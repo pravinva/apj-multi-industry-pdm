@@ -1,6 +1,12 @@
 import math
 import random
 
+from core.simulator.semiconductor_physics import (
+    chamber_contamination,
+    focus_drift_coupled,
+    overlay_thermal_drift,
+)
+
 
 def bearing_wear(base: float, severity: float, elapsed_h: float, noise: float) -> float:
     degradation = min(1.0, severity * (1 - math.exp(-elapsed_h / 200)))
@@ -31,17 +37,11 @@ def recipe_drift(base: float, severity: float, elapsed_h: float, noise: float) -
 
 
 def contamination_event(base: float, severity: float, elapsed_h: float, noise: float) -> float:
-    growth_rate = severity * 0.08
-    value = base * math.exp(growth_rate * elapsed_h)
-    return max(base, value) + abs(random.gauss(0, noise * base))
+    return chamber_contamination(base, severity, elapsed_h, noise)
 
 
 def thermal_drift_sinusoidal(base: float, severity: float, elapsed_h: float, noise: float) -> float:
-    hvac_amplitude = 0.02 * severity
-    hvac = hvac_amplitude * math.sin(2 * math.pi * elapsed_h / 12)
-    linear_drift = severity * elapsed_h * 0.002
-    value = base + hvac + linear_drift
-    return value + random.gauss(0, noise * base)
+    return overlay_thermal_drift(base, severity, elapsed_h, noise)
 
 
 def wear_index(base: float, severity: float, elapsed_h: float, noise: float) -> float:
@@ -65,8 +65,8 @@ PHYSICS_MAP = {
     "pipe_leak": pipe_leak_acoustic,
     "cavitation": pressure_drop,
     "chamber_contamination": contamination_event,
-    "overlay_drift": thermal_drift_sinusoidal,
-    "focus_drift": thermal_drift_sinusoidal,
+    "overlay_drift": overlay_thermal_drift,
+    "focus_drift": focus_drift_coupled,
     "recipe_drift": recipe_drift,
     "pad_wear": wear_index,
     "laser_degradation": pressure_drop,
