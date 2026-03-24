@@ -1,0 +1,74 @@
+industry: energy
+display_name: "Energy - Wind, BESS, Transformer"
+catalog: pdm_energy
+version: "1.0.0"
+
+accounts:
+  primary: "Alinta Energy"
+  references: ["AGL", "Origin"]
+  pipeline_monthly: 1900000
+
+isa95_hierarchy:
+  levels:
+    - { key: site, display: Site, example: NorthHub }
+    - { key: area, display: Area, example: Wind Farm }
+    - { key: unit, display: Unit, example: Generation }
+    - { key: equipment, display: Equipment, example: WT-004 }
+    - { key: component, display: Component, example: Gearbox }
+
+simulator:
+  tick_interval_ms: 1000
+  noise_factor: 0.02
+  protocol: OPC-UA
+  assets:
+    - { id: WT-004, type: wind_turbine, model: "Vestas V150", site: northhub, area: wind, unit: gen, inject_fault: gearbox_degradation, fault_severity: 0.91, fault_start_offset_hours: -8 }
+    - { id: BESS-01, type: bess, model: "Tesla Megapack", site: northhub, area: storage, unit: battery, inject_fault: thermal_runaway, fault_severity: 0.71, fault_start_offset_hours: -6 }
+    - { id: TX-07, type: transformer, model: "ABB 220kV", site: northhub, area: substation, unit: transmission, fault_severity: 0.0, fault_start_offset_hours: 0 }
+    - { id: WT-011, type: wind_turbine, model: "Vestas V150", site: northhub, area: wind, unit: gen, fault_severity: 0.0, fault_start_offset_hours: 0 }
+
+sensors:
+  wind_turbine:
+    - { name: gearbox_vibration, display: Gearbox Vibration, unit: mm/s, opc_ua_node: "ns=2;s=WT.Gearbox.Vib", normal_range: [1.1, 2.8], warning_threshold: 3.8, critical_threshold: 5.2, dir: 1, failure_mode: gearbox_degradation }
+    - { name: nacelle_temp, display: Nacelle Temp, unit: C, opc_ua_node: "ns=2;s=WT.Nacelle.Temp", normal_range: [18, 42], warning_threshold: 48, critical_threshold: 54, dir: 1, failure_mode: gearbox_degradation }
+    - { name: rotor_speed, display: Rotor Speed, unit: rpm, opc_ua_node: "ns=2;s=WT.Rotor.Speed", normal_range: [8, 14], warning_threshold: null, critical_threshold: null, dir: 1, failure_mode: null }
+    - { name: output_power, display: Output Power, unit: MW, opc_ua_node: "ns=2;s=WT.Power", normal_range: [1.6, 5.8], warning_threshold: null, critical_threshold: null, dir: 1, failure_mode: null }
+  bess:
+    - { name: cell_temp_max, display: Cell Temp Max, unit: C, opc_ua_node: "ns=2;s=BESS.CellTempMax", normal_range: [18, 34], warning_threshold: 40, critical_threshold: 47, dir: 1, failure_mode: thermal_runaway }
+    - { name: cell_voltage_min, display: Cell Voltage Min, unit: V, opc_ua_node: "ns=2;s=BESS.CellVoltMin", normal_range: [3.2, 3.5], warning_threshold: 3.1, critical_threshold: 2.95, dir: -1, failure_mode: thermal_runaway }
+    - { name: soc, display: State of Charge, unit: pct, opc_ua_node: "ns=2;s=BESS.SOC", normal_range: [25, 90], warning_threshold: null, critical_threshold: null, dir: 1, failure_mode: null }
+  transformer:
+    - { name: oil_temp, display: Oil Temp, unit: C, opc_ua_node: "ns=2;s=TX.OilTemp", normal_range: [45, 72], warning_threshold: 80, critical_threshold: 90, dir: 1, failure_mode: transformer_thermal_failure }
+    - { name: hydrogen_ppm, display: Hydrogen PPM, unit: ppm, opc_ua_node: "ns=2;s=TX.H2", normal_range: [20, 120], warning_threshold: 180, critical_threshold: 260, dir: 1, failure_mode: transformer_thermal_failure }
+    - { name: load_factor, display: Load Factor, unit: pct, opc_ua_node: "ns=2;s=TX.LoadFactor", normal_range: [40, 85], warning_threshold: 92, critical_threshold: 98, dir: 1, failure_mode: transformer_thermal_failure }
+
+failure_modes:
+  gearbox_degradation: { display: Gearbox Degradation, sensors: [gearbox_vibration, nacelle_temp], mtbf_hours: 3200, repair_time_hours: 10.0, cost_per_event: 28000, downtime_type: planned }
+  transformer_thermal_failure: { display: Transformer Thermal Failure, sensors: [oil_temp, hydrogen_ppm, load_factor], mtbf_hours: 4000, repair_time_hours: 14.0, cost_per_event: 80000, downtime_type: unplanned }
+  thermal_runaway: { display: Battery Thermal Runaway, sensors: [cell_temp_max, cell_voltage_min], mtbf_hours: 2600, repair_time_hours: 18.0, cost_per_event: 120000, downtime_type: unplanned }
+
+features:
+  - { name: mean_15m, formula: mean, window: "15 minutes", apply_to: all }
+  - { name: stddev_15m, formula: stddev, window: "15 minutes", apply_to: all }
+  - { name: slope_1h, formula: slope, window: "1 hour", apply_to: all }
+  - { name: zscore_30d, formula: zscore, window: "30 days", apply_to: all }
+  - { name: cumsum_24h, formula: cumsum, window: "1 day", apply_to: all }
+
+agent:
+  persona: "Grid reliability maintenance assistant"
+  system_prompt_file: "industries/energy/system_prompt.txt"
+  terminology:
+    asset: asset
+    asset_plural: assets
+    downtime_event: outage event
+    maintenance_window: switching window
+    production_unit: MWh
+    cost_currency: AUD
+    cost_event_label: outage cost
+    site_timezone: AEST
+
+dashboard:
+  primary_kpi: fleet_health_score
+  kpis:
+    - { label: Grid reliability, field: health_score_pct, format: percent_1dp, good_direction: up, good_threshold: 90 }
+    - { label: Critical assets, field: critical_assets, format: integer, good_direction: down, good_threshold: 1 }
+    - { label: Avoided outage cost, field: avoided_cost, format: currency, good_direction: up, good_threshold: 70000 }

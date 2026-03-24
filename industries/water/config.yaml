@@ -1,0 +1,73 @@
+industry: water
+display_name: "Water - Pumping and Metering"
+catalog: pdm_water
+version: "1.0.0"
+
+accounts:
+  primary: "Sydney Water"
+  references: ["WaterNSW", "Yarra Valley Water"]
+  pipeline_monthly: 1400000
+
+isa95_hierarchy:
+  levels:
+    - { key: site, display: Site, example: Prospect }
+    - { key: area, display: Area, example: Pump Station }
+    - { key: unit, display: Unit, example: Distribution }
+    - { key: equipment, display: Equipment, example: PS-07 }
+    - { key: component, display: Component, example: Bearing }
+
+simulator:
+  tick_interval_ms: 900
+  noise_factor: 0.02
+  protocol: OPC-UA
+  assets:
+    - { id: PS-07, type: pump, model: "Centrifugal Pump", site: prospect, area: station_7, unit: distribution, inject_fault: bearing_wear, fault_severity: 0.92, fault_start_offset_hours: -10 }
+    - { id: MT-03, type: smart_meter, model: "AMI Meter v4", site: cbd, area: zone_3, unit: metering, inject_fault: pipe_leak, fault_severity: 0.71, fault_start_offset_hours: -8 }
+    - { id: TP-01, type: chlorination_unit, model: "Chlorinator C1", site: prospect, area: treatment, unit: dosing, fault_severity: 0.0, fault_start_offset_hours: 0 }
+    - { id: VS-11, type: vent_shaft, model: "Vent Shaft 11", site: north, area: tunnel, unit: ventilation, fault_severity: 0.0, fault_start_offset_hours: 0 }
+
+sensors:
+  pump:
+    - { name: vibration_rms, display: Vibration RMS, unit: mm/s, opc_ua_node: "ns=2;s=Pump.Vib", normal_range: [0.9, 2.5], warning_threshold: 3.5, critical_threshold: 5.0, dir: 1, failure_mode: bearing_wear }
+    - { name: suction_pressure, display: Suction Pressure, unit: kPa, opc_ua_node: "ns=2;s=Pump.SuctionPressure", normal_range: [180, 260], warning_threshold: 165, critical_threshold: 140, dir: -1, failure_mode: cavitation }
+    - { name: discharge_pressure, display: Discharge Pressure, unit: kPa, opc_ua_node: "ns=2;s=Pump.DischargePressure", normal_range: [380, 560], warning_threshold: 340, critical_threshold: 300, dir: -1, failure_mode: pipe_leak }
+    - { name: motor_current, display: Motor Current, unit: A, opc_ua_node: "ns=2;s=Pump.MotorCurrent", normal_range: [22, 40], warning_threshold: 44, critical_threshold: 48, dir: 1, failure_mode: bearing_wear }
+  smart_meter:
+    - { name: flow_rate, display: Flow Rate, unit: lps, opc_ua_node: "mqtt://meter/flow_rate", normal_range: [8, 22], warning_threshold: 25, critical_threshold: 30, dir: 1, failure_mode: pipe_leak }
+    - { name: acoustic_index, display: Acoustic Index, unit: idx, opc_ua_node: "mqtt://meter/acoustic_index", normal_range: [0.05, 0.2], warning_threshold: 0.35, critical_threshold: 0.6, dir: 1, failure_mode: pipe_leak }
+  chlorination_unit:
+    - { name: chlorine_ppm, display: Chlorine PPM, unit: ppm, opc_ua_node: "ns=2;s=Chl.PPM", normal_range: [1.8, 2.6], warning_threshold: 1.4, critical_threshold: 1.0, dir: -1, failure_mode: null }
+  vent_shaft:
+    - { name: airflow_rate, display: Airflow Rate, unit: m3/s, opc_ua_node: "ns=2;s=Vent.Flow", normal_range: [6, 14], warning_threshold: 5, critical_threshold: 4, dir: -1, failure_mode: null }
+
+failure_modes:
+  bearing_wear: { display: Bearing Wear, sensors: [vibration_rms, motor_current], mtbf_hours: 2000, repair_time_hours: 5.0, cost_per_event: 18000, downtime_type: planned, regulatory_note: "EPA incident note if overflow risk exists." }
+  pipe_leak: { display: Pipe Leak, sensors: [flow_rate, acoustic_index, discharge_pressure], mtbf_hours: 1700, repair_time_hours: 7.0, cost_per_event: 35000, downtime_type: unplanned, regulatory_note: "EPA reporting required for major discharge incidents." }
+  cavitation: { display: Cavitation, sensors: [suction_pressure], mtbf_hours: 2200, repair_time_hours: 4.0, cost_per_event: 12000, downtime_type: planned, regulatory_note: "Document root cause in maintenance log." }
+
+features:
+  - { name: mean_15m, formula: mean, window: "15 minutes", apply_to: all }
+  - { name: stddev_15m, formula: stddev, window: "15 minutes", apply_to: all }
+  - { name: slope_1h, formula: slope, window: "1 hour", apply_to: all }
+  - { name: zscore_30d, formula: zscore, window: "30 days", apply_to: all }
+  - { name: cumsum_24h, formula: cumsum, window: "1 day", apply_to: all }
+
+agent:
+  persona: "Water operations maintenance assistant"
+  system_prompt_file: "industries/water/system_prompt.txt"
+  terminology:
+    asset: pump
+    asset_plural: pumps
+    downtime_event: service disruption
+    maintenance_window: maintenance window
+    production_unit: megalitres
+    cost_currency: AUD
+    cost_event_label: disruption cost
+    site_timezone: AEST
+
+dashboard:
+  primary_kpi: fleet_health_score
+  kpis:
+    - { label: Service continuity, field: health_score_pct, format: percent_1dp, good_direction: up, good_threshold: 92 }
+    - { label: Leak risk assets, field: critical_assets, format: integer, good_direction: down, good_threshold: 1 }
+    - { label: Avoided loss, field: avoided_cost, format: currency, good_direction: up, good_threshold: 60000 }

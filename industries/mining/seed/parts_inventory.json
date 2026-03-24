@@ -1,0 +1,24 @@
+[
+  {
+    "part_number": "SKF-6316-HT",
+    "description": "Haul truck wheel bearing kit",
+    "quantity": 6,
+    "location": "Aisle B2",
+    "depot": "Karratha",
+    "unit_cost": 1480,
+    "currency": "AUD",
+    "reorder_point": 2,
+    "lead_time_days": 4
+  },
+  {
+    "part_number": "CAT-793F-COOL",
+    "description": "Coolant pump assembly",
+    "quantity": 2,
+    "location": "Aisle C1",
+    "depot": "Gudai-Darri",
+    "unit_cost": 7400,
+    "currency": "AUD",
+    "reorder_point": 1,
+    "lead_time_days": 7
+  }
+]

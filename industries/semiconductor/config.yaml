@@ -1,0 +1,76 @@
+industry: semiconductor
+display_name: "Semiconductor - Etch and Litho"
+catalog: pdm_semiconductor
+version: "1.0.0"
+
+accounts:
+  primary: "Renesas"
+  references: ["Kioxia", "Sony Semiconductor"]
+  pipeline_monthly: 2400000
+
+isa95_hierarchy:
+  levels:
+    - { key: site, display: Fab, example: Naka }
+    - { key: area, display: Bay, example: Bay 3 }
+    - { key: unit, display: Tool Class, example: Etch }
+    - { key: equipment, display: Equipment, example: ET-04 }
+    - { key: component, display: Chamber, example: Chamber A }
+
+simulator:
+  tick_interval_ms: 700
+  noise_factor: 0.015
+  protocol: OPC-UA
+  assets:
+    - { id: ET-04, type: etch_tool, model: "Lam Exelanx", site: naka_fab, area: bay_3, unit: etch, inject_fault: chamber_contamination, fault_severity: 0.91, fault_start_offset_hours: -5 }
+    - { id: LT-11, type: stepper, model: "ASML PAS 5500", site: naka_fab, area: bay_5, unit: lithography, inject_fault: overlay_drift, fault_severity: 0.68, fault_start_offset_hours: -8 }
+    - { id: CMP-07, type: cmp_tool, model: "Ebara Frex", site: naka_fab, area: bay_2, unit: polish, fault_severity: 0.0, fault_start_offset_hours: 0 }
+    - { id: IN-02, type: inspection_tool, model: "KLA 39xx", site: naka_fab, area: bay_6, unit: metrology, fault_severity: 0.0, fault_start_offset_hours: 0 }
+
+sensors:
+  etch_tool:
+    - { name: particle_count, display: Particle Count, unit: "/cm2", opc_ua_node: "ns=2;s=Etch.ParticleCount", normal_range: [2, 8], warning_threshold: 15, critical_threshold: 25, dir: 1, failure_mode: chamber_contamination }
+    - { name: chamber_pressure, display: Chamber Pressure, unit: mTorr, opc_ua_node: "ns=2;s=Etch.ChamberPressure", normal_range: [35, 55], warning_threshold: 62, critical_threshold: 70, dir: 1, failure_mode: chamber_contamination }
+    - { name: rf_power, display: RF Power, unit: W, opc_ua_node: "ns=2;s=Etch.RFPower", normal_range: [600, 920], warning_threshold: 980, critical_threshold: 1100, dir: 1, failure_mode: recipe_drift }
+  stepper:
+    - { name: overlay_error_nm, display: Overlay Error, unit: nm, opc_ua_node: "ns=2;s=Stepper.Overlay", normal_range: [1.2, 2.4], warning_threshold: 3.0, critical_threshold: 3.8, dir: 1, failure_mode: overlay_drift }
+    - { name: focus_drift_nm, display: Focus Drift, unit: nm, opc_ua_node: "ns=2;s=Stepper.FocusDrift", normal_range: [0.6, 1.8], warning_threshold: 2.3, critical_threshold: 2.9, dir: 1, failure_mode: focus_drift }
+    - { name: lens_temp, display: Lens Temp, unit: C, opc_ua_node: "ns=2;s=Stepper.LensTemp", normal_range: [19, 24], warning_threshold: 26, critical_threshold: 28, dir: 1, failure_mode: overlay_drift }
+  cmp_tool:
+    - { name: pad_wear_index, display: Pad Wear Index, unit: idx, opc_ua_node: "ns=2;s=CMP.PadWear", normal_range: [0.1, 0.35], warning_threshold: 0.5, critical_threshold: 0.7, dir: 1, failure_mode: pad_wear }
+  inspection_tool:
+    - { name: laser_power, display: Laser Power, unit: mW, opc_ua_node: "ns=2;s=Inspect.LaserPower", normal_range: [75, 95], warning_threshold: 70, critical_threshold: 60, dir: -1, failure_mode: laser_degradation }
+
+failure_modes:
+  chamber_contamination: { display: Chamber Contamination, sensors: [particle_count, chamber_pressure], mtbf_hours: 1300, repair_time_hours: 7.5, cost_per_event: 120000, downtime_type: unplanned }
+  overlay_drift: { display: Overlay Drift, sensors: [overlay_error_nm, lens_temp], mtbf_hours: 1600, repair_time_hours: 5.0, cost_per_event: 90000, downtime_type: planned }
+  focus_drift: { display: Focus Drift, sensors: [focus_drift_nm], mtbf_hours: 1700, repair_time_hours: 4.5, cost_per_event: 70000, downtime_type: planned }
+  recipe_drift: { display: Recipe Drift, sensors: [rf_power], mtbf_hours: 1400, repair_time_hours: 3.0, cost_per_event: 60000, downtime_type: planned }
+  pad_wear: { display: Pad Wear, sensors: [pad_wear_index], mtbf_hours: 1100, repair_time_hours: 2.0, cost_per_event: 30000, downtime_type: planned }
+  laser_degradation: { display: Laser Degradation, sensors: [laser_power], mtbf_hours: 2000, repair_time_hours: 6.0, cost_per_event: 50000, downtime_type: planned }
+
+features:
+  - { name: mean_15m, formula: mean, window: "15 minutes", apply_to: all }
+  - { name: stddev_15m, formula: stddev, window: "15 minutes", apply_to: all }
+  - { name: slope_1h, formula: slope, window: "1 hour", apply_to: all }
+  - { name: zscore_30d, formula: zscore, window: "30 days", apply_to: all }
+  - { name: cumsum_24h, formula: cumsum, window: "1 day", apply_to: all }
+
+agent:
+  persona: "Fab maintenance copilot"
+  system_prompt_file: "industries/semiconductor/system_prompt.txt"
+  terminology:
+    asset: tool
+    asset_plural: tools
+    downtime_event: fab downtime event
+    maintenance_window: engineering window
+    production_unit: wafer lots
+    cost_currency: USD
+    cost_event_label: lot exposure cost
+    site_timezone: JST
+
+dashboard:
+  primary_kpi: fab_availability
+  kpis:
+    - { label: Fab availability, field: health_score_pct, format: percent_1dp, good_direction: up, good_threshold: 93 }
+    - { label: Critical tools, field: critical_assets, format: integer, good_direction: down, good_threshold: 1 }
+    - { label: Avoided lot loss, field: avoided_cost, format: currency, good_direction: up, good_threshold: 120000 }

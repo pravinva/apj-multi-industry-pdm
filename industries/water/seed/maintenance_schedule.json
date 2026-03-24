@@ -1,0 +1,22 @@
+[
+  {
+    "equipment_id": "PS-07",
+    "shift_label": "Day Shift",
+    "shift_start": "2026-03-24T20:00:00Z",
+    "shift_end": "2026-03-25T08:00:00Z",
+    "planned_downtime_hours": 1.0,
+    "maintenance_window_start": "2026-03-25T05:00:00Z",
+    "maintenance_window_end": "2026-03-25T06:00:00Z",
+    "crew_available": true
+  },
+  {
+    "equipment_id": "MT-03",
+    "shift_label": "Night Shift",
+    "shift_start": "2026-03-25T08:00:00Z",
+    "shift_end": "2026-03-25T20:00:00Z",
+    "planned_downtime_hours": 0.5,
+    "maintenance_window_start": "2026-03-25T14:00:00Z",
+    "maintenance_window_end": "2026-03-25T14:30:00Z",
+    "crew_available": true
+  }
+]

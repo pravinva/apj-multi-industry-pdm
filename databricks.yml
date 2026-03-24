@@ -1,0 +1,98 @@
+bundle:
+  name: ot-pdm-intelligence
+
+variables:
+  industry:
+    description: "Industry skin to deploy"
+    default: mining
+  use_simulator:
+    description: "Use OT simulator instead of live Zerobus connector"
+    default: "true"
+  catalog_name:
+    description: "Unity Catalog catalog name"
+    default: "pdm_${var.industry}"
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: https://e2-demo-field-eng.cloud.databricks.com
+  prod:
+    mode: production
+    workspace:
+      host: https://e2-demo-field-eng.cloud.databricks.com
+
+resources:
+  pipelines:
+    ot_pdm_dlt_pipeline:
+      name: ot-pdm-dlt-${var.industry}
+      continuous: true
+      clusters:
+        - label: default
+          num_workers: 1
+      libraries:
+        - file:
+            path: core/dlt/bronze.py
+        - file:
+            path: core/dlt/silver.py
+        - file:
+            path: core/dlt/gold.py
+      configuration:
+        industry: ${var.industry}
+        use_simulator: ${var.use_simulator}
+        catalog_name: ${var.catalog_name}
+      catalog: ${var.catalog_name}
+      target: bronze
+
+  experiments:
+    ot_pdm_mlflow_experiment:
+      name: /Shared/ot-pdm-intelligence/${var.industry}
+
+  model_serving_endpoints:
+    ot_pdm_model_endpoint:
+      name: ot-pdm-${var.industry}
+      config:
+        served_entities:
+          - name: ot-pdm-rul-${var.industry}
+            entity_name: ${var.catalog_name}.models.ot_pdm_rul_${var.industry}
+            entity_version: "1"
+            scale_to_zero_enabled: true
+            workload_size: Small
+
+  jobs:
+    ot_pdm_scoring_job:
+      name: ot-pdm-scoring-${var.industry}
+      tasks:
+        - task_key: batch_score
+          new_cluster:
+            spark_version: 15.4.x-cpu-ml-scala2.12
+            node_type_id: Standard_DS3_v2
+            num_workers: 1
+          spark_python_task:
+            python_file: core/ml/batch_score.py
+      schedule:
+        pause_status: UNPAUSED
+        quartz_cron_expression: "0 0 */2 * * ?"
+        timezone_id: UTC
+
+    ot_pdm_training_job:
+      name: ot-pdm-training-${var.industry}
+      tasks:
+        - task_key: train_models
+          new_cluster:
+            spark_version: 15.4.x-cpu-ml-scala2.12
+            node_type_id: Standard_DS3_v2
+            num_workers: 1
+          spark_python_task:
+            python_file: core/ml/train.py
+      schedule:
+        pause_status: UNPAUSED
+        quartz_cron_expression: "0 0 2 * * ?"
+        timezone_id: UTC
+
+  apps:
+    ot_pdm_app:
+      name: ot-pdm-app-${var.industry}
+      source_code_path: app/
+      description: OT PdM Intelligence - ${var.industry}
