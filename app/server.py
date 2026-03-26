@@ -31,7 +31,7 @@ except Exception:  # pragma: no cover - optional runtime dependency
 
 ROOT = Path(__file__).resolve().parent
 DIST = ROOT / "dist"
-SDT_REPORT_DIR = ROOT.parent / "docs" / "sdt-compression"
+SDT_REPORT_DIR = (ROOT / "sdt-compression") if (ROOT / "sdt-compression").exists() else (ROOT.parent / "docs" / "sdt-compression")
 GENIE_ROOM_MAP_PATH = ROOT / "genie_rooms.json"
 INDUSTRIES = ["mining", "energy", "water", "automotive", "semiconductor"]
 ISA_EMOJI = {
