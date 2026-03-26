@@ -20,6 +20,20 @@ simulator:
   tick_interval_ms: 900
   noise_factor: 0.02
   protocol: OPC-UA
+  sdt:
+    enabled: false
+    epsilon_abs: 0.15
+    epsilon_pct: 0.006
+    heartbeat_ms: 15000
+    tag_overrides:
+      vibration_rms: { epsilon_abs: 0.05, heartbeat_ms: 8000 }
+      suction_pressure: { epsilon_abs: 1.2, heartbeat_ms: 12000 }
+      discharge_pressure: { epsilon_abs: 1.8, heartbeat_ms: 12000 }
+      motor_current: { epsilon_abs: 0.8, heartbeat_ms: 10000 }
+      flow_rate: { epsilon_abs: 0.15, heartbeat_ms: 8000 }
+      acoustic_index: { epsilon_abs: 0.015, heartbeat_ms: 5000 }
+      chlorine_ppm: { epsilon_abs: 0.04, heartbeat_ms: 15000 }
+      airflow_rate: { epsilon_abs: 0.2, heartbeat_ms: 12000 }
   assets:
     - { id: PS-07, type: pump, model: "Centrifugal Pump", site: prospect, area: station_7, unit: distribution, inject_fault: bearing_wear, fault_severity: 0.92, fault_start_offset_hours: -10 }
     - { id: MT-03, type: smart_meter, model: "AMI Meter v4", site: cbd, area: zone_3, unit: metering, inject_fault: pipe_leak, fault_severity: 0.71, fault_start_offset_hours: -8 }

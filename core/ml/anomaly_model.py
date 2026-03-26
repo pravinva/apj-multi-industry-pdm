@@ -40,14 +40,20 @@ class OTPdMAnomalyModel:
     def predict_label(self, x: pd.DataFrame) -> np.ndarray:
         return np.where(self.score(x) > 0.5, "anomaly", "normal")
 
-    def log_to_mlflow(self, x_train: pd.DataFrame, metrics: dict):
+    def log_to_mlflow(self, x_train: pd.DataFrame, metrics: dict, catalog: str):
         import mlflow
+        from mlflow.models import infer_signature
         import mlflow.sklearn
 
+        x_sample = x_train.head(min(len(x_train), 50))
+        y_sample = self.pipeline.predict(x_sample)
+        signature = infer_signature(x_sample, y_sample)
         mlflow.sklearn.log_model(
             self.pipeline,
             artifact_path="anomaly_model",
-            registered_model_name=f"ot_pdm_anomaly_{self.equipment_id.lower()}",
+            registered_model_name=f"{catalog}.models.ot_pdm_anomaly_{self.equipment_id.lower()}",
+            signature=signature,
+            input_example=x_sample.head(5),
         )
         mlflow.log_params(
             {

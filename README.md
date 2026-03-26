@@ -66,6 +66,52 @@ OT source (simulator or Zerobus)
 For FE/demo workflows use `USE_SIMULATOR=true` to produce identical Bronze schema with synthetic but physics-shaped data.
 Reference: [unified-ot-zerobus-connector](https://github.com/pravinva/unified-ot-zerobus-connector).
 
+### Real Zerobus Ingest (all protocols)
+
+The repo now supports a real first-mile connector flow with defaults for:
+
+- OPC-UA
+- MQTT JSON
+- MQTT Sparkplug B
+- Modbus TCP
+- CANBUS
+
+Defaults live in `core/zerobus_ingest/defaults.yaml` and can be overridden with `ZEROBUS_*` env vars.
+
+#### Databricks (real ingestion path)
+
+1. Set `USE_SIMULATOR=false` when deploying/running Bronze.
+2. Run job `ot_pdm_zerobus_connector_job` (added in `databricks.yml`).
+3. Connector writes into `{catalog}.bronze._zerobus_staging`.
+4. Bronze DLT reads `_zerobus_staging` and materializes `{catalog}.bronze.sensor_readings`.
+
+#### Local devloop (easy defaults)
+
+- Start simulator + connector:
+  - `python tools/zerobus_easy_start.py`
+- Skip simulator and only run connector:
+  - `python tools/zerobus_easy_start.py --no-simulator`
+
+The default simulator endpoint/ports align with `ot_simulator` from
+[unified-ot-zerobus-connector](https://github.com/pravinva/unified-ot-zerobus-connector/tree/main/ot_simulator).
+
+#### Swinging Door Trending (SDT) in simulator
+
+SDT compression is implemented in `core/simulator/sdt.py` and applied in
+`core/simulator/engine.py` before writing to
+`{catalog}.bronze._simulator_staging`. This is intentional so compression
+happens at the edge/simulator side, not in the Zerobus ingest connector.
+
+Per-industry controls are under `simulator.sdt` in `industries/*/config.yaml`:
+
+- `enabled`: turn SDT on/off
+- `epsilon_abs`: absolute SDT door width
+- `epsilon_pct`: percentage-based SDT door width
+- `heartbeat_ms`: force periodic keepalive points
+- `tag_overrides`: per-tag SDT tuning map
+
+Full runbook: `docs/zerobus-real-ingest.md`.
+
 ## Ten Differentiators
 
 1. First-mile OT connectivity path (Zerobus)

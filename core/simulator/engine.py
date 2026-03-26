@@ -11,6 +11,7 @@ from pyspark.sql.types import (
 )
 
 from core.simulator.fault_injection import FaultInjector
+from core.simulator.sdt import SwingingDoorCompressor
 
 
 class OTSimulator:
@@ -25,6 +26,7 @@ class OTSimulator:
         self.tick_interval_s = config["simulator"]["tick_interval_ms"] / 1000
         self.noise = config["simulator"]["noise_factor"]
         self._injectors: dict[str, FaultInjector] = {}
+        self._sdt = SwingingDoorCompressor(config.get("simulator", {}))
         self._build_injectors()
 
     def _build_injectors(self) -> None:
@@ -68,6 +70,15 @@ class OTSimulator:
                     value, quality_label, quality_code = injector.compute(
                         sensor["name"], base, self.noise
                     )
+                    key = f"{asset['id']}::{sensor['name']}"
+                    if not self._sdt.should_emit(
+                        key=key,
+                        tag_name=sensor["name"],
+                        value=float(value),
+                        quality=quality_label,
+                        ts=now,
+                    ):
+                        continue
                     rows.append(
                         {
                             "site_id": asset.get("site", ""),

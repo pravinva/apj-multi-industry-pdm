@@ -1,19 +1,45 @@
-"""
-Per-asset training for anomaly + RUL models.
-"""
-
 import os
+import sys
+from argparse import ArgumentParser
+from pathlib import Path
+from glob import glob
 
 import mlflow
 import pandas as pd
+
+def _ensure_repo_root_on_path() -> Path:
+    candidates: list[Path] = []
+    if "__file__" in globals():
+        candidates.append(Path(__file__).resolve().parents[2])
+    cwd = Path.cwd()
+    candidates.extend([cwd, *cwd.parents])
+    for p in glob("/Workspace/Users/*/.bundle/ot-pdm-intelligence/dev/files"):
+        candidates.append(Path(p))
+    for root in candidates:
+        if (root / "core" / "config" / "loader.py").exists():
+            root_s = str(root)
+            if root_s not in sys.path:
+                sys.path.insert(0, root_s)
+            return root
+    raise RuntimeError("Unable to locate bundle repo root for imports.")
+
+
+REPO_ROOT = _ensure_repo_root_on_path()
 
 from core.config.loader import load_config
 from core.ml.anomaly_model import OTPdMAnomalyModel
 from core.ml.features import get_feature_matrix
 from core.ml.rul_model import OTPdMRULModel, generate_rul_labels
 
-INDUSTRY = os.environ.get("INDUSTRY", "mining")
-config = load_config(INDUSTRY)
+def _resolve_industry() -> str:
+    parser = ArgumentParser(add_help=False)
+    parser.add_argument("--industry", default=None)
+    args, _ = parser.parse_known_args()
+    return args.industry or os.environ.get("INDUSTRY", "mining")
+
+
+INDUSTRY = _resolve_industry()
+config = load_config(INDUSTRY, config_root=str(REPO_ROOT / "industries"))
 catalog = config["catalog"]
 
 mlflow.set_registry_uri("databricks-uc")
@@ -40,6 +66,7 @@ def train_asset_models(equipment_id: str, spark):
                 "mean_score_healthy": float(scores[:n_healthy].mean()),
                 "mean_score_fault": float(scores[n_healthy:].mean()) if len(scores) > n_healthy else 0.0,
             },
+            catalog,
         )
 
     with mlflow.start_run(run_name=f"{equipment_id}_rul"):

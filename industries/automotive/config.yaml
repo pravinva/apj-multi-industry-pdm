@@ -20,6 +20,20 @@ simulator:
   tick_interval_ms: 850
   noise_factor: 0.02
   protocol: OPC-UA
+  sdt:
+    enabled: false
+    epsilon_abs: 0.2
+    epsilon_pct: 0.006
+    heartbeat_ms: 15000
+    tag_overrides:
+      die_temp: { epsilon_abs: 0.5, heartbeat_ms: 12000 }
+      stroke_force: { epsilon_abs: 5.0, heartbeat_ms: 10000 }
+      cycle_time: { epsilon_abs: 0.04, heartbeat_ms: 8000 }
+      servo_temp: { epsilon_abs: 0.4, heartbeat_ms: 10000 }
+      torch_current: { epsilon_abs: 2.0, heartbeat_ms: 8000 }
+      seam_quality_idx: { epsilon_abs: 0.01, heartbeat_ms: 5000 }
+      spindle_vibration: { epsilon_abs: 0.05, heartbeat_ms: 8000 }
+      conveyor_speed: { epsilon_abs: 0.02, heartbeat_ms: 8000 }
   assets:
     - { id: TP-07, type: stamping_press, model: "AIDA 1200T", site: nagoya, area: press, unit: line_a, inject_fault: die_wear, fault_severity: 0.93, fault_start_offset_hours: -12 }
     - { id: WR-14, type: robotic_welder, model: "FANUC ARC Mate", site: nagoya, area: body, unit: line_a, inject_fault: servo_degradation, fault_severity: 0.65, fault_start_offset_hours: -10 }

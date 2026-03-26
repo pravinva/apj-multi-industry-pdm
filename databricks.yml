@@ -1,6 +1,12 @@
 bundle:
   name: ot-pdm-intelligence
 
+sync:
+  exclude:
+    - "app/node_modules/**"
+    - "app/.npmrc"
+    - "app/package-lock.json"
+
 variables:
   industry:
     description: "Industry skin to deploy"
@@ -49,28 +55,37 @@ resources:
     ot_pdm_mlflow_experiment:
       name: /Shared/ot-pdm-intelligence/${var.industry}
 
-  model_serving_endpoints:
-    ot_pdm_model_endpoint:
-      name: ot-pdm-${var.industry}
-      config:
-        served_entities:
-          - name: ot-pdm-rul-${var.industry}
-            entity_name: ${var.catalog_name}.models.ot_pdm_rul_${var.industry}
-            entity_version: "1"
-            scale_to_zero_enabled: true
-            workload_size: Small
-
   jobs:
+    ot_pdm_zerobus_connector_job:
+      name: ot-pdm-zerobus-connector-${var.industry}
+      tasks:
+        - task_key: ingest_real_zerobus
+          new_cluster:
+            spark_version: 15.4.x-scala2.12
+            node_type_id: m5.xlarge
+            num_workers: 1
+            aws_attributes:
+              ebs_volume_count: 1
+              ebs_volume_size: 100
+          spark_python_task:
+            python_file: core/zerobus_ingest/run_connector.py
+            parameters:
+              - "--industry"
+              - "${var.industry}"
+          libraries:
+            - pypi:
+                package: unified-ot-zerobus-connector
+
     ot_pdm_scoring_job:
       name: ot-pdm-scoring-${var.industry}
       tasks:
         - task_key: batch_score
-          new_cluster:
-            spark_version: 15.4.x-cpu-ml-scala2.12
-            node_type_id: Standard_DS3_v2
-            num_workers: 1
+          existing_cluster_id: 0127-122435-da5izx1u
           spark_python_task:
             python_file: core/ml/batch_score.py
+            parameters:
+              - "--industry"
+              - "${var.industry}"
       schedule:
         pause_status: UNPAUSED
         quartz_cron_expression: "0 0 */2 * * ?"
@@ -80,19 +95,14 @@ resources:
       name: ot-pdm-training-${var.industry}
       tasks:
         - task_key: train_models
-          new_cluster:
-            spark_version: 15.4.x-cpu-ml-scala2.12
-            node_type_id: Standard_DS3_v2
-            num_workers: 1
+          existing_cluster_id: 0127-122435-da5izx1u
           spark_python_task:
             python_file: core/ml/train.py
+            parameters:
+              - "--industry"
+              - "${var.industry}"
       schedule:
         pause_status: UNPAUSED
         quartz_cron_expression: "0 0 2 * * ?"
         timezone_id: UTC
 
-  apps:
-    ot_pdm_app:
-      name: ot-pdm-app-${var.industry}
-      source_code_path: app/
-      description: OT PdM Intelligence - ${var.industry}

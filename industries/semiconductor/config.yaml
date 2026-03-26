@@ -20,6 +20,20 @@ simulator:
   tick_interval_ms: 700
   noise_factor: 0.015
   protocol: OPC-UA
+  sdt:
+    enabled: false
+    epsilon_abs: 0.08
+    epsilon_pct: 0.004
+    heartbeat_ms: 8000
+    tag_overrides:
+      particle_count: { epsilon_abs: 0.25, heartbeat_ms: 6000 }
+      chamber_pressure: { epsilon_abs: 0.6, heartbeat_ms: 8000 }
+      rf_power: { epsilon_abs: 8.0, heartbeat_ms: 8000 }
+      overlay_error_nm: { epsilon_abs: 0.04, heartbeat_ms: 5000 }
+      focus_drift_nm: { epsilon_abs: 0.03, heartbeat_ms: 5000 }
+      lens_temp: { epsilon_abs: 0.15, heartbeat_ms: 8000 }
+      pad_wear_index: { epsilon_abs: 0.01, heartbeat_ms: 10000 }
+      laser_power: { epsilon_abs: 0.6, heartbeat_ms: 8000 }
   assets:
     - { id: ET-04, type: etch_tool, model: "Lam Exelanx", site: naka_fab, area: bay_3, unit: etch, inject_fault: chamber_contamination, fault_severity: 0.91, fault_start_offset_hours: -5 }
     - { id: LT-11, type: stepper, model: "ASML PAS 5500", site: naka_fab, area: bay_5, unit: lithography, inject_fault: overlay_drift, fault_severity: 0.68, fault_start_offset_hours: -8 }

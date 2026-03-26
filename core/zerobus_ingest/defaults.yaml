@@ -1,0 +1,38 @@
+zerobus:
+  host: localhost
+  web_port: 8080
+  metrics_port: 9090
+  connector_cmd: "python -m opcua2uc"
+  protocols:
+    opcua:
+      enabled: true
+      port: 4840
+      variable_limit: 500
+    mqtt:
+      enabled: true
+      port: 1883
+      qos: 1
+      topics:
+        - "sensors/#"
+    sparkplug:
+      enabled: true
+      port: 1883
+      qos: 1
+      topics:
+        - "spBv1.0/#"
+    modbus:
+      enabled: true
+      port: 5020
+      slave_id: 1
+      poll_interval_ms: 500
+      register_address: 0
+      register_count: 4096
+    canbus:
+      enabled: true
+      interface: vcan0
+      bitrate: 500000
+      poll_interval_ms: 100
+      frame_ids:
+        - "0x100"
+        - "0x101"
+        - "0x200"

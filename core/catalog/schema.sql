@@ -17,6 +17,38 @@ CREATE TABLE IF NOT EXISTS ${catalog_name}.bronze.sensor_readings (
 USING DELTA
 TBLPROPERTIES ('delta.enableChangeDataFeed' = 'true');
 
+CREATE TABLE IF NOT EXISTS ${catalog_name}.bronze._simulator_staging (
+  site_id         STRING NOT NULL,
+  area_id         STRING NOT NULL,
+  unit_id         STRING NOT NULL,
+  equipment_id    STRING NOT NULL,
+  component_id    STRING,
+  tag_name        STRING NOT NULL,
+  value           DOUBLE NOT NULL,
+  unit            STRING,
+  quality         STRING NOT NULL,
+  quality_code    STRING NOT NULL,
+  source_protocol STRING NOT NULL,
+  timestamp       TIMESTAMP NOT NULL
+)
+USING DELTA;
+
+CREATE TABLE IF NOT EXISTS ${catalog_name}.bronze._zerobus_staging (
+  site_id         STRING NOT NULL,
+  area_id         STRING NOT NULL,
+  unit_id         STRING NOT NULL,
+  equipment_id    STRING NOT NULL,
+  component_id    STRING,
+  tag_name        STRING NOT NULL,
+  value           DOUBLE NOT NULL,
+  unit            STRING,
+  quality         STRING NOT NULL,
+  quality_code    STRING NOT NULL,
+  source_protocol STRING NOT NULL,
+  timestamp       TIMESTAMP NOT NULL
+)
+USING DELTA;
+
 CREATE TABLE IF NOT EXISTS ${catalog_name}.silver.sensor_features (
   equipment_id      STRING NOT NULL,
   tag_name          STRING NOT NULL,

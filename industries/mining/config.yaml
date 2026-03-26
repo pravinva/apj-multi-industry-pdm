@@ -30,6 +30,24 @@ simulator:
   tick_interval_ms: 800
   noise_factor: 0.02
   protocol: OPC-UA
+  sdt:
+    enabled: true
+    epsilon_abs: 0.3
+    epsilon_pct: 0.008
+    heartbeat_ms: 30000
+    tag_overrides:
+      vibration_rms: { epsilon_abs: 0.06, heartbeat_ms: 10000 }
+      roller_vibration: { epsilon_abs: 0.05, heartbeat_ms: 10000 }
+      engine_egt: { epsilon_abs: 1.5, heartbeat_ms: 20000 }
+      coolant_temp: { epsilon_abs: 0.8, heartbeat_ms: 20000 }
+      oil_temp: { epsilon_abs: 0.8, heartbeat_ms: 20000 }
+      tyre_pressure_fl: { epsilon_abs: 0.6, heartbeat_ms: 15000 }
+      tyre_pressure_fr: { epsilon_abs: 0.6, heartbeat_ms: 15000 }
+      payload_weight: { epsilon_abs: 1.2, heartbeat_ms: 20000 }
+      fuel_rate: { epsilon_abs: 2.5, heartbeat_ms: 20000 }
+      motor_current: { epsilon_abs: 1.2, heartbeat_ms: 12000 }
+      belt_tension: { epsilon_abs: 0.8, heartbeat_ms: 12000 }
+      throughput_rate: { epsilon_abs: 0.7, heartbeat_ms: 12000 }
   assets:
     - id: HT-012
       type: haul_truck

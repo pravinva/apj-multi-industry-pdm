@@ -43,12 +43,20 @@ class OTPdMRULModel:
 
     def log_to_mlflow(self, metrics: dict, catalog: str):
         import mlflow
+        from mlflow.models import infer_signature
         import mlflow.sklearn
 
+        # Use feature matrix columns seen during fit to create a stable signature.
+        feature_names = getattr(self, "feature_names_", [])
+        x_sample = pd.DataFrame([[0.0 for _ in feature_names]], columns=feature_names)
+        y_sample = self.pipeline.predict(x_sample)
+        signature = infer_signature(x_sample, y_sample)
         mlflow.sklearn.log_model(
             self.pipeline,
             artifact_path="rul_model",
             registered_model_name=f"{catalog}.models.ot_pdm_rul_{self.equipment_id.lower()}",
+            signature=signature,
+            input_example=x_sample,
         )
         mlflow.log_params(
             {
