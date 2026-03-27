@@ -4,7 +4,7 @@ const INDUSTRIES = ["mining", "energy", "water", "automotive", "semiconductor"];
 const CURRENCIES = ["AUTO", "USD", "AUD", "JPY"];
 const EMPTY_EXECUTIVE = {
   audience: "finance_executive",
-  window: "last_30_days_simulated",
+  window: "last_30_days",
   currency: "USD",
   value_statement: "Impact on EBIT saved through prescriptive maintenance: USD 0",
   ebit_saved: 0,
@@ -974,9 +974,10 @@ export default function App() {
               <div className="alert-hdr">Recent alerts</div>
               <div className="arows">
                 {(overview.alerts || []).map((a, i) => (
-                  <div key={`${a.text}-${i}`} className={`arow ${a.severity}`}>
+                  <div key={`${a.text}-${i}`} className={`arow ${a.severity}`} title={a.tooltip || ""}>
                     <div className={`apip ${a.severity}`} />
                     <span className="atext">{a.text}</span>
+                    <span className="alert-tip" title={a.tooltip || ""}>i</span>
                     <span className="atime">{a.time}</span>
                   </div>
                 ))}
@@ -990,7 +991,7 @@ export default function App() {
                 <div className="exec-hero-eyebrow">Executive briefing value statement</div>
                 <div className="exec-hero-title">{executive.value_statement || EMPTY_EXECUTIVE.value_statement}</div>
                 <div className="exec-hero-sub">
-                  Finance lens for {industry} skin ({executive.window || "last_30_days_simulated"}) to support EBC storytelling.
+                  Financial summary for {industry.charAt(0).toUpperCase() + industry.slice(1)} operations over the last 30 days.
                 </div>
                 <div className="exec-hero-actions">
                   <button className="exec-jump-btn" onClick={() => setPage("p7")}>Open Finance Command Center</button>
@@ -1028,7 +1029,18 @@ export default function App() {
                   <div className="exec-card-title">Value bridge to EBIT</div>
                   {(executive.value_bridge || []).map((b) => (
                     <div key={b.label} className="exec-bridge-row">
-                      <span className="exec-bridge-label">{b.label}</span>
+                      <span className="exec-bridge-label">
+                        {b.label}
+                        <span
+                          className="exec-tip"
+                          title={b.tooltip || execTips.source_table || ""}
+                          data-tip={b.tooltip || execTips.source_table || ""}
+                          aria-label={b.tooltip || execTips.source_table || ""}
+                          tabIndex={0}
+                        >
+                          i
+                        </span>
+                      </span>
                       <span className={`exec-bridge-val ${b.kind === "negative" ? "neg" : "pos"}`} title={b.tooltip || execTips.source_table || ""}>{b.amount_fmt}</span>
                     </div>
                   ))}
@@ -1041,7 +1053,18 @@ export default function App() {
                     <div><span className="exec-erp-k">Planner group</span><span className="exec-erp-v">{executive.erp?.planner_group || "—"}</span></div>
                     <div><span className="exec-erp-k">Account</span><span className="exec-erp-v">{executive.erp?.reference_account || "—"}</span></div>
                   </div>
-                  <div className="exec-erp-source" title={execTips.source_table || ""}>Source table: {executive.source_table || "simulated model"}</div>
+                  <div className="exec-erp-source" title={execTips.source_table || ""}>
+                    Source table: {executive.source_table || "simulated model"}
+                    <span
+                      className="exec-tip"
+                      title={execTips.source_table || ""}
+                      data-tip={execTips.source_table || ""}
+                      aria-label={execTips.source_table || ""}
+                      tabIndex={0}
+                    >
+                      i
+                    </span>
+                  </div>
                   <div className="exec-chip-row">
                     {(executive.erp?.cost_centers || []).map((c) => <span key={c} className="exec-chip">{c}</span>)}
                   </div>
@@ -1696,7 +1719,18 @@ export default function App() {
                   <div className="exec-card-title">Value bridge</div>
                   {(executive.value_bridge || []).map((b) => (
                     <div key={`p7-bridge-${b.label}`} className="exec-bridge-row">
-                      <span className="exec-bridge-label">{b.label}</span>
+                      <span className="exec-bridge-label">
+                        {b.label}
+                        <span
+                          className="exec-tip"
+                          title={b.tooltip || execTips.source_table || ""}
+                          data-tip={b.tooltip || execTips.source_table || ""}
+                          aria-label={b.tooltip || execTips.source_table || ""}
+                          tabIndex={0}
+                        >
+                          i
+                        </span>
+                      </span>
                       <span className={`exec-bridge-val ${b.kind === "negative" ? "neg" : "pos"}`} title={b.tooltip || execTips.source_table || ""}>{b.amount_fmt}</span>
                     </div>
                   ))}
