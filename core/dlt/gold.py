@@ -1,41 +1,27 @@
 import dlt
 from pyspark.sql import functions as F
-
-from core.config.loader import load_config
-
-INDUSTRY = spark.conf.get("industry", "mining")
-config = load_config(INDUSTRY)
-catalog = config["catalog"]
+FEATURE_COLS = ["mean_15m", "stddev_15m", "slope_1h", "zscore_30d", "cumsum_24h"]
 
 
 @dlt.table(
     name="feature_vectors",
-    comment="Gold: wide feature vectors per asset per 15-min window - MLflow training input",
+    comment="Gold: fixed-schema feature vectors per asset per 15-min window",
     table_properties={"quality": "gold", "delta.enableChangeDataFeed": "true"},
 )
 def feature_vectors():
     silver = dlt.read("sensor_features")
-    feature_cols = [f["name"] for f in config["features"]]
-
-    grouped = silver.groupBy("equipment_id", F.window("timestamp", "15 minutes"), "tag_name").agg(
-        *[F.first(F.col(f)).alias(f) for f in feature_cols]
-    )
-    rows = []
-    for f in feature_cols:
-        rows.append(F.struct(F.col("tag_name"), F.lit(f).alias("feature"), F.col(f).alias("v")))
-
-    exploded = grouped.withColumn("kv", F.explode(F.array(*rows))).select(
-        "equipment_id",
-        F.col("window.start").alias("window_start"),
-        F.col("window.end").alias("window_end"),
-        F.concat_ws("__", F.col("kv.tag_name"), F.col("kv.feature")).alias("pivot_key"),
-        F.col("kv.v").alias("pivot_value"),
-    )
-
+    aggs = []
+    for f in FEATURE_COLS:
+        aggs.append(F.avg(F.col(f)).alias(f"{f}_avg"))
+        aggs.append(F.max(F.col(f)).alias(f"{f}_max"))
+    aggs.append(F.count("*").alias("reading_count"))
+    aggs.append(F.countDistinct("tag_name").alias("tag_count"))
     return (
-        exploded.groupBy("equipment_id", "window_start", "window_end")
-        .pivot("pivot_key")
-        .agg(F.first("pivot_value"))
+        silver.groupBy("equipment_id", F.window("timestamp", "15 minutes"))
+        .agg(*aggs)
+        .withColumn("window_start", F.col("window.start"))
+        .withColumn("window_end", F.col("window.end"))
+        .drop("window")
         .withColumn("_processed_at", F.current_timestamp())
     )
 

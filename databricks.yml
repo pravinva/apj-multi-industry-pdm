@@ -13,7 +13,10 @@ variables:
     default: mining
   use_simulator:
     description: "Use OT simulator instead of live Zerobus connector"
-    default: "true"
+    default: "false"
+  zerobus_source_table:
+    description: "Bronze source table for Zerobus ingest in bronze schema"
+    default: "pravin_zerobus"
   catalog_name:
     description: "Unity Catalog catalog name"
     default: "pdm_${var.industry}"
@@ -47,6 +50,7 @@ resources:
       configuration:
         industry: ${var.industry}
         use_simulator: ${var.use_simulator}
+        zerobus_source_table: ${var.zerobus_source_table}
         catalog_name: ${var.catalog_name}
       catalog: ${var.catalog_name}
       target: bronze
