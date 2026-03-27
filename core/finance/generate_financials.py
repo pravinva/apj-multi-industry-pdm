@@ -73,36 +73,39 @@ def _daily_rows(industry: str, days: int) -> list[dict]:
 
 def main() -> None:
     args = _parse_args().parse_args()
-    industry = str(args.industry or "mining").strip().lower()
-    catalog = args.catalog or f"pdm_{industry}"
-    rows = _daily_rows(industry, args.days)
-    if not rows:
-        return
+    requested = str(args.industry or "mining").strip().lower()
+    industries = list(INDUSTRY_PROFILES.keys()) if requested in {"all", "*"} else [requested]
 
-    spark.sql(f"CREATE SCHEMA IF NOT EXISTS {catalog}.finance")
-    spark.sql(
-        f"""
-        CREATE TABLE IF NOT EXISTS {catalog}.finance.pm_financial_daily (
-          ds DATE,
-          industry STRING,
-          currency STRING,
-          avoided_downtime_cost DOUBLE,
-          avoided_quality_cost DOUBLE,
-          avoided_energy_cost DOUBLE,
-          intervention_cost DOUBLE,
-          platform_cost DOUBLE,
-          ebit_saved DOUBLE,
-          net_benefit DOUBLE,
-          baseline_monthly_ebit DOUBLE,
-          updated_at TIMESTAMP
-        ) USING DELTA
-        """
-    )
-    spark.sql(f"DELETE FROM {catalog}.finance.pm_financial_daily WHERE industry = '{industry}'")
-    pdf = pd.DataFrame(rows)
-    pdf["ds"] = pd.to_datetime(pdf["ds"]).dt.date
-    df = spark.createDataFrame(pdf).withColumn("ds", F.to_date(F.col("ds")))
-    df.write.mode("append").saveAsTable(f"{catalog}.finance.pm_financial_daily")
+    for industry in industries:
+        catalog = args.catalog if (len(industries) == 1 and args.catalog) else f"pdm_{industry}"
+        rows = _daily_rows(industry, args.days)
+        if not rows:
+            continue
+
+        spark.sql(f"CREATE SCHEMA IF NOT EXISTS {catalog}.finance")
+        spark.sql(
+            f"""
+            CREATE TABLE IF NOT EXISTS {catalog}.finance.pm_financial_daily (
+              ds DATE,
+              industry STRING,
+              currency STRING,
+              avoided_downtime_cost DOUBLE,
+              avoided_quality_cost DOUBLE,
+              avoided_energy_cost DOUBLE,
+              intervention_cost DOUBLE,
+              platform_cost DOUBLE,
+              ebit_saved DOUBLE,
+              net_benefit DOUBLE,
+              baseline_monthly_ebit DOUBLE,
+              updated_at TIMESTAMP
+            ) USING DELTA
+            """
+        )
+        spark.sql(f"DELETE FROM {catalog}.finance.pm_financial_daily WHERE industry = '{industry}'")
+        pdf = pd.DataFrame(rows)
+        pdf["ds"] = pd.to_datetime(pdf["ds"]).dt.date
+        df = spark.createDataFrame(pdf).withColumn("ds", F.to_date(F.col("ds")))
+        df.write.mode("append").saveAsTable(f"{catalog}.finance.pm_financial_daily")
 
 
 if __name__ == "__main__":

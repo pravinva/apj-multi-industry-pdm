@@ -119,9 +119,7 @@ resources:
             python_file: core/finance/generate_financials.py
             parameters:
               - "--industry"
-              - "${var.industry}"
-              - "--catalog"
-              - "${var.catalog_name}"
+              - "all"
               - "--days"
               - "730"
       schedule:
