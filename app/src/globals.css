@@ -169,11 +169,13 @@ body,
 }
 
 .isa-badge {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  padding: 2px 7px;
-  border-radius: 3px;
+  font-size: 12px;
+  color: #86efac;
+  border: 1px solid rgba(134, 239, 172, 0.55);
+  background: rgba(22, 163, 74, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(134, 239, 172, 0.12);
+  padding: 3px 9px;
+  border-radius: 6px;
   font-family: "IBM Plex Mono", monospace;
   margin-left: 12px;
   white-space: nowrap;
@@ -883,8 +885,9 @@ body,
 
 .atime {
   font-family: "IBM Plex Mono", monospace;
-  font-size: 10px;
-  color: var(--muted);
+  font-size: 11px;
+  color: #16a34a;
+  font-weight: 600;
 }
 
 .exec-wrap {
