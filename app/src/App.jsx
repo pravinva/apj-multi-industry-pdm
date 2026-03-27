@@ -992,6 +992,9 @@ export default function App() {
                 <div className="exec-hero-sub">
                   Finance lens for {industry} skin ({executive.window || "last_30_days_simulated"}) to support EBC storytelling.
                 </div>
+                <div className="exec-hero-actions">
+                  <button className="exec-jump-btn" onClick={() => setPage("p7")}>Open Finance Command Center</button>
+                </div>
               </div>
 
               <div className="exec-finance-row">
