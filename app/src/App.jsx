@@ -1081,7 +1081,7 @@ export default function App() {
           <span className="logo-text">Databricks</span>
         </div>
         <div className="topbar-div" />
-        <span className="app-name">{isJapanese ? "予知保全 オペレーション＆ビジネス価値コマンドセンター" : "Predictive Maintenance Operations & Business Value Command Center"}</span>
+        <span className="app-name">{isJapanese ? "予知保全 オペレーション＆ビジネス価値ハブ" : "Predictive Maintenance Operations & Business Value Hub"}</span>
         <div className="ind-tabs">
           {INDUSTRIES.map((ind) => (
             <button key={ind} className={`itab ${industry === ind ? "active" : ""}`} onClick={() => setIndustry(ind)}>
