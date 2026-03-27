@@ -34,12 +34,34 @@ OT source (simulator or Zerobus)
 
 ## App Design
 
-- **Page 1 - Fleet**: KPI strip, fleet risk, operational actions.
+- **Page 1 - Fleet**: starts with an executive value view (EBIT impact), then drills into fleet risk and operational actions.
 - **Page 2 - Drilldown**: per-asset telemetry, anomaly and RUL context.
 - **Page 3 - ISA-95**: hierarchy browsing and roll-up health.
 - **Page 4 - Stream**: near-real-time row stream with quality/protocol flags.
 - **Page 5 - Model**: model status and explainability views.
 - **Page 6 - Simulator**: fault controls, configuration and connector setup.
+
+## Executive Value Layer (Finance + ERP Simulation)
+
+The executive view now includes a finance-first narrative for EBC use:
+
+- Value statement: **Impact on EBIT saved through prescriptive maintenance**
+- KPI cards: EBIT saved, ROI, payback days, EBIT margin lift (bps)
+- Value bridge: avoided downtime + quality + energy, minus intervention and platform cost
+- ERP context: plant code, fiscal period, planner group, cost centers
+- Work-order simulation: recommended WOs with expected failure cost, intervention cost, and net EBIT impact
+
+### Multi-skin sector-specific ERP and financial assumptions
+
+Each skin has distinct ERP and finance assumptions (not shared defaults):
+
+- `mining`: plant/cost centers, mining downtime economics, AUD
+- `energy`: grid and storage work centers, outage economics, AUD
+- `water`: distribution + quality operations economics, AUD
+- `automotive`: line-stop and quality economics, JPY
+- `semiconductor`: fab yield and tool downtime economics, USD
+
+These are simulated in backend payload generation and surfaced in the executive UI for each industry skin.
 
 ## Quick Start (clean workspace)
 

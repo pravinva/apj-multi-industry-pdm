@@ -144,6 +144,89 @@ def _read_csv_rows(path: Path) -> list[dict[str, Any]]:
         return list(csv.DictReader(f))
 
 
+def _live_stream_points(industry: str, max_ticks: int) -> list[dict[str, Any]]:
+    target_fqn, _ = _zerobus_action_target(industry)
+    limit = max(500, min(30000, max_ticks * 40))
+    statement = f"""
+    SELECT equipment_id, tag_name, value, quality, timestamp
+    FROM {target_fqn}
+    WHERE tag_name <> 'operator.recommendation.action'
+    ORDER BY timestamp DESC
+    LIMIT {limit}
+    """
+    rows = _run_sql(statement, cache_key=f"{target_fqn}:live_stream_points:{max_ticks}")
+    rows = [r for r in rows if r.get("tag_name")]
+    rows.sort(key=lambda r: (_parse_dt(r.get("timestamp")) or datetime.fromtimestamp(0, tz=timezone.utc)))
+    return rows
+
+
+def _live_sdt_window_metrics(industry: str, points: list[dict[str, Any]], ticks: int) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    from core.simulator.sdt import SwingingDoorCompressor
+
+    def _to_float(v: Any) -> float:
+        try:
+            return float(v)
+        except Exception:
+            return 0.0
+
+    if not points:
+        return (
+            {"industry": industry, "raw_total": 0, "sdt_total": 0, "kept_pct": 0.0, "drop_pct": 0.0},
+            [],
+        )
+
+    # Build per-tag latest N points and replay SDT locally for a true rolling-window estimate.
+    per_tag: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for r in points:
+        key = (str(r.get("equipment_id") or ""), str(r.get("tag_name") or ""))
+        per_tag.setdefault(key, []).append(r)
+    for key in per_tag:
+        per_tag[key] = per_tag[key][-max(1, ticks) :]
+
+    comp = SwingingDoorCompressor(_industry_cfg(industry).get("simulator", {}))
+    raw_total = 0
+    sdt_total = 0
+    tag_raw: dict[str, int] = {}
+    tag_sdt: dict[str, int] = {}
+    for (equipment_id, tag_name), tag_points in per_tag.items():
+        for p in tag_points:
+            ts = _parse_dt(p.get("timestamp")) or datetime.now(timezone.utc)
+            raw_total += 1
+            tag_raw[tag_name] = tag_raw.get(tag_name, 0) + 1
+            value = _to_float(p.get("value"))
+            quality = str(p.get("quality") or "good")
+            emit = comp.should_emit(f"{equipment_id}:{tag_name}", tag_name, value, quality, ts)
+            if emit:
+                sdt_total += 1
+                tag_sdt[tag_name] = tag_sdt.get(tag_name, 0) + 1
+
+    kept_pct = (sdt_total / raw_total * 100.0) if raw_total else 0.0
+    drop_pct = 100.0 - kept_pct
+    overall = {
+        "industry": industry,
+        "raw_total": int(raw_total),
+        "sdt_total": int(sdt_total),
+        "kept_pct": float(kept_pct),
+        "drop_pct": float(drop_pct),
+    }
+    tags: list[dict[str, Any]] = []
+    for tag_name, rcount in sorted(tag_raw.items()):
+        scount = int(tag_sdt.get(tag_name, 0))
+        t_kept = (scount / rcount * 100.0) if rcount else 0.0
+        tags.append(
+            {
+                "industry": industry,
+                "tag_name": tag_name,
+                "raw_count": int(rcount),
+                "sdt_count": scount,
+                "kept_pct": float(t_kept),
+                "drop_pct": float(100.0 - t_kept),
+            }
+        )
+    tags.sort(key=lambda x: x["drop_pct"], reverse=True)
+    return overall, tags
+
+
 def _report_dir_for_ticks(ticks: int) -> Path:
     return SDT_REPORT_DIR / str(ticks)
 
@@ -450,12 +533,11 @@ def _persist_simulator_rows(industry: str, rows: list[dict[str, Any]]) -> None:
         return
     if WorkspaceClient is None or sql_service is None:
         return
-    catalog = _industry_cfg(industry).get("catalog", f"pdm_{industry}")
+    target_fqn, _ = _zerobus_action_target(industry)
     client = WorkspaceClient()
-
     if not _SIM_STAGING_READY.get(industry):
         ddl = f"""
-        CREATE TABLE IF NOT EXISTS {catalog}.bronze._simulator_staging (
+        CREATE TABLE IF NOT EXISTS {target_fqn} (
           site_id STRING,
           area_id STRING,
           unit_id STRING,
@@ -477,9 +559,7 @@ def _persist_simulator_rows(industry: str, rows: list[dict[str, Any]]) -> None:
                 wait_timeout="20s",
                 disposition=sql_service.Disposition.INLINE,
             )
-            _SIM_STAGING_READY[industry] = True
-        except Exception:
-            # Continue best effort; inserts may still work if table already exists.
+        finally:
             _SIM_STAGING_READY[industry] = True
 
     values_sql: list[str] = []
@@ -510,7 +590,7 @@ def _persist_simulator_rows(industry: str, rows: list[dict[str, Any]]) -> None:
     chunk = 200
     for i in range(0, len(values_sql), chunk):
         stmt = (
-            f"INSERT INTO {catalog}.bronze._simulator_staging "
+            f"INSERT INTO {target_fqn} "
             "(site_id, area_id, unit_id, equipment_id, component_id, tag_name, value, unit, quality, quality_code, source_protocol, timestamp) VALUES "
             + ", ".join(values_sql[i : i + chunk])
         )
@@ -958,6 +1038,246 @@ def _asset_rng(industry: str, asset_id: str) -> random.Random:
     return random.Random(f"{industry}:{asset_id}")
 
 
+def _to_float(v: Any, default: float = 0.0) -> float:
+    try:
+        if v is None:
+            return default
+        return float(v)
+    except Exception:
+        return default
+
+
+def _fmt_money(amount: float, currency: str) -> str:
+    whole = int(round(_to_float(amount, 0.0)))
+    sign = "-" if whole < 0 else ""
+    return f"{currency} {sign}{abs(whole):,}"
+
+
+def _executive_profile(industry: str, cfg: dict[str, Any]) -> dict[str, Any]:
+    default_currency = str(
+        cfg.get("agent", {}).get("terminology", {}).get("cost_currency", "USD")
+    )
+    # Sector-specific ERP + finance assumptions for executive value simulation.
+    profiles: dict[str, dict[str, Any]] = {
+        "mining": {
+            "plant_code": "AU-MIN-01",
+            "fiscal_period": "FY2026-P03",
+            "cost_centers": ["MIN-EXTR-210", "MIN-MAINT-110", "MIN-CRUSH-320"],
+            "work_centers": ["Pit Maintenance", "Mobile Equipment", "Crushing Line"],
+            "planner_group": "MIN-PLAN-A",
+            "currency": "AUD",
+            "downtime_cost_per_hour": 56000.0,
+            "quality_cost_per_hour": 6500.0,
+            "energy_cost_per_hour": 2400.0,
+            "labor_cost_per_hour": 320.0,
+            "parts_cost_base": 18500.0,
+            "dispatch_cost": 2800.0,
+            "platform_cost_monthly_alloc": 42000.0,
+        },
+        "energy": {
+            "plant_code": "AU-ENE-07",
+            "fiscal_period": "FY2026-P03",
+            "cost_centers": ["ENE-GRID-410", "ENE-OPS-120", "ENE-STOR-230"],
+            "work_centers": ["Generation Ops", "Grid Reliability", "BESS Maintenance"],
+            "planner_group": "ENE-PLAN-B",
+            "currency": "AUD",
+            "downtime_cost_per_hour": 47000.0,
+            "quality_cost_per_hour": 3900.0,
+            "energy_cost_per_hour": 5100.0,
+            "labor_cost_per_hour": 300.0,
+            "parts_cost_base": 21000.0,
+            "dispatch_cost": 2500.0,
+            "platform_cost_monthly_alloc": 36000.0,
+        },
+        "water": {
+            "plant_code": "AU-WAT-04",
+            "fiscal_period": "FY2026-P03",
+            "cost_centers": ["WAT-DIST-180", "WAT-PUMP-220", "WAT-QUAL-090"],
+            "work_centers": ["Pump Station Team", "Distribution Ops", "Water Quality"],
+            "planner_group": "WAT-PLAN-C",
+            "currency": "AUD",
+            "downtime_cost_per_hour": 18500.0,
+            "quality_cost_per_hour": 4200.0,
+            "energy_cost_per_hour": 1300.0,
+            "labor_cost_per_hour": 220.0,
+            "parts_cost_base": 8200.0,
+            "dispatch_cost": 1600.0,
+            "platform_cost_monthly_alloc": 18000.0,
+        },
+        "automotive": {
+            "plant_code": "JP-AUTO-12",
+            "fiscal_period": "FY2026-M03",
+            "cost_centers": ["AUTO-PRESS-510", "AUTO-BODY-540", "AUTO-MACH-530"],
+            "work_centers": ["Press Shop", "Body Welding", "CNC Machining"],
+            "planner_group": "AUTO-PLAN-A",
+            "currency": "JPY",
+            "downtime_cost_per_hour": 950000.0,
+            "quality_cost_per_hour": 180000.0,
+            "energy_cost_per_hour": 42000.0,
+            "labor_cost_per_hour": 11000.0,
+            "parts_cost_base": 340000.0,
+            "dispatch_cost": 70000.0,
+            "platform_cost_monthly_alloc": 1200000.0,
+        },
+        "semiconductor": {
+            "plant_code": "JP-SEM-22",
+            "fiscal_period": "FY2026-M03",
+            "cost_centers": ["SEM-ETCH-710", "SEM-LITHO-730", "SEM-METRO-760"],
+            "work_centers": ["Etch Bay", "Lithography Bay", "Yield Engineering"],
+            "planner_group": "SEM-PLAN-Z",
+            "currency": "USD",
+            "downtime_cost_per_hour": 68000.0,
+            "quality_cost_per_hour": 24000.0,
+            "energy_cost_per_hour": 5200.0,
+            "labor_cost_per_hour": 420.0,
+            "parts_cost_base": 36000.0,
+            "dispatch_cost": 4500.0,
+            "platform_cost_monthly_alloc": 56000.0,
+        },
+    }
+    profile = dict(profiles.get(industry, profiles["mining"]))
+    profile["currency"] = str(profile.get("currency") or default_currency)
+    profile["expedite_parts_multiplier"] = 1.35
+    profile["emergency_labor_multiplier"] = 1.4
+    profile["planned_parts_ratio"] = 0.45
+    return profile
+
+
+def _executive_work_orders(
+    industry: str, assets: list[dict[str, Any]], profile: dict[str, Any]
+) -> list[dict[str, Any]]:
+    scoped = [a for a in assets if a.get("status") != "healthy"]
+    scoped.sort(key=lambda a: _to_float(a.get("anomaly_score"), 0.0), reverse=True)
+    center_list = profile.get("cost_centers", [])
+    work_centers = profile.get("work_centers", [])
+    prefix = industry[:3].upper()
+    orders: list[dict[str, Any]] = []
+    for idx, asset in enumerate(scoped[:8], start=1):
+        anomaly = max(0.05, min(0.98, _to_float(asset.get("anomaly_score"), 0.25)))
+        critical = str(asset.get("status")) == "critical"
+        repair_h = 8.0 if critical else 5.5
+        planned_h = repair_h * (0.58 if critical else 0.66)
+        unplanned_h = repair_h * (1.75 if critical else 1.35)
+        parts_base = _to_float(profile.get("parts_cost_base"), 0.0) * (1.35 if critical else 1.0)
+        labor_rate = _to_float(profile.get("labor_cost_per_hour"), 0.0)
+        down_rate = _to_float(profile.get("downtime_cost_per_hour"), 0.0)
+        qual_rate = _to_float(profile.get("quality_cost_per_hour"), 0.0)
+        energy_rate = _to_float(profile.get("energy_cost_per_hour"), 0.0)
+        dispatch = _to_float(profile.get("dispatch_cost"), 0.0)
+
+        avoided_downtime_cost = anomaly * unplanned_h * down_rate
+        avoided_quality_cost = anomaly * unplanned_h * qual_rate
+        avoided_energy_cost = anomaly * unplanned_h * energy_rate
+        expected_failure_cost = (
+            avoided_downtime_cost
+            + avoided_quality_cost
+            + avoided_energy_cost
+            + parts_base * _to_float(profile.get("expedite_parts_multiplier"), 1.35)
+            + (labor_rate * unplanned_h * _to_float(profile.get("emergency_labor_multiplier"), 1.4))
+        )
+        intervention_cost = (
+            planned_h * labor_rate
+            + parts_base * _to_float(profile.get("planned_parts_ratio"), 0.45)
+            + dispatch
+        )
+        net_ebit_impact = max(0.0, expected_failure_cost - intervention_cost)
+
+        orders.append(
+            {
+                "wo_id": f"{prefix}-WO-{1200 + idx}",
+                "equipment_id": str(asset.get("id") or ""),
+                "priority": "P1" if critical else "P2",
+                "status": "RECOMMENDED",
+                "work_center": work_centers[(idx - 1) % max(1, len(work_centers))] if work_centers else "Operations",
+                "cost_center": center_list[(idx - 1) % max(1, len(center_list))] if center_list else "OPS-000",
+                "planner_group": profile.get("planner_group", "PLAN-DEFAULT"),
+                "failure_probability": round(anomaly, 3),
+                "expected_failure_cost": round(expected_failure_cost, 2),
+                "intervention_cost": round(intervention_cost, 2),
+                "net_ebit_impact": round(net_ebit_impact, 2),
+                "avoided_downtime_cost": round(avoided_downtime_cost, 2),
+                "avoided_quality_cost": round(avoided_quality_cost, 2),
+                "avoided_energy_cost": round(avoided_energy_cost, 2),
+                "rul_hours": _to_float(asset.get("rul_hours"), 0.0),
+            }
+        )
+    return orders
+
+
+def _executive_value(industry: str, assets: list[dict[str, Any]]) -> dict[str, Any]:
+    cfg = _industry_cfg(industry)
+    accounts = cfg.get("accounts", {}) or {}
+    profile = _executive_profile(industry, cfg)
+    currency = str(profile.get("currency", "USD"))
+    work_orders = _executive_work_orders(industry, assets, profile)
+
+    avoided_downtime = sum(_to_float(w.get("avoided_downtime_cost"), 0.0) for w in work_orders)
+    avoided_quality = sum(_to_float(w.get("avoided_quality_cost"), 0.0) for w in work_orders)
+    avoided_energy = sum(_to_float(w.get("avoided_energy_cost"), 0.0) for w in work_orders)
+    intervention_cost = sum(_to_float(w.get("intervention_cost"), 0.0) for w in work_orders)
+    platform_cost = _to_float(profile.get("platform_cost_monthly_alloc"), 0.0)
+    net_benefit = avoided_downtime + avoided_quality + avoided_energy - intervention_cost - platform_cost
+    ebit_saved = max(0.0, net_benefit)
+    invested = max(1.0, intervention_cost + platform_cost)
+    roi_pct = (ebit_saved / invested) * 100.0
+    payback_days = 999.0
+    if ebit_saved > 0:
+        daily = ebit_saved / 30.0
+        payback_days = invested / max(1.0, daily)
+
+    pipeline_monthly = _to_float(accounts.get("pipeline_monthly"), 1.0)
+    ebit_margin_bps = (ebit_saved / max(1.0, pipeline_monthly)) * 10000.0
+
+    for w in work_orders:
+        w["expected_failure_cost_fmt"] = _fmt_money(_to_float(w["expected_failure_cost"]), currency)
+        w["intervention_cost_fmt"] = _fmt_money(_to_float(w["intervention_cost"]), currency)
+        w["net_ebit_impact_fmt"] = _fmt_money(_to_float(w["net_ebit_impact"]), currency)
+
+    value_bridge = [
+        {"label": "Avoided unplanned downtime", "kind": "positive", "amount": round(avoided_downtime, 2), "amount_fmt": _fmt_money(avoided_downtime, currency)},
+        {"label": "Avoided quality and scrap loss", "kind": "positive", "amount": round(avoided_quality, 2), "amount_fmt": _fmt_money(avoided_quality, currency)},
+        {"label": "Avoided energy waste", "kind": "positive", "amount": round(avoided_energy, 2), "amount_fmt": _fmt_money(avoided_energy, currency)},
+        {"label": "Planned intervention cost", "kind": "negative", "amount": round(-intervention_cost, 2), "amount_fmt": _fmt_money(-intervention_cost, currency)},
+        {"label": "Platform and operations allocation", "kind": "negative", "amount": round(-platform_cost, 2), "amount_fmt": _fmt_money(-platform_cost, currency)},
+    ]
+
+    return {
+        "audience": "finance_executive",
+        "window": "last_30_days_simulated",
+        "currency": currency,
+        "value_statement": f"Impact on EBIT saved through prescriptive maintenance: {_fmt_money(ebit_saved, currency)}",
+        "ebit_saved": round(ebit_saved, 2),
+        "ebit_saved_fmt": _fmt_money(ebit_saved, currency),
+        "net_benefit": round(net_benefit, 2),
+        "net_benefit_fmt": _fmt_money(net_benefit, currency),
+        "roi_pct": round(roi_pct, 1),
+        "payback_days": round(payback_days, 1),
+        "ebit_margin_bps": round(ebit_margin_bps, 1),
+        "kpis": {
+            "avoided_downtime_cost": round(avoided_downtime, 2),
+            "avoided_downtime_cost_fmt": _fmt_money(avoided_downtime, currency),
+            "avoided_quality_cost": round(avoided_quality, 2),
+            "avoided_quality_cost_fmt": _fmt_money(avoided_quality, currency),
+            "avoided_energy_cost": round(avoided_energy, 2),
+            "avoided_energy_cost_fmt": _fmt_money(avoided_energy, currency),
+            "intervention_cost": round(intervention_cost, 2),
+            "intervention_cost_fmt": _fmt_money(intervention_cost, currency),
+            "platform_cost": round(platform_cost, 2),
+            "platform_cost_fmt": _fmt_money(platform_cost, currency),
+        },
+        "erp": {
+            "plant_code": profile.get("plant_code"),
+            "fiscal_period": profile.get("fiscal_period"),
+            "cost_centers": profile.get("cost_centers", []),
+            "work_centers": profile.get("work_centers", []),
+            "planner_group": profile.get("planner_group"),
+            "reference_account": accounts.get("primary", ""),
+        },
+        "value_bridge": value_bridge,
+        "work_orders": work_orders,
+    }
+
+
 def _asset_snapshot(industry: str, asset_def: dict[str, Any], pred: dict[str, Any] | None = None) -> dict[str, Any]:
     aid = asset_def["id"]
     rng = _asset_rng(industry, aid)
@@ -1007,7 +1327,12 @@ def _overview(industry: str) -> dict[str, Any]:
     rows = [_asset_snapshot(industry, a, predictions.get(a["id"])) for a in _asset_defs(industry)]
     actioned_assets = _recommendation_actioned_assets(industry)
     if not rows:
-        return {"assets": [], "actioned_assets": [], "kpis": {"fleet_health_score": 0, "critical_assets": 0, "asset_count": 0}}
+        return {
+            "assets": [],
+            "actioned_assets": [],
+            "kpis": {"fleet_health_score": 0, "critical_assets": 0, "asset_count": 0},
+            "executive": _executive_value(industry, []),
+        }
     avg_health = round(sum(a["health_score_pct"] for a in rows) / len(rows), 1)
     critical = [a for a in rows if a["status"] == "critical"]
     warning = [a for a in rows if a["status"] == "warning"]
@@ -1035,6 +1360,7 @@ def _overview(industry: str) -> dict[str, Any]:
                 "text": "I can triage top-risk equipment, parts readiness, and recommended actions.",
             }
         ],
+        "executive": _executive_value(industry, rows),
     }
 
 
@@ -1189,6 +1515,152 @@ def _sim_state(industry: str) -> dict[str, Any]:
             "recent_rows": [],
         }
     return SIM_STATE[industry]
+
+
+def _sim_flow_stage(table_fqn: str, stage_name: str, limit: int, tier: str = "bronze") -> dict[str, Any]:
+    max_rows = max(5, min(120, int(limit)))
+    now_bucket = int(time.time() // 2)
+    latest_stmt = f"""
+    SELECT timestamp, equipment_id, tag_name, value, unit, quality, source_protocol
+    FROM {table_fqn}
+    ORDER BY timestamp DESC
+    LIMIT {max_rows}
+    """
+    rows = _run_sql(latest_stmt, cache_key=f"{table_fqn}:{stage_name}:latest:{max_rows}:{now_bucket}")
+
+    count_stmt = f"""
+    SELECT
+      SUM(CASE WHEN timestamp >= current_timestamp() - INTERVAL 30 MINUTES THEN 1 ELSE 0 END) AS rows_30m,
+      SUM(CASE WHEN timestamp >= current_timestamp() - INTERVAL 5 MINUTES THEN 1 ELSE 0 END) AS rows_5m,
+      SUM(CASE
+            WHEN timestamp >= current_timestamp() - INTERVAL 10 MINUTES
+             AND timestamp < current_timestamp() - INTERVAL 5 MINUTES THEN 1
+            ELSE 0
+          END) AS rows_prev_5m,
+      MAX(timestamp) AS latest_ts
+    FROM {table_fqn}
+    """
+    cnt = _run_sql(count_stmt, cache_key=f"{table_fqn}:{stage_name}:count:{now_bucket}")
+    rows_30m = 0
+    rows_5m = 0
+    rows_prev_5m = 0
+    latest_ts = None
+    if cnt:
+        rows_30m = int(cnt[0].get("rows_30m") or 0)
+        rows_5m = int(cnt[0].get("rows_5m") or 0)
+        rows_prev_5m = int(cnt[0].get("rows_prev_5m") or 0)
+        latest_ts = cnt[0].get("latest_ts")
+    elif rows:
+        latest_ts = rows[0].get("timestamp")
+    if rows_prev_5m <= 0:
+        rate_change_pct = 100.0 if rows_5m > 0 else 0.0
+    else:
+        rate_change_pct = ((rows_5m - rows_prev_5m) / rows_prev_5m) * 100.0
+
+    return {
+        "stage": stage_name,
+        "tier": tier,
+        "table": table_fqn,
+        "rows_30m": rows_30m,
+        "rows_5m": rows_5m,
+        "rows_prev_5m": rows_prev_5m,
+        "rate_change_pct": round(rate_change_pct, 1),
+        "latest_ts": latest_ts,
+        "rows": rows,
+    }
+
+
+def _sim_custom_stage(
+    table_fqn: str,
+    stage_name: str,
+    limit: int,
+    latest_stmt: str,
+    count_stmt: str,
+    ts_field: str = "timestamp",
+    tier: str = "silver",
+) -> dict[str, Any]:
+    max_rows = max(5, min(120, int(limit)))
+    now_bucket = int(time.time() // 2)
+    rows = _run_sql(latest_stmt.format(limit=max_rows), cache_key=f"{table_fqn}:{stage_name}:latest:{max_rows}:{now_bucket}")
+    cnt = _run_sql(count_stmt, cache_key=f"{table_fqn}:{stage_name}:count:{now_bucket}")
+    rows_30m = 0
+    rows_5m = 0
+    rows_prev_5m = 0
+    latest_ts = None
+    if cnt:
+        rows_30m = int(cnt[0].get("rows_30m") or 0)
+        rows_5m = int(cnt[0].get("rows_5m") or 0)
+        rows_prev_5m = int(cnt[0].get("rows_prev_5m") or 0)
+        latest_ts = cnt[0].get("latest_ts")
+    elif rows:
+        latest_ts = rows[0].get(ts_field)
+    if rows_prev_5m <= 0:
+        rate_change_pct = 100.0 if rows_5m > 0 else 0.0
+    else:
+        rate_change_pct = ((rows_5m - rows_prev_5m) / rows_prev_5m) * 100.0
+    return {
+        "stage": stage_name,
+        "tier": tier,
+        "table": table_fqn,
+        "rows_30m": rows_30m,
+        "rows_5m": rows_5m,
+        "rows_prev_5m": rows_prev_5m,
+        "rate_change_pct": round(rate_change_pct, 1),
+        "latest_ts": latest_ts,
+        "rows": rows,
+    }
+
+
+def _sim_silver_stage(table_fqn: str, limit: int) -> dict[str, Any]:
+    latest_stmt = f"""
+    SELECT timestamp, equipment_id, tag_name,
+           mean_15m AS value,
+           quality,
+           'SILVER' AS source_protocol
+    FROM {table_fqn}
+    ORDER BY timestamp DESC
+    LIMIT {{limit}}
+    """
+    count_stmt = f"""
+    SELECT
+      SUM(CASE WHEN timestamp >= current_timestamp() - INTERVAL 30 MINUTES THEN 1 ELSE 0 END) AS rows_30m,
+      SUM(CASE WHEN timestamp >= current_timestamp() - INTERVAL 5 MINUTES THEN 1 ELSE 0 END) AS rows_5m,
+      SUM(CASE
+            WHEN timestamp >= current_timestamp() - INTERVAL 10 MINUTES
+             AND timestamp < current_timestamp() - INTERVAL 5 MINUTES THEN 1
+            ELSE 0
+          END) AS rows_prev_5m,
+      MAX(timestamp) AS latest_ts
+    FROM {table_fqn}
+    """
+    return _sim_custom_stage(table_fqn, "silver_features", limit, latest_stmt, count_stmt, "timestamp", "silver")
+
+
+def _sim_gold_stage(table_fqn: str, limit: int) -> dict[str, Any]:
+    latest_stmt = f"""
+    SELECT prediction_timestamp AS timestamp,
+           equipment_id,
+           'anomaly_score' AS tag_name,
+           anomaly_score AS value,
+           anomaly_label AS quality,
+           'GOLD' AS source_protocol
+    FROM {table_fqn}
+    ORDER BY prediction_timestamp DESC
+    LIMIT {{limit}}
+    """
+    count_stmt = f"""
+    SELECT
+      SUM(CASE WHEN prediction_timestamp >= current_timestamp() - INTERVAL 30 MINUTES THEN 1 ELSE 0 END) AS rows_30m,
+      SUM(CASE WHEN prediction_timestamp >= current_timestamp() - INTERVAL 5 MINUTES THEN 1 ELSE 0 END) AS rows_5m,
+      SUM(CASE
+            WHEN prediction_timestamp >= current_timestamp() - INTERVAL 10 MINUTES
+             AND prediction_timestamp < current_timestamp() - INTERVAL 5 MINUTES THEN 1
+            ELSE 0
+          END) AS rows_prev_5m,
+      MAX(prediction_timestamp) AS latest_ts
+    FROM {table_fqn}
+    """
+    return _sim_custom_stage(table_fqn, "gold_predictions", limit, latest_stmt, count_stmt, "timestamp", "gold")
 
 
 def _default_cost_unit(industry: str) -> str:
@@ -1567,6 +2039,27 @@ def ui_simulator_state(industry: str = "mining") -> dict:
     }
 
 
+@app.get("/api/ui/simulator/flow")
+def ui_simulator_flow(industry: str = "mining", limit: int = 30) -> dict:
+    if industry not in INDUSTRIES:
+        raise HTTPException(status_code=400, detail="Invalid industry")
+    cfg = _industry_cfg(industry)
+    catalog = cfg.get("catalog", f"pdm_{industry}")
+    bronze_fqn = f"{catalog}.bronze.sensor_readings"
+    features_fqn = f"{catalog}.bronze.sensor_features"
+    predictions_fqn = f"{catalog}.bronze.pdm_predictions"
+    bronze = _sim_flow_stage(bronze_fqn, "bronze_curated", limit, "bronze")
+    silver = _sim_silver_stage(features_fqn, limit)
+    gold = _sim_gold_stage(predictions_fqn, limit)
+    return {
+        "industry": industry,
+        "bronze": bronze,
+        "silver": silver,
+        "gold": gold,
+        "stages": [bronze, silver, gold],
+    }
+
+
 @app.post("/api/ui/simulator/control")
 def ui_simulator_control(payload: dict) -> dict:
     industry = payload.get("industry", "mining")
@@ -1628,7 +2121,7 @@ def ui_simulator_tick(payload: dict) -> dict:
             )
     st["reading_count"] += len(rows)
     st["recent_rows"] = (rows + st["recent_rows"])[:120]
-    # Persist simulator ticks into Bronze staging so DLT/ML scoring can consume new data.
+    # Persist simulator ticks to configured Zerobus target table (Zerobus-only ingest path).
     try:
         _persist_simulator_rows(industry, rows)
     except Exception as e:
@@ -1725,7 +2218,7 @@ def ui_config_preview(payload: dict) -> dict:
 
 
 @app.get("/api/ui/sdt/report")
-def ui_sdt_report(industry: str = "mining", ticks: int = 300) -> dict[str, Any]:
+def ui_sdt_report(industry: str = "mining", ticks: int = 300, live: bool = True) -> dict[str, Any]:
     if industry not in INDUSTRIES:
         raise HTTPException(status_code=400, detail="Invalid industry")
 
@@ -1818,6 +2311,45 @@ def ui_sdt_report(industry: str = "mining", ticks: int = 300) -> dict[str, Any]:
             )
     for ind in trend_by_industry:
         trend_by_industry[ind].sort(key=lambda x: int(x.get("ticks", 0)))
+
+    # Live-live mode: recompute SDT from incoming Zerobus stream windows.
+    if live:
+        live_windows = sorted(set((available_ticks or []) + [selected_ticks]))
+        live_trend_by_industry: dict[str, list[dict[str, Any]]] = {}
+        live_summary_by_industry: dict[str, dict[str, Any]] = {}
+        live_tags_for_industry: list[dict[str, Any]] = []
+        max_window = max(live_windows) if live_windows else selected_ticks
+        for ind in INDUSTRIES:
+            points = _live_stream_points(ind, max_window)
+            if not points:
+                continue
+            snapshots: list[dict[str, Any]] = []
+            chosen_tags: list[dict[str, Any]] = []
+            for w in live_windows:
+                ov, tag_metrics = _live_sdt_window_metrics(ind, points, w)
+                snapshot = {
+                    "ticks": int(w),
+                    "raw_total": ov["raw_total"],
+                    "sdt_total": ov["sdt_total"],
+                    "kept_pct": ov["kept_pct"],
+                    "drop_pct": ov["drop_pct"],
+                    "generated_at": datetime.now(timezone.utc).isoformat(),
+                }
+                snapshots.append(snapshot)
+                if int(w) == int(selected_ticks):
+                    live_summary_by_industry[ind] = ov
+                    if ind == industry:
+                        chosen_tags = tag_metrics
+            if snapshots:
+                live_trend_by_industry[ind] = snapshots
+            if ind == industry and chosen_tags:
+                live_tags_for_industry = chosen_tags
+        if live_summary_by_industry:
+            overall = sorted(live_summary_by_industry.values(), key=lambda x: x["industry"])
+            if live_tags_for_industry:
+                tags = live_tags_for_industry
+            trend_by_industry = live_trend_by_industry
+            generated_at = datetime.now(timezone.utc).isoformat()
 
     return {
         "industry": industry,

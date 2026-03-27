@@ -1,6 +1,37 @@
 import { useEffect, useMemo, useState } from "react";
 
 const INDUSTRIES = ["mining", "energy", "water", "automotive", "semiconductor"];
+const EMPTY_EXECUTIVE = {
+  audience: "finance_executive",
+  window: "last_30_days_simulated",
+  currency: "USD",
+  value_statement: "Impact on EBIT saved through prescriptive maintenance: USD 0",
+  ebit_saved: 0,
+  ebit_saved_fmt: "USD 0",
+  net_benefit: 0,
+  net_benefit_fmt: "USD 0",
+  roi_pct: 0,
+  payback_days: 0,
+  ebit_margin_bps: 0,
+  kpis: {
+    avoided_downtime_cost_fmt: "USD 0",
+    avoided_quality_cost_fmt: "USD 0",
+    avoided_energy_cost_fmt: "USD 0",
+    intervention_cost_fmt: "USD 0",
+    platform_cost_fmt: "USD 0"
+  },
+  erp: { plant_code: "", fiscal_period: "", cost_centers: [], work_centers: [], planner_group: "", reference_account: "" },
+  value_bridge: [],
+  work_orders: []
+};
+const EMPTY_OVERVIEW = {
+  assets: [],
+  actioned_assets: [],
+  kpis: { fleet_health_score: 0, critical_assets: 0, asset_count: 0 },
+  alerts: [],
+  messages: [],
+  executive: EMPTY_EXECUTIVE
+};
 const PAGE_META = [
   ["p1", "Fleet", "▦"],
   ["p2", "Asset", "◉"],
@@ -184,7 +215,7 @@ export default function App() {
   const [view, setView] = useState("operator");
   const [simTab, setSimTab] = useState("sim");
 
-  const [overview, setOverview] = useState({ assets: [], actioned_assets: [], kpis: { fleet_health_score: 0, critical_assets: 0, asset_count: 0 }, alerts: [], messages: [] });
+  const [overview, setOverview] = useState(EMPTY_OVERVIEW);
   const [recActionPending, setRecActionPending] = useState({});
   const [recCommentByAsset, setRecCommentByAsset] = useState({});
   const [selectedAssetId, setSelectedAssetId] = useState("");
@@ -212,6 +243,13 @@ export default function App() {
     faults: {},
     asset_sensors: {},
     catalog: "pdm_mining"
+  });
+  const [simFlow, setSimFlow] = useState({
+    industry: "mining",
+    bronze: { stage: "bronze_curated", tier: "bronze", table: "", rows_30m: 0, rows_5m: 0, rows_prev_5m: 0, rate_change_pct: 0, latest_ts: "", rows: [] },
+    silver: { stage: "silver_features", tier: "silver", table: "", rows_30m: 0, rows_5m: 0, rows_prev_5m: 0, rate_change_pct: 0, latest_ts: "", rows: [] },
+    gold: { stage: "gold_predictions", tier: "gold", table: "", rows_30m: 0, rows_5m: 0, rows_prev_5m: 0, rate_change_pct: 0, latest_ts: "", rows: [] },
+    stages: []
   });
   const [cfg, setCfg] = useState({
     industry_key: "mining",
@@ -277,7 +315,7 @@ export default function App() {
     let cancelled = false;
     (async () => {
       const [ov, h, sim] = await Promise.all([
-        getJson(`/api/ui/overview?industry=${industry}`, { assets: [], actioned_assets: [], kpis: { fleet_health_score: 0, critical_assets: 0, asset_count: 0 }, alerts: [], messages: [] }),
+        getJson(`/api/ui/overview?industry=${industry}`, EMPTY_OVERVIEW),
         getJson(`/api/ui/hierarchy?industry=${industry}`, null),
         getJson(`/api/ui/simulator/state?industry=${industry}`, null)
       ]);
@@ -401,6 +439,28 @@ export default function App() {
     };
   }, [page, simTab, industry, simState?.running, simState?.tick_interval_ms]);
 
+  useEffect(() => {
+    if (page !== "p6" || simTab !== "sim") return undefined;
+    let alive = true;
+    const fallback = {
+      industry,
+      bronze: { stage: "bronze_curated", tier: "bronze", table: "", rows_30m: 0, rows_5m: 0, rows_prev_5m: 0, rate_change_pct: 0, latest_ts: "", rows: [] },
+      silver: { stage: "silver_features", tier: "silver", table: "", rows_30m: 0, rows_5m: 0, rows_prev_5m: 0, rate_change_pct: 0, latest_ts: "", rows: [] },
+      gold: { stage: "gold_predictions", tier: "gold", table: "", rows_30m: 0, rows_5m: 0, rows_prev_5m: 0, rate_change_pct: 0, latest_ts: "", rows: [] },
+      stages: []
+    };
+    const run = async () => {
+      const data = await getJson(`/api/ui/simulator/flow?industry=${industry}&limit=24`, fallback);
+      if (alive) setSimFlow(data || fallback);
+    };
+    run();
+    const timer = setInterval(run, 2500);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [page, simTab, industry]);
+
   const selectedAsset = useMemo(
     () => overview.assets.find((a) => a.id === selectedAssetId) || overview.assets[0] || null,
     [overview.assets, selectedAssetId]
@@ -426,6 +486,7 @@ export default function App() {
     () => overview.assets.filter((a) => a.status !== "healthy" && !actionedAssetSet.has(String(a.id))).slice(0, 4),
     [overview.assets, actionedAssetSet]
   );
+  const executive = overview.executive || EMPTY_EXECUTIVE;
 
   const sdtWindowInsights = useMemo(() => {
     const summary = sdtReport.summary || [];
@@ -502,7 +563,7 @@ export default function App() {
       if (res?.ok) {
         const ov = await getJson(
           `/api/ui/overview?industry=${industry}`,
-          { assets: [], actioned_assets: [], kpis: { fleet_health_score: 0, critical_assets: 0, asset_count: 0 }, alerts: [], messages: overview.messages || [] }
+          { ...EMPTY_OVERVIEW, messages: overview.messages || [] }
         );
         setOverview(ov);
         setRecCommentByAsset((prev) => ({ ...prev, [equipmentId]: "" }));
@@ -884,6 +945,61 @@ export default function App() {
 
           <div className={`view-panel ${view === "executive" ? "active" : ""}`}>
             <div className="exec-wrap">
+              <div className="exec-hero-card">
+                <div className="exec-hero-eyebrow">Executive briefing value statement</div>
+                <div className="exec-hero-title">{executive.value_statement || EMPTY_EXECUTIVE.value_statement}</div>
+                <div className="exec-hero-sub">
+                  Finance lens for {industry} skin ({executive.window || "last_30_days_simulated"}) to support EBC storytelling.
+                </div>
+              </div>
+
+              <div className="exec-finance-row">
+                <div className="exec-fin-card">
+                  <div className="exec-fin-label">EBIT Saved</div>
+                  <div className="exec-fin-val">{executive.ebit_saved_fmt || "—"}</div>
+                  <div className="exec-fin-sub">Net impact from prescriptive maintenance</div>
+                </div>
+                <div className="exec-fin-card">
+                  <div className="exec-fin-label">ROI</div>
+                  <div className="exec-fin-val">{Number(executive.roi_pct || 0).toFixed(1)}%</div>
+                  <div className="exec-fin-sub">Savings versus intervention + platform cost</div>
+                </div>
+                <div className="exec-fin-card">
+                  <div className="exec-fin-label">Payback</div>
+                  <div className="exec-fin-val">{Number(executive.payback_days || 0).toFixed(1)} days</div>
+                  <div className="exec-fin-sub">Estimated time to recover investment</div>
+                </div>
+                <div className="exec-fin-card">
+                  <div className="exec-fin-label">EBIT Margin Lift</div>
+                  <div className="exec-fin-val">{Number(executive.ebit_margin_bps || 0).toFixed(1)} bps</div>
+                  <div className="exec-fin-sub">Simulated contribution versus monthly pipeline</div>
+                </div>
+              </div>
+
+              <div className="exec-finance-grid">
+                <div className="exec-trend-card">
+                  <div className="exec-card-title">Value bridge to EBIT</div>
+                  {(executive.value_bridge || []).map((b) => (
+                    <div key={b.label} className="exec-bridge-row">
+                      <span className="exec-bridge-label">{b.label}</span>
+                      <span className={`exec-bridge-val ${b.kind === "negative" ? "neg" : "pos"}`}>{b.amount_fmt}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="exec-trend-card">
+                  <div className="exec-card-title">ERP and work-order context</div>
+                  <div className="exec-erp-grid">
+                    <div><span className="exec-erp-k">Plant</span><span className="exec-erp-v">{executive.erp?.plant_code || "—"}</span></div>
+                    <div><span className="exec-erp-k">Fiscal period</span><span className="exec-erp-v">{executive.erp?.fiscal_period || "—"}</span></div>
+                    <div><span className="exec-erp-k">Planner group</span><span className="exec-erp-v">{executive.erp?.planner_group || "—"}</span></div>
+                    <div><span className="exec-erp-k">Account</span><span className="exec-erp-v">{executive.erp?.reference_account || "—"}</span></div>
+                  </div>
+                  <div className="exec-chip-row">
+                    {(executive.erp?.cost_centers || []).map((c) => <span key={c} className="exec-chip">{c}</span>)}
+                  </div>
+                </div>
+              </div>
+
               <div className="exec-priority-row">
                 <div className="exec-pcard critical">
                   <div className="exec-pcount critical">{overview.assets.filter((a) => a.status === "critical").length}</div>
@@ -932,6 +1048,18 @@ export default function App() {
                   ))}
                 </div>
                 <div className="exec-right">
+                  <div className="exec-trend-card">
+                    <div className="exec-card-title">Top recommended work orders</div>
+                    {(executive.work_orders || []).slice(0, 5).map((w) => (
+                      <div key={w.wo_id} className="exec-wo-row">
+                        <div>
+                          <div className="exec-wo-id">{w.wo_id}</div>
+                          <div className="exec-wo-meta">{w.equipment_id} · {w.priority} · {w.work_center}</div>
+                        </div>
+                        <div className="exec-wo-impact">{w.net_ebit_impact_fmt}</div>
+                      </div>
+                    ))}
+                  </div>
                   <div className="exec-trend-card">
                     <div className="exec-card-title">Fleet health snapshot</div>
                     {overview.assets.map((a) => (
@@ -1202,18 +1330,65 @@ export default function App() {
                   ))}
                 </div>
                 <div className="bronze-panel">
-                  <div className="bronze-hdr"><div><div className="bronze-title">Bronze DLT output — live</div><div className="bronze-subtitle">catalog: {simState.catalog} · schema: bronze · table: sensor_readings</div></div></div>
-                  <div className="bronze-table-wrap">
-                    <table className="bronze-table">
-                      <thead><tr><th>Timestamp</th><th>Site</th><th>Area</th><th>Unit</th><th>Equipment</th><th>Tag</th><th>Value</th><th>Unit</th><th>Quality</th><th>Protocol</th></tr></thead>
-                      <tbody>
-                        {(simState.rows || []).slice(0, 120).map((r, i) => (
-                          <tr key={`simrow-${i}`} className={r.quality !== "good" ? r.quality : ""}>
-                            <td className="mono">{r.timestamp}</td><td className="mono">{r.site_id}</td><td className="mono">{r.area_id}</td><td className="mono">{r.unit_id}</td><td className="mono">{r.equipment_id}</td><td className="mono">{r.tag_name}</td><td className="mono">{r.value}</td><td>{r.unit}</td><td><span className={`q-badge ${r.quality}`}>{r.quality}</span></td><td><span className={`proto-badge ${(r.source_protocol || "").toLowerCase().replace(/[^a-z]/g, "")}`}>{r.source_protocol}</span></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div className="bronze-hdr">
+                    <div>
+                      <div className="bronze-title">Live ingestion flow</div>
+                      <div className="bronze-subtitle">3 stages: Bronze → Silver → Gold (10 recent rows each)</div>
+                    </div>
+                  </div>
+                  <div className="flow-viewport">
+                    <div className="flow-chain">
+                      {(simFlow.stages || [
+                        simFlow.bronze,
+                        simFlow.silver,
+                        simFlow.gold
+                      ]).map((data, idx) => (
+                        <div key={`${data.stage || "stage"}-${idx}`} className="flow-stage-wrap">
+                          <div className={`flow-stage ${String(data.tier || "bronze")}`}>
+                            <div className="flow-stage-hdr">
+                              <div className="flow-stage-title">
+                                {idx + 1}) {String(data.stage || "").replaceAll("_", " ")}
+                              </div>
+                              <div className={`flow-tier-badge ${String(data.tier || "bronze")}`}>{String(data.tier || "bronze").toUpperCase()}</div>
+                              <div className="flow-stage-meta">{data.table || "table unavailable"}</div>
+                              <div className="flow-stage-transform">
+                                Transformation: {{
+                                  bronze_curated: "Read Zerobus landing + validate + normalize in one Bronze table",
+                                  silver_features: "Compute rolling feature statistics per asset/tag",
+                                  gold_predictions: "Generate anomaly/RUL prediction outputs"
+                                }[String(data.stage || "")] || "Pipeline stage processing"}
+                              </div>
+                              <div className="flow-stage-kpi">
+                                <span>{Number(data.rows_30m || 0).toLocaleString()} / 30m</span>
+                                <span>{Number(data.rows_5m || 0).toLocaleString()} / 5m</span>
+                                <span className={`flow-rate ${(Number(data.rate_change_pct || 0) >= 0) ? "up" : "down"}`}>
+                                  {Number(data.rate_change_pct || 0) >= 0 ? "+" : ""}{Number(data.rate_change_pct || 0).toFixed(1)}%
+                                </span>
+                                <span>{data.latest_ts ? new Date(data.latest_ts).toLocaleTimeString() : "no recent rows"}</span>
+                              </div>
+                            </div>
+                            <div className="bronze-table-wrap">
+                              <table className="bronze-table flow-table">
+                                <thead><tr><th>Timestamp</th><th>Equipment</th><th>Tag</th><th>Value</th><th>Q</th><th>Protocol</th></tr></thead>
+                                <tbody>
+                                  {(data.rows || []).slice(0, 10).map((r, i) => (
+                                    <tr key={`${data.stage}-row-${i}`} className={r.quality !== "good" ? r.quality : ""}>
+                                      <td className="mono">{r.timestamp}</td>
+                                      <td className="mono">{r.equipment_id}</td>
+                                      <td className="mono">{r.tag_name}</td>
+                                      <td className="mono">{r.value}</td>
+                                      <td><span className={`q-badge ${r.quality}`}>{r.quality}</span></td>
+                                      <td><span className={`proto-badge ${(r.source_protocol || "").toLowerCase().replace(/[^a-z]/g, "")}`}>{r.source_protocol}</span></td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        {idx < 2 && <div className="flow-arrow">↓</div>}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
