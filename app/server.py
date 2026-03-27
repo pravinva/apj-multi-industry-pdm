@@ -35,6 +35,7 @@ DIST = ROOT / "dist"
 SDT_REPORT_DIR = (ROOT / "sdt-compression") if (ROOT / "sdt-compression").exists() else (ROOT.parent / "docs" / "sdt-compression")
 GENIE_ROOM_MAP_PATH = ROOT / "genie_rooms.json"
 INDUSTRIES = ["mining", "energy", "water", "automotive", "semiconductor"]
+SUPPORTED_CURRENCIES = {"USD", "AUD", "JPY"}
 ISA_EMOJI = {
     "site": "🏭",
     "area": "📍",
@@ -1077,6 +1078,39 @@ def _fmt_money(amount: float, currency: str) -> str:
     return f"{currency} {sign}{abs(whole):,}"
 
 
+def _normalize_currency(code: str | None, fallback: str = "USD") -> str:
+    c = str(code or "").strip().upper()
+    if c in SUPPORTED_CURRENCIES:
+        return c
+    return str(fallback or "USD").upper()
+
+
+def _fx_convert(amount: float, from_currency: str, to_currency: str) -> float:
+    src = _normalize_currency(from_currency, "USD")
+    dst = _normalize_currency(to_currency, "USD")
+    if src == dst:
+        return _to_float(amount, 0.0)
+    per_unit_to_usd = {
+        "USD": 1.0,
+        "AUD": 0.66,
+        "JPY": 0.0067,
+    }
+    src_to_usd = per_unit_to_usd.get(src, 1.0)
+    dst_to_usd = per_unit_to_usd.get(dst, 1.0)
+    usd_amount = _to_float(amount, 0.0) * src_to_usd
+    return usd_amount / max(1e-9, dst_to_usd)
+
+
+def _effective_demo_currency(requested_currency: str | None, native_currency: str) -> str:
+    env_override = os.getenv("OT_PDM_DEMO_CURRENCY", "").strip().upper()
+    if env_override in SUPPORTED_CURRENCIES:
+        return env_override
+    req = str(requested_currency or "").strip().upper()
+    if req in SUPPORTED_CURRENCIES:
+        return req
+    return _normalize_currency(native_currency, "USD")
+
+
 def _executive_profile(industry: str, cfg: dict[str, Any]) -> dict[str, Any]:
     default_currency = str(
         cfg.get("agent", {}).get("terminology", {}).get("cost_currency", "USD")
@@ -1097,6 +1131,7 @@ def _executive_profile(industry: str, cfg: dict[str, Any]) -> dict[str, Any]:
             "parts_cost_base": 18500.0,
             "dispatch_cost": 2800.0,
             "platform_cost_monthly_alloc": 42000.0,
+            "baseline_monthly_ebit": 42000000.0,
         },
         "energy": {
             "plant_code": "AU-ENE-07",
@@ -1112,6 +1147,7 @@ def _executive_profile(industry: str, cfg: dict[str, Any]) -> dict[str, Any]:
             "parts_cost_base": 21000.0,
             "dispatch_cost": 2500.0,
             "platform_cost_monthly_alloc": 36000.0,
+            "baseline_monthly_ebit": 28000000.0,
         },
         "water": {
             "plant_code": "AU-WAT-04",
@@ -1127,6 +1163,7 @@ def _executive_profile(industry: str, cfg: dict[str, Any]) -> dict[str, Any]:
             "parts_cost_base": 8200.0,
             "dispatch_cost": 1600.0,
             "platform_cost_monthly_alloc": 18000.0,
+            "baseline_monthly_ebit": 9000000.0,
         },
         "automotive": {
             "plant_code": "JP-AUTO-12",
@@ -1142,6 +1179,7 @@ def _executive_profile(industry: str, cfg: dict[str, Any]) -> dict[str, Any]:
             "parts_cost_base": 340000.0,
             "dispatch_cost": 70000.0,
             "platform_cost_monthly_alloc": 1200000.0,
+            "baseline_monthly_ebit": 620000000.0,
         },
         "semiconductor": {
             "plant_code": "JP-SEM-22",
@@ -1157,6 +1195,7 @@ def _executive_profile(industry: str, cfg: dict[str, Any]) -> dict[str, Any]:
             "parts_cost_base": 36000.0,
             "dispatch_cost": 4500.0,
             "platform_cost_monthly_alloc": 56000.0,
+            "baseline_monthly_ebit": 55000000.0,
         },
     }
     profile = dict(profiles.get(industry, profiles["mining"]))
@@ -1228,31 +1267,52 @@ def _executive_work_orders(
     return orders
 
 
-def _executive_value(industry: str, assets: list[dict[str, Any]]) -> dict[str, Any]:
+def _executive_value(industry: str, assets: list[dict[str, Any]], display_currency: str | None = None) -> dict[str, Any]:
     cfg = _industry_cfg(industry)
     accounts = cfg.get("accounts", {}) or {}
     profile = _executive_profile(industry, cfg)
-    currency = str(profile.get("currency", "USD"))
+    native_currency = str(profile.get("currency", "USD"))
+    currency = _effective_demo_currency(display_currency, native_currency)
     work_orders = _executive_work_orders(industry, assets, profile)
 
-    avoided_downtime = sum(_to_float(w.get("avoided_downtime_cost"), 0.0) for w in work_orders)
-    avoided_quality = sum(_to_float(w.get("avoided_quality_cost"), 0.0) for w in work_orders)
-    avoided_energy = sum(_to_float(w.get("avoided_energy_cost"), 0.0) for w in work_orders)
-    intervention_cost = sum(_to_float(w.get("intervention_cost"), 0.0) for w in work_orders)
-    platform_cost = _to_float(profile.get("platform_cost_monthly_alloc"), 0.0)
-    net_benefit = avoided_downtime + avoided_quality + avoided_energy - intervention_cost - platform_cost
-    ebit_saved = max(0.0, net_benefit)
-    invested = max(1.0, intervention_cost + platform_cost)
-    roi_pct = (ebit_saved / invested) * 100.0
+    avoided_downtime_native = sum(_to_float(w.get("avoided_downtime_cost"), 0.0) for w in work_orders)
+    avoided_quality_native = sum(_to_float(w.get("avoided_quality_cost"), 0.0) for w in work_orders)
+    avoided_energy_native = sum(_to_float(w.get("avoided_energy_cost"), 0.0) for w in work_orders)
+    intervention_cost_native = sum(_to_float(w.get("intervention_cost"), 0.0) for w in work_orders)
+    platform_cost_native = _to_float(profile.get("platform_cost_monthly_alloc"), 0.0)
+    net_benefit_native = (
+        avoided_downtime_native
+        + avoided_quality_native
+        + avoided_energy_native
+        - intervention_cost_native
+        - platform_cost_native
+    )
+    ebit_saved_native = max(0.0, net_benefit_native)
+    invested_native = max(1.0, intervention_cost_native + platform_cost_native)
+    roi_pct = (ebit_saved_native / invested_native) * 100.0
     payback_days = 999.0
-    if ebit_saved > 0:
-        daily = ebit_saved / 30.0
-        payback_days = invested / max(1.0, daily)
+    if ebit_saved_native > 0:
+        daily = ebit_saved_native / 30.0
+        payback_days = invested_native / max(1.0, daily)
 
-    pipeline_monthly = _to_float(accounts.get("pipeline_monthly"), 1.0)
-    ebit_margin_bps = (ebit_saved / max(1.0, pipeline_monthly)) * 10000.0
+    baseline_monthly_ebit_native = _to_float(profile.get("baseline_monthly_ebit"), 1.0)
+    ebit_margin_bps = (ebit_saved_native / max(1.0, baseline_monthly_ebit_native)) * 10000.0
+
+    def _cv(amount: float) -> float:
+        return _fx_convert(amount, native_currency, currency)
+
+    avoided_downtime = _cv(avoided_downtime_native)
+    avoided_quality = _cv(avoided_quality_native)
+    avoided_energy = _cv(avoided_energy_native)
+    intervention_cost = _cv(intervention_cost_native)
+    platform_cost = _cv(platform_cost_native)
+    net_benefit = _cv(net_benefit_native)
+    ebit_saved = _cv(ebit_saved_native)
 
     for w in work_orders:
+        w["expected_failure_cost"] = round(_cv(_to_float(w["expected_failure_cost"])), 2)
+        w["intervention_cost"] = round(_cv(_to_float(w["intervention_cost"])), 2)
+        w["net_ebit_impact"] = round(_cv(_to_float(w["net_ebit_impact"])), 2)
         w["expected_failure_cost_fmt"] = _fmt_money(_to_float(w["expected_failure_cost"]), currency)
         w["intervention_cost_fmt"] = _fmt_money(_to_float(w["intervention_cost"]), currency)
         w["net_ebit_impact_fmt"] = _fmt_money(_to_float(w["net_ebit_impact"]), currency)
@@ -1264,6 +1324,13 @@ def _executive_value(industry: str, assets: list[dict[str, Any]]) -> dict[str, A
         {"label": "Planned intervention cost", "kind": "negative", "amount": round(-intervention_cost, 2), "amount_fmt": _fmt_money(-intervention_cost, currency)},
         {"label": "Platform and operations allocation", "kind": "negative", "amount": round(-platform_cost, 2), "amount_fmt": _fmt_money(-platform_cost, currency)},
     ]
+
+    trend_scale = [0.72, 0.81, 0.88, 0.94, 1.0, 1.06]
+    trend_labels = ["M-5", "M-4", "M-3", "M-2", "M-1", "Current"]
+    ebit_trend = []
+    for lbl, mult in zip(trend_labels, trend_scale):
+        v = ebit_saved * mult
+        ebit_trend.append({"label": lbl, "value": round(v, 2), "value_fmt": _fmt_money(v, currency)})
 
     return {
         "audience": "finance_executive",
@@ -1277,6 +1344,15 @@ def _executive_value(industry: str, assets: list[dict[str, Any]]) -> dict[str, A
         "roi_pct": round(roi_pct, 1),
         "payback_days": round(payback_days, 1),
         "ebit_margin_bps": round(ebit_margin_bps, 1),
+        "explainability": {
+            "ebit_saved": "EBIT Saved = (avoided downtime + avoided quality/scrap + avoided energy) - (planned intervention + platform allocation).",
+            "roi_pct": "ROI = EBIT Saved / (planned intervention + platform allocation).",
+            "payback_days": "Payback days = (planned intervention + platform allocation) / (EBIT Saved / 30).",
+            "ebit_margin_bps": "EBIT Margin Lift (bps) = EBIT Saved / baseline monthly EBIT * 10,000.",
+            "baseline_monthly_ebit": f"Baseline monthly EBIT reference for {industry} scenario: {_fmt_money(_cv(baseline_monthly_ebit_native), currency)}.",
+        },
+        "baseline_monthly_ebit": round(_cv(baseline_monthly_ebit_native), 2),
+        "baseline_monthly_ebit_fmt": _fmt_money(_cv(baseline_monthly_ebit_native), currency),
         "kpis": {
             "avoided_downtime_cost": round(avoided_downtime, 2),
             "avoided_downtime_cost_fmt": _fmt_money(avoided_downtime, currency),
@@ -1298,11 +1374,17 @@ def _executive_value(industry: str, assets: list[dict[str, Any]]) -> dict[str, A
             "reference_account": accounts.get("primary", ""),
         },
         "value_bridge": value_bridge,
+        "ebit_trend": ebit_trend,
         "work_orders": work_orders,
     }
 
 
-def _asset_snapshot(industry: str, asset_def: dict[str, Any], pred: dict[str, Any] | None = None) -> dict[str, Any]:
+def _asset_snapshot(
+    industry: str,
+    asset_def: dict[str, Any],
+    pred: dict[str, Any] | None = None,
+    display_currency: str | None = None,
+) -> dict[str, Any]:
     aid = asset_def["id"]
     rng = _asset_rng(industry, aid)
     sev = float(asset_def.get("fault_severity", 0.0))
@@ -1322,7 +1404,9 @@ def _asset_snapshot(industry: str, asset_def: dict[str, Any], pred: dict[str, An
     fm = _industry_cfg(industry).get("failure_modes", {}).get(inject_fault or "", {})
     base_cost = int(fm.get("cost_per_event", rng.uniform(8_000, 95_000)))
     exposure = int(base_cost * max(0.3, anomaly))
-    currency = _industry_cfg(industry).get("agent", {}).get("terminology", {}).get("cost_currency", "USD")
+    native_currency = _industry_cfg(industry).get("agent", {}).get("terminology", {}).get("cost_currency", "USD")
+    currency = _effective_demo_currency(display_currency, native_currency)
+    exposure_conv = _fx_convert(float(exposure), str(native_currency), currency)
     return {
         "id": aid,
         "equipment_id": aid,
@@ -1337,7 +1421,8 @@ def _asset_snapshot(industry: str, asset_def: dict[str, Any], pred: dict[str, An
         "health_score_pct": health,
         "rul_hours": rul,
         "fault_mode": inject_fault or "none",
-        "cost_exposure": f"{currency} {exposure:,}",
+        "cost_exposure": _fmt_money(exposure_conv, currency),
+        "cost_exposure_value": round(exposure_conv, 2),
         "model_version_anomaly": (pred or {}).get("model_version_anomaly"),
         "model_version_rul": (pred or {}).get("model_version_rul"),
         "prediction_timestamp": (pred or {}).get("prediction_timestamp"),
@@ -1346,16 +1431,19 @@ def _asset_snapshot(industry: str, asset_def: dict[str, Any], pred: dict[str, An
     }
 
 
-def _overview(industry: str) -> dict[str, Any]:
+def _overview(industry: str, display_currency: str | None = None) -> dict[str, Any]:
     predictions = _predictions_map(industry)
-    rows = [_asset_snapshot(industry, a, predictions.get(a["id"])) for a in _asset_defs(industry)]
+    rows = [
+        _asset_snapshot(industry, a, predictions.get(a["id"]), display_currency=display_currency)
+        for a in _asset_defs(industry)
+    ]
     actioned_assets = _recommendation_actioned_assets(industry)
     if not rows:
         return {
             "assets": [],
             "actioned_assets": [],
             "kpis": {"fleet_health_score": 0, "critical_assets": 0, "asset_count": 0},
-            "executive": _executive_value(industry, []),
+            "executive": _executive_value(industry, [], display_currency=display_currency),
         }
     avg_health = round(sum(a["health_score_pct"] for a in rows) / len(rows), 1)
     critical = [a for a in rows if a["status"] == "critical"]
@@ -1367,7 +1455,7 @@ def _overview(industry: str) -> dict[str, Any]:
             "fleet_health_score": avg_health,
             "critical_assets": len(critical),
             "asset_count": len(rows),
-            "avoided_cost": sum(int(str(a["cost_exposure"]).split()[-1].replace(",", "")) for a in warning + critical),
+            "avoided_cost": round(sum(_to_float(a.get("cost_exposure_value"), 0.0) for a in warning + critical), 2),
         },
         "alerts": [
             {"severity": "critical", "text": f"{a['id']} requires immediate intervention ({a['fault_mode']})", "time": "now"}
@@ -1384,7 +1472,7 @@ def _overview(industry: str) -> dict[str, Any]:
                 "text": "I can triage top-risk equipment, parts readiness, and recommended actions.",
             }
         ],
-        "executive": _executive_value(industry, rows),
+        "executive": _executive_value(industry, rows, display_currency=display_currency),
     }
 
 
@@ -1460,12 +1548,12 @@ def _hierarchy(industry: str) -> dict[str, Any]:
     return root
 
 
-def _asset_detail(industry: str, asset_id: str) -> dict[str, Any]:
+def _asset_detail(industry: str, asset_id: str, display_currency: str | None = None) -> dict[str, Any]:
     asset_def = next((a for a in _asset_defs(industry) if a["id"] == asset_id), None)
     if asset_def is None:
         raise HTTPException(status_code=404, detail="Asset not found")
     predictions = _predictions_map(industry)
-    snapshot = _asset_snapshot(industry, asset_def, predictions.get(asset_id))
+    snapshot = _asset_snapshot(industry, asset_def, predictions.get(asset_id), display_currency=display_currency)
     sensors = _sensor_defs(industry, asset_def.get("type", ""))
     sensor_features = _sensor_features_map(industry)
     srng = _asset_rng(industry, asset_id)
@@ -1876,10 +1964,10 @@ def parts(asset_id: str, industry: str = "mining") -> dict:
 
 
 @app.get("/api/ui/overview")
-def ui_overview(industry: str = "mining") -> dict:
+def ui_overview(industry: str = "mining", currency: str = "") -> dict:
     if industry not in INDUSTRIES:
         raise HTTPException(status_code=400, detail="Invalid industry")
-    return _overview(industry)
+    return _overview(industry, display_currency=currency)
 
 
 @app.post("/api/ui/recommendation/action")
@@ -1987,17 +2075,17 @@ def ui_hierarchy(industry: str = "mining") -> dict:
 
 
 @app.get("/api/ui/asset/{asset_id}")
-def ui_asset(asset_id: str, industry: str = "mining") -> dict:
+def ui_asset(asset_id: str, industry: str = "mining", currency: str = "") -> dict:
     if industry not in INDUSTRIES:
         raise HTTPException(status_code=400, detail="Invalid industry")
-    return _asset_detail(industry, asset_id)
+    return _asset_detail(industry, asset_id, display_currency=currency)
 
 
 @app.get("/api/ui/model/{asset_id}")
-def ui_model(asset_id: str, industry: str = "mining") -> dict:
+def ui_model(asset_id: str, industry: str = "mining", currency: str = "") -> dict:
     if industry not in INDUSTRIES:
         raise HTTPException(status_code=400, detail="Invalid industry")
-    detail = _asset_detail(industry, asset_id)
+    detail = _asset_detail(industry, asset_id, display_currency=currency)
     sensor_features = _sensor_features_map(industry)
     feat = []
     for sensor in detail.get("sensors", []):
@@ -2668,6 +2756,50 @@ def agent_chat(payload: dict) -> dict:
             "conversation_id": conversation_id,
             "choices": [{"message": {"content": f"Genie request failed: {e}"}}],
         }
+
+
+@app.post("/api/agent/finance_chat")
+def agent_finance_chat(payload: dict) -> dict:
+    industry = str(payload.get("industry", "mining") or "mining").lower()
+    if industry not in INDUSTRIES:
+        industry = "mining"
+    currency = str(payload.get("currency", "") or "").strip().upper()
+    messages = payload.get("messages", [])
+    user_text = ""
+    if messages:
+        user_text = str(messages[-1].get("content", "") or "").strip()
+    if not user_text:
+        return {"choices": [{"message": {"content": "Please enter a finance question."}}]}
+
+    ov = _overview(industry, display_currency=currency)
+    ex = ov.get("executive", {}) if isinstance(ov, dict) else {}
+    context = (
+        f"Finance context ({industry}): "
+        f"EBIT saved={ex.get('ebit_saved_fmt', 'n/a')}, "
+        f"ROI={ex.get('roi_pct', 'n/a')}%, "
+        f"Payback={ex.get('payback_days', 'n/a')} days, "
+        f"EBIT margin lift={ex.get('ebit_margin_bps', 'n/a')} bps, "
+        f"Baseline monthly EBIT={ex.get('baseline_monthly_ebit_fmt', 'n/a')}. "
+        f"Use this context when answering predictive-maintenance financial scenarios."
+    )
+    merged = f"{user_text}\n\n{context}"
+    base_payload = {
+        "industry": industry,
+        "conversation_id": payload.get("conversation_id", ""),
+        "messages": [{"role": "user", "content": merged}],
+    }
+    reply = agent_chat(base_payload)
+    try:
+        if isinstance(reply, dict):
+            reply.setdefault("finance_context", {
+                "industry": industry,
+                "currency": ex.get("currency", ""),
+                "ebit_saved_fmt": ex.get("ebit_saved_fmt", ""),
+                "roi_pct": ex.get("roi_pct", 0),
+            })
+    except Exception:
+        pass
+    return reply
 
 
 @app.get("/{full_path:path}")

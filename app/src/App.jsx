@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 const INDUSTRIES = ["mining", "energy", "water", "automotive", "semiconductor"];
+const CURRENCIES = ["AUTO", "USD", "AUD", "JPY"];
 const EMPTY_EXECUTIVE = {
   audience: "finance_executive",
   window: "last_30_days_simulated",
@@ -13,6 +14,8 @@ const EMPTY_EXECUTIVE = {
   roi_pct: 0,
   payback_days: 0,
   ebit_margin_bps: 0,
+  baseline_monthly_ebit_fmt: "USD 0",
+  explainability: {},
   kpis: {
     avoided_downtime_cost_fmt: "USD 0",
     avoided_quality_cost_fmt: "USD 0",
@@ -22,6 +25,7 @@ const EMPTY_EXECUTIVE = {
   },
   erp: { plant_code: "", fiscal_period: "", cost_centers: [], work_centers: [], planner_group: "", reference_account: "" },
   value_bridge: [],
+  ebit_trend: [],
   work_orders: []
 };
 const EMPTY_OVERVIEW = {
@@ -38,7 +42,8 @@ const PAGE_META = [
   ["p3", "Hier.", "⫶"],
   ["p4", "Stream", "≋"],
   ["p5", "Model", "↗"],
-  ["p6", "Sim", "◎"]
+  ["p6", "Sim", "◎"],
+  ["p7", "Finance", "¥"]
 ];
 
 async function getJson(url, fallback) {
@@ -211,6 +216,7 @@ function renderSimpleMarkdown(text) {
 
 export default function App() {
   const [industry, setIndustry] = useState("mining");
+  const [demoCurrency, setDemoCurrency] = useState("AUTO");
   const [page, setPage] = useState("p1");
   const [view, setView] = useState("operator");
   const [simTab, setSimTab] = useState("sim");
@@ -232,6 +238,10 @@ export default function App() {
   const [agentMsgs, setAgentMsgs] = useState([]);
   const [genieConversationByIndustry, setGenieConversationByIndustry] = useState({});
   const [agentPending, setAgentPending] = useState(false);
+  const [financeInput, setFinanceInput] = useState("");
+  const [financeMsgs, setFinanceMsgs] = useState([]);
+  const [financeConversationByIndustry, setFinanceConversationByIndustry] = useState({});
+  const [financePending, setFinancePending] = useState(false);
 
   const [simState, setSimState] = useState({
     running: false,
@@ -310,12 +320,13 @@ export default function App() {
   const [tagQuery, setTagQuery] = useState("");
   const [selectedTags, setSelectedTags] = useState([]);
   const [tagMappings, setTagMappings] = useState([]);
+  const currencyParam = demoCurrency === "AUTO" ? "" : `&currency=${encodeURIComponent(demoCurrency)}`;
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const [ov, h, sim] = await Promise.all([
-        getJson(`/api/ui/overview?industry=${industry}`, EMPTY_OVERVIEW),
+        getJson(`/api/ui/overview?industry=${industry}${currencyParam}`, EMPTY_OVERVIEW),
         getJson(`/api/ui/hierarchy?industry=${industry}`, null),
         getJson(`/api/ui/simulator/state?industry=${industry}`, null)
       ]);
@@ -325,6 +336,11 @@ export default function App() {
       setHierSelection(h);
       setSimState(sim || {});
       setAgentMsgs((ov.messages || []).map((m) => ({ role: m.role, text: m.text, label: m.label || "AI" })));
+      setFinanceMsgs([{
+        role: "agent",
+        label: "Finance Command AI",
+        text: `I can answer financial predictive maintenance scenarios for ${industry} in ${(ov.executive || {}).currency || demoCurrency}.`
+      }]);
       const defaultAsset = ov.assets?.[0]?.id || "";
       setSelectedAssetId(defaultAsset);
       const template = await getJson(`/api/ui/config/template?industry=${industry}`, null);
@@ -347,15 +363,15 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [industry]);
+  }, [industry, currencyParam]);
 
   useEffect(() => {
     if (!selectedAssetId) return;
     let cancelled = false;
     (async () => {
       const [detail, modelData] = await Promise.all([
-        getJson(`/api/ui/asset/${selectedAssetId}?industry=${industry}`, null),
-        getJson(`/api/ui/model/${selectedAssetId}?industry=${industry}`, null)
+        getJson(`/api/ui/asset/${selectedAssetId}?industry=${industry}${currencyParam}`, null),
+        getJson(`/api/ui/model/${selectedAssetId}?industry=${industry}${currencyParam}`, null)
       ]);
       if (cancelled) return;
       setAssetDetail(detail);
@@ -364,7 +380,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [industry, selectedAssetId]);
+  }, [industry, selectedAssetId, currencyParam]);
 
   useEffect(() => {
     if (page !== "p4") return undefined;
@@ -477,16 +493,8 @@ export default function App() {
     [streamRows, streamFilters]
   );
 
-  const actionedAssetSet = useMemo(
-    () => new Set((overview.actioned_assets || []).map((v) => String(v))),
-    [overview.actioned_assets]
-  );
-
-  const actionableInsights = useMemo(
-    () => overview.assets.filter((a) => a.status !== "healthy" && !actionedAssetSet.has(String(a.id))).slice(0, 4),
-    [overview.assets, actionedAssetSet]
-  );
   const executive = overview.executive || EMPTY_EXECUTIVE;
+  const execTips = executive.explainability || {};
 
   const sdtWindowInsights = useMemo(() => {
     const summary = sdtReport.summary || [];
@@ -562,7 +570,7 @@ export default function App() {
       );
       if (res?.ok) {
         const ov = await getJson(
-          `/api/ui/overview?industry=${industry}`,
+          `/api/ui/overview?industry=${industry}${currencyParam}`,
           { ...EMPTY_OVERVIEW, messages: overview.messages || [] }
         );
         setOverview(ov);
@@ -574,6 +582,33 @@ export default function App() {
         delete next[key];
         return next;
       });
+    }
+  }
+
+  async function sendFinanceMessage() {
+    if (!financeInput.trim() || financePending) return;
+    const userText = financeInput.trim();
+    setFinanceMsgs((prev) => [...prev, { role: "user", text: userText, label: "ME" }]);
+    setFinanceInput("");
+    setFinancePending(true);
+    try {
+      const reply = await postJson(
+        "/api/agent/finance_chat",
+        {
+          industry,
+          currency: demoCurrency === "AUTO" ? executive.currency : demoCurrency,
+          conversation_id: financeConversationByIndustry[industry] || "",
+          messages: [{ role: "user", content: userText }]
+        },
+        { choices: [{ message: { content: "Unable to get response." } }] }
+      );
+      if (reply?.conversation_id) {
+        setFinanceConversationByIndustry((prev) => ({ ...prev, [industry]: reply.conversation_id }));
+      }
+      const answer = reply?.choices?.[0]?.message?.content || "No response.";
+      setFinanceMsgs((prev) => [...prev, { role: "agent", text: answer, label: "Finance Command AI" }]);
+    } finally {
+      setFinancePending(false);
     }
   }
 
@@ -809,6 +844,12 @@ export default function App() {
             </button>
           ))}
         </div>
+        <div className="currency-wrap">
+          <span className="currency-lbl">Currency</span>
+          <select className="currency-sel" value={demoCurrency} onChange={(e) => setDemoCurrency(e.target.value)}>
+            {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
         <span className="isa-badge">ISA-95 · Unity Catalog</span>
       </header>
 
@@ -956,23 +997,23 @@ export default function App() {
               <div className="exec-finance-row">
                 <div className="exec-fin-card">
                   <div className="exec-fin-label">EBIT Saved</div>
-                  <div className="exec-fin-val">{executive.ebit_saved_fmt || "—"}</div>
+                  <div className="exec-fin-val" title={execTips.ebit_saved || ""}>{executive.ebit_saved_fmt || "—"}</div>
                   <div className="exec-fin-sub">Net impact from prescriptive maintenance</div>
                 </div>
                 <div className="exec-fin-card">
                   <div className="exec-fin-label">ROI</div>
-                  <div className="exec-fin-val">{Number(executive.roi_pct || 0).toFixed(1)}%</div>
+                  <div className="exec-fin-val" title={execTips.roi_pct || ""}>{Number(executive.roi_pct || 0).toFixed(1)}%</div>
                   <div className="exec-fin-sub">Savings versus intervention + platform cost</div>
                 </div>
                 <div className="exec-fin-card">
                   <div className="exec-fin-label">Payback</div>
-                  <div className="exec-fin-val">{Number(executive.payback_days || 0).toFixed(1)} days</div>
+                  <div className="exec-fin-val" title={execTips.payback_days || ""}>{Number(executive.payback_days || 0).toFixed(1)} days</div>
                   <div className="exec-fin-sub">Estimated time to recover investment</div>
                 </div>
                 <div className="exec-fin-card">
                   <div className="exec-fin-label">EBIT Margin Lift</div>
-                  <div className="exec-fin-val">{Number(executive.ebit_margin_bps || 0).toFixed(1)} bps</div>
-                  <div className="exec-fin-sub">Simulated contribution versus monthly pipeline</div>
+                  <div className="exec-fin-val" title={execTips.ebit_margin_bps || ""}>{Number(executive.ebit_margin_bps || 0).toFixed(1)} bps</div>
+                  <div className="exec-fin-sub" title={execTips.baseline_monthly_ebit || ""}>Versus baseline monthly EBIT ({executive.baseline_monthly_ebit_fmt || "n/a"})</div>
                 </div>
               </div>
 
@@ -982,7 +1023,7 @@ export default function App() {
                   {(executive.value_bridge || []).map((b) => (
                     <div key={b.label} className="exec-bridge-row">
                       <span className="exec-bridge-label">{b.label}</span>
-                      <span className={`exec-bridge-val ${b.kind === "negative" ? "neg" : "pos"}`}>{b.amount_fmt}</span>
+                      <span className={`exec-bridge-val ${b.kind === "negative" ? "neg" : "pos"}`} title={execTips.ebit_saved || ""}>{b.amount_fmt}</span>
                     </div>
                   ))}
                 </div>
@@ -1000,76 +1041,27 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="exec-priority-row">
-                <div className="exec-pcard critical">
-                  <div className="exec-pcount critical">{overview.assets.filter((a) => a.status === "critical").length}</div>
-                  <div><div className="exec-plabel">Immediate action required</div><div className="exec-psub">Critical-risk assets</div></div>
+              <div className="exec-summary-grid">
+                <div className="exec-trend-card">
+                  <div className="exec-card-title">EBIT impact trend (simulated)</div>
+                  <TrendLine values={(executive.ebit_trend || []).map((p) => Number(p.value || 0))} color="#0F766E" height={120} />
+                  <div className="exec-chip-row">
+                    {(executive.ebit_trend || []).map((p) => (
+                      <span key={`trend-${p.label}`} className="exec-chip" title={execTips.ebit_saved || ""}>{p.label}: {p.value_fmt}</span>
+                    ))}
+                  </div>
                 </div>
-                <div className="exec-pcard warning">
-                  <div className="exec-pcount warning">{overview.assets.filter((a) => a.status === "warning").length}</div>
-                  <div><div className="exec-plabel">Schedule this week</div><div className="exec-psub">Early intervention candidates</div></div>
-                </div>
-                <div className="exec-pcard healthy">
-                  <div className="exec-pcount healthy">{overview.assets.filter((a) => a.status === "healthy").length}</div>
-                  <div><div className="exec-plabel">No action required</div><div className="exec-psub">Operating normally</div></div>
-                </div>
-              </div>
-
-              <div className="exec-main">
-                <div className="exec-insights">
-                  {actionableInsights.map((a) => (
-                    <div key={a.id} className={`exec-insight-card ${a.status}`}>
-                      <div className="eic-top">
-                        <span className={`eic-badge ${a.status}`}>{a.status === "critical" ? "Act now" : "Schedule"}</span>
-                        <div><div className="eic-asset-id">{a.id}</div><div className="eic-asset-type">{a.type}</div></div>
-                        <div className="eic-cost"><div className="eic-cost-val">{a.cost_exposure}</div><div className="eic-cost-label">cost exposure</div></div>
+                <div className="exec-trend-card">
+                  <div className="exec-card-title">Financial impact by work order</div>
+                  {(executive.work_orders || []).slice(0, 6).map((w) => (
+                    <div key={w.wo_id} className="exec-wo-row">
+                      <div>
+                        <div className="exec-wo-id">{w.wo_id}</div>
+                        <div className="exec-wo-meta">{w.equipment_id} · {w.priority} · {w.work_center}</div>
                       </div>
-                      <div className="eic-metrics">
-                        <div className="eic-metric"><div className="eic-metric-l">RUL</div><div className="eic-metric-v">{a.rul_hours}h</div></div>
-                        <div className="eic-metric"><div className="eic-metric-l">Health</div><div className="eic-metric-v">{a.health_score_pct}%</div></div>
-                        <div className="eic-metric"><div className="eic-metric-l">Confidence</div><div className="eic-metric-v">{Math.round(a.anomaly_score * 100)}%</div></div>
-                      </div>
-                      <div className={`eic-recommendation ${a.status}`}>
-                        <div className={`eic-rec-label ${a.status}`}>Recommendation</div>
-                        Plan intervention and parts readiness for {a.id}.
-                        <input
-                          className="cfg-inp"
-                          value={recCommentByAsset[a.id] || ""}
-                          onChange={(e) => setRecCommentByAsset((prev) => ({ ...prev, [a.id]: e.target.value }))}
-                          placeholder="Add operator comment (optional)"
-                        />
-                        <div className="eic-actions">
-                          <button className="cfg-add-btn" disabled={!!recActionPending[`${a.id}:approve`]} onClick={() => actOnRecommendation(a.id, "approve")}>Approve</button>
-                          <button className="cfg-add-btn" disabled={!!recActionPending[`${a.id}:reject`]} onClick={() => actOnRecommendation(a.id, "reject")}>Reject</button>
-                          <button className="cfg-add-btn" disabled={!!recActionPending[`${a.id}:defer`]} onClick={() => actOnRecommendation(a.id, "defer")}>Defer</button>
-                        </div>
-                      </div>
+                      <div className="exec-wo-impact" title={execTips.ebit_saved || ""}>{w.net_ebit_impact_fmt}</div>
                     </div>
                   ))}
-                </div>
-                <div className="exec-right">
-                  <div className="exec-trend-card">
-                    <div className="exec-card-title">Top recommended work orders</div>
-                    {(executive.work_orders || []).slice(0, 5).map((w) => (
-                      <div key={w.wo_id} className="exec-wo-row">
-                        <div>
-                          <div className="exec-wo-id">{w.wo_id}</div>
-                          <div className="exec-wo-meta">{w.equipment_id} · {w.priority} · {w.work_center}</div>
-                        </div>
-                        <div className="exec-wo-impact">{w.net_ebit_impact_fmt}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="exec-trend-card">
-                    <div className="exec-card-title">Fleet health snapshot</div>
-                    {overview.assets.map((a) => (
-                      <div key={`bar-${a.id}`} className="exec-exp-row">
-                        <span className="exec-exp-asset">{a.id}</span>
-                        <div className="exec-exp-bar-wrap"><div className="exec-exp-bar" style={{ width: `${a.health_score_pct}%`, background: statusColor(a.status) }} /></div>
-                        <span className="exec-exp-val" style={{ color: statusColor(a.status) }}>{a.health_score_pct}%</span>
-                      </div>
-                    ))}
-                  </div>
                 </div>
               </div>
             </div>
@@ -1645,6 +1637,106 @@ export default function App() {
                       ))
                     )}
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className={`page ${page === "p7" ? "active" : ""}`} id="p7">
+          <div className="p7-wrap">
+            <div className="p7-left">
+              <div className="exec-hero-card">
+                <div className="exec-hero-eyebrow">Executive command center</div>
+                <div className="exec-hero-title">{executive.value_statement || EMPTY_EXECUTIVE.value_statement}</div>
+                <div className="exec-hero-sub">One-pane financial view for predictive maintenance value realization.</div>
+              </div>
+
+              <div className="exec-finance-row">
+                <div className="exec-fin-card">
+                  <div className="exec-fin-label">EBIT Saved</div>
+                  <div className="exec-fin-val" title={execTips.ebit_saved || ""}>{executive.ebit_saved_fmt || "—"}</div>
+                </div>
+                <div className="exec-fin-card">
+                  <div className="exec-fin-label">ROI</div>
+                  <div className="exec-fin-val" title={execTips.roi_pct || ""}>{Number(executive.roi_pct || 0).toFixed(1)}%</div>
+                </div>
+                <div className="exec-fin-card">
+                  <div className="exec-fin-label">Payback</div>
+                  <div className="exec-fin-val" title={execTips.payback_days || ""}>{Number(executive.payback_days || 0).toFixed(1)} days</div>
+                </div>
+                <div className="exec-fin-card">
+                  <div className="exec-fin-label">Margin Lift</div>
+                  <div className="exec-fin-val" title={execTips.ebit_margin_bps || ""}>{Number(executive.ebit_margin_bps || 0).toFixed(1)} bps</div>
+                </div>
+              </div>
+
+              <div className="p7-grid">
+                <div className="exec-trend-card">
+                  <div className="exec-card-title">EBIT trend</div>
+                  <TrendLine values={(executive.ebit_trend || []).map((p) => Number(p.value || 0))} color="#0F766E" height={140} />
+                  <div className="exec-chip-row">
+                    {(executive.ebit_trend || []).map((p) => (
+                      <span key={`p7-trend-${p.label}`} className="exec-chip" title={execTips.ebit_saved || ""}>{p.label}: {p.value_fmt}</span>
+                    ))}
+                  </div>
+                </div>
+                <div className="exec-trend-card">
+                  <div className="exec-card-title">Value bridge</div>
+                  {(executive.value_bridge || []).map((b) => (
+                    <div key={`p7-bridge-${b.label}`} className="exec-bridge-row">
+                      <span className="exec-bridge-label">{b.label}</span>
+                      <span className={`exec-bridge-val ${b.kind === "negative" ? "neg" : "pos"}`} title={execTips.ebit_saved || ""}>{b.amount_fmt}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="p7-right">
+              <div className="agent-panel finance-panel">
+                <div className="agent-hdr">
+                  <div className="adot" />
+                  <div>
+                    <div className="atitle">Finance Scenario Genie</div>
+                    <div className="asubt">Ask financial what-if scenarios in predictive maintenance context</div>
+                  </div>
+                </div>
+                <div className="msgs">
+                  {financeMsgs.map((m, i) => (
+                    <div className="msg" key={`f-${m.role}-${i}`}>
+                      <div className={`av ${m.role === "user" ? "user" : "agent"}`}>{m.role === "user" ? "ME" : "AI"}</div>
+                      <div className={`bubble ${m.role === "user" ? "user" : ""}`}>
+                        {m.role === "agent" && <div className="bubble-lbl">{m.label}</div>}
+                        {m.role === "agent" ? renderSimpleMarkdown(m.text) : m.text}
+                      </div>
+                    </div>
+                  ))}
+                  {financePending && (
+                    <div className="msg">
+                      <div className="av agent">AI</div>
+                      <div className="bubble bubble-thinking">
+                        <div className="bubble-lbl">Finance Command AI</div>
+                        <div className="thinking-row">
+                          <span className="thinking-dot" />
+                          <span className="thinking-dot" />
+                          <span className="thinking-dot" />
+                          <span>Thinking...</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div className="agent-inp">
+                  <input
+                    className="ainput"
+                    value={financeInput}
+                    onChange={(e) => setFinanceInput(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && sendFinanceMessage()}
+                    placeholder={financePending ? "Processing scenario..." : "Ask: If we defer maintenance by 2 weeks, what is EBIT impact?"}
+                    disabled={financePending}
+                  />
+                  <button className="sbtn" onClick={sendFinanceMessage} disabled={financePending}>{financePending ? "Processing..." : "Ask"}</button>
                 </div>
               </div>
             </div>
