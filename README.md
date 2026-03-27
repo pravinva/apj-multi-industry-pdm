@@ -106,6 +106,8 @@ Notebook widgets:
 - `history_days` (default: 730)
 - `grant_principal` (default: `account users`)
 - `trigger_jobs` (`true` / `false`)
+- `reset_existing` (`true` / `false`) - truncate and reseed demo tables
+- `seed_demo_planning_case` (`true` / `false`) - seed deterministic planning case rows (includes mining `HT-001`, `HT-012`, `HT-007`)
 
 For portability across workspaces, scheduled jobs now use job-cluster definitions (no hardcoded cluster IDs).
 

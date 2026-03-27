@@ -3578,6 +3578,89 @@ def agent_finance_chat(payload: dict) -> dict:
 
     ov = _overview(industry, display_currency=currency)
     ex = ov.get("executive", {}) if isinstance(ov, dict) else {}
+    user_text_l = user_text.lower()
+
+    def _schema_rejection_answer(text: str) -> bool:
+        t = str(text or "").lower()
+        signals = [
+            "unrelated to the database schema",
+            "not present in any of the available tables",
+            "cannot calculate ebit",
+            "cannot calculate",
+            "no available table",
+            "not present in the schema",
+        ]
+        return any(s in t for s in signals)
+
+    def _extract_weeks(text: str) -> int | None:
+        m = re.search(r"(\d+)\s*(week|weeks|wk|wks)", text, flags=re.I)
+        if m:
+            try:
+                return int(m.group(1))
+            except Exception:
+                return None
+        return None
+
+    def _finance_fallback_response(reason: str = "") -> dict:
+        decisions = list(ex.get("decision_cockpit", []) or [])
+        base_risk = sum(_to_float(d.get("value_uplift"), 0.0) for d in decisions[:3])
+        if base_risk <= 0:
+            base_risk = sum(_to_float(w.get("net_ebit_impact"), 0.0) for w in list(ex.get("work_orders", []) or [])[:3])
+        weeks = _extract_weeks(user_text) or 0
+        deferred_impact = base_risk * (1.0 + (0.12 * max(0, weeks)))
+        cur = str(ex.get("currency") or currency or "USD")
+        deferred_impact_fmt = _fmt_money(deferred_impact, cur)
+        ebit_saved_fmt = str(ex.get("ebit_saved_fmt") or _fmt_money(_to_float(ex.get("ebit_saved"), 0.0), cur))
+        with_actions_30 = str(
+            (((ex.get("forward_outlook") or {}).get("horizon_30_days") or {}).get("protected_with_actions_fmt"))
+            or ebit_saved_fmt
+        )
+        without_actions_30 = str(
+            (((ex.get("forward_outlook") or {}).get("horizon_30_days") or {}).get("protected_without_actions_fmt"))
+            or _fmt_money(max(0.0, _to_float(ex.get("ebit_saved"), 0.0) - deferred_impact), cur)
+        )
+        source_table = str(ex.get("source_table") or f"pdm_{industry}.finance.pm_financial_daily")
+        intro = f"{reason}\n\n" if reason else ""
+        msg = (
+            f"{intro}For **{industry}**, deferring top recommended maintenance by **{weeks} weeks** is estimated to put about "
+            f"**{deferred_impact_fmt}** of EBIT at risk over the near-term window.\n\n"
+            f"- 30d protected EBIT (with actions): **{with_actions_30}**\n"
+            f"- 30d protected EBIT (if deferred): **{without_actions_30}**\n"
+            f"- Current EBIT saved baseline: **{ebit_saved_fmt}**\n\n"
+            f"Source: `{source_table}` (finance daily) plus ranked work-order impacts in executive payload."
+        )
+        return {
+            "choices": [{"message": {"content": msg}}],
+            "finance_context": {
+                "industry": industry,
+                "currency": cur,
+                "ebit_saved_fmt": ex.get("ebit_saved_fmt", ""),
+                "roi_pct": ex.get("roi_pct", 0),
+            },
+        }
+
+    # Deterministic finance answer for defer-impact scenarios.
+    if ("defer" in user_text_l or "delay" in user_text_l) and ("ebit" in user_text_l or "impact" in user_text_l):
+        return _finance_fallback_response()
+
+    # Clarify data-source expectations when user asks about Genie-room finance visibility.
+    if "finance data" in user_text_l and "genie room" in user_text_l:
+        src = str(ex.get("source_table") or f"pdm_{industry}.finance.pm_financial_daily")
+        msg = (
+            f"The current Genie room appears to be scoped mainly to operational schema, which is why it may reject EBIT questions.\n\n"
+            f"In this app, finance metrics are available from **`{src}`** and merged into the executive/finance APIs. "
+            f"I can answer finance scenarios from that dataset directly."
+        )
+        return {
+            "choices": [{"message": {"content": msg}}],
+            "finance_context": {
+                "industry": industry,
+                "currency": ex.get("currency", ""),
+                "ebit_saved_fmt": ex.get("ebit_saved_fmt", ""),
+                "roi_pct": ex.get("roi_pct", 0),
+            },
+        }
+
     context = (
         f"Finance context ({industry}): "
         f"EBIT saved={ex.get('ebit_saved_fmt', 'n/a')}, "
@@ -3597,6 +3680,11 @@ def agent_finance_chat(payload: dict) -> dict:
     reply = agent_chat(base_payload)
     try:
         if isinstance(reply, dict):
+            text = str((((reply.get("choices") or [{}])[0] or {}).get("message") or {}).get("content") or "")
+            if _schema_rejection_answer(text):
+                return _finance_fallback_response(
+                    reason="Genie returned a schema-scoped response, so I used the app finance model directly."
+                )
             reply.setdefault("finance_context", {
                 "industry": industry,
                 "currency": ex.get("currency", ""),

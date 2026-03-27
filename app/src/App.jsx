@@ -122,6 +122,32 @@ const JA_UI = {
   "Portfolio concentration": "ポートフォリオ集中度",
   "Top 5 assets share of risk exposure": "上位5資産のリスク露出シェア",
   "Run-rate to annual target": "年次目標に対するランレート",
+  "Back to Executive View": "経営ビューへ戻る",
+  "EBIT Saved": "EBIT改善額",
+  ROI: "ROI",
+  Payback: "投資回収",
+  "Margin Lift": "利益率改善",
+  "EBIT Margin Lift": "EBITマージン改善",
+  "Savings versus intervention + platform cost": "介入コスト＋プラットフォーム費用に対する効果",
+  "Estimated time to recover investment": "投資回収までの推定期間",
+  "Versus baseline monthly EBIT": "基準月次EBIT比",
+  "Source table:": "参照テーブル:",
+  "Thinking...": "考え中...",
+  Sources: "参照ソース",
+  ME: "私",
+  AI: "AI",
+  healthy: "正常",
+  warning: "警告",
+  critical: "重大",
+  "Executive scenario outlook": "経営シナリオ見通し",
+  "30d protected with actions": "30日保護EBIT（実行時）",
+  "30d protected if deferred": "30日保護EBIT（延期時）",
+  "Top decision actions": "優先意思決定アクション",
+  "No decision actions available in current window.": "現在の期間で意思決定アクションはありません。",
+  "Executive briefing metadata": "経営ブリーフィング情報",
+  Industry: "業界",
+  "Prepared at": "作成日時",
+  "Source table": "参照テーブル",
   "Model trained": "モデル学習日時",
   "RUL accuracy (R²)": "RUL精度 (R²)",
   RMSE: "RMSE",
@@ -150,6 +176,12 @@ function localizeAlertText(text, isJapanese) {
   const schedule = String(text || "").match(/^(.+?) should be scheduled this week \((.+)\)$/);
   if (schedule) return `${schedule[1]} は今週中の対応推奨です（${schedule[2]}）`;
   return text;
+}
+
+function localizeStatusText(status, isJapanese) {
+  const s = String(status || "");
+  if (!isJapanese) return s;
+  return JA_UI[s] || s;
 }
 
 async function getJson(url, fallback) {
@@ -369,6 +401,7 @@ export default function App() {
   const [financeConversationByIndustry, setFinanceConversationByIndustry] = useState({});
   const [financePending, setFinancePending] = useState(false);
   const [execDelayWeeks, setExecDelayWeeks] = useState(0);
+  const [liveClock, setLiveClock] = useState(() => new Date().toLocaleString());
 
   const [simState, setSimState] = useState({
     running: false,
@@ -608,6 +641,11 @@ export default function App() {
     };
   }, [page, simTab, industry]);
 
+  useEffect(() => {
+    const timer = setInterval(() => setLiveClock(new Date().toLocaleString()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   const selectedAsset = useMemo(
     () => overview.assets.find((a) => a.id === selectedAssetId) || overview.assets[0] || null,
     [overview.assets, selectedAssetId]
@@ -629,6 +667,8 @@ export default function App() {
   const effectiveUiCurrency = demoCurrency === "AUTO" ? (executive.currency || "USD") : demoCurrency;
   const isJapanese = effectiveUiCurrency === "JPY";
   const t = (text) => (isJapanese ? (JA_UI[text] || text) : text);
+  const dayUnit = isJapanese ? "日" : "days";
+  const shortDayUnit = isJapanese ? "日" : "d";
   const industryLabel = (ind) => (isJapanese ? (JA_INDUSTRY_LABELS[ind] || ind) : (ind.charAt(0).toUpperCase() + ind.slice(1)));
   const execScenario = useMemo(() => {
     const decisions = executive.decision_cockpit || [];
@@ -646,6 +686,10 @@ export default function App() {
       withAction30Fmt: executive.forward_outlook?.horizon_30_days?.protected_with_actions_fmt || executive.ebit_saved_fmt || "—"
     };
   }, [executive, execDelayWeeks, effectiveUiCurrency]);
+  const briefingStamp = useMemo(
+    () => new Date().toLocaleString(),
+    [industry, effectiveUiCurrency, executive.ebit_saved_fmt, executive.roi_pct, executive.payback_days]
+  );
 
   const sdtWindowInsights = useMemo(() => {
     const summary = sdtReport.summary || [];
@@ -1037,7 +1081,7 @@ export default function App() {
           <span className="logo-text">Databricks</span>
         </div>
         <div className="topbar-div" />
-        <span className="app-name">{isJapanese ? "OT 予知保全インテリジェンス" : "OT PdM Intelligence"}</span>
+        <span className="app-name">{isJapanese ? "予知保全 オペレーション＆ビジネス価値コマンドセンター" : "Predictive Maintenance Operations & Business Value Command Center"}</span>
         <div className="ind-tabs">
           {INDUSTRIES.map((ind) => (
             <button key={ind} className={`itab ${industry === ind ? "active" : ""}`} onClick={() => setIndustry(ind)}>
@@ -1051,7 +1095,7 @@ export default function App() {
             {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
-        <span className="isa-badge">{isJapanese ? "ISA-95 ・ Unity Catalog" : "ISA-95 · Unity Catalog"}</span>
+        <span className="isa-badge">{isJapanese ? `ライブ ・ ${liveClock}` : `Live · ${liveClock}`}</span>
       </header>
 
       <div className="body-wrap">
@@ -1067,6 +1111,10 @@ export default function App() {
 
         <div className={`page ${page === "p1" ? "active" : ""}`} id="p1">
           <div className="p1-topbar">
+            <div className="view-toggle-wrap">
+              <button className={`view-btn ${view === "operator" ? "active" : ""}`} onClick={() => setView("operator")}>{t("Operator")}</button>
+              <button className={`view-btn ${view === "executive" ? "active" : ""}`} onClick={() => setView("executive")}>{t("Executive")}</button>
+            </div>
             <div className="kpi-strip" style={{ flex: 1, borderBottom: "none" }}>
               <div className="kpi">
                 <div className="kpi-l">{t("Fleet Health")}</div>
@@ -1083,10 +1131,6 @@ export default function App() {
                 <div className="kpi-v a">{overview.kpis.asset_count}</div>
                 <div className="kpi-d">{t("In monitored fleet")}</div>
               </div>
-            </div>
-            <div className="view-toggle-wrap">
-              <button className={`view-btn ${view === "operator" ? "active" : ""}`} onClick={() => setView("operator")}>{t("Operator")}</button>
-              <button className={`view-btn ${view === "executive" ? "active" : ""}`} onClick={() => setView("executive")}>{t("Executive")}</button>
             </div>
           </div>
 
@@ -1120,7 +1164,7 @@ export default function App() {
                           <div className="atype">{a.type}</div>
                           <div className="acrumb">{a.crumb}</div>
                         </div>
-                        <span className={`sbadge ${a.status}`}>{a.status}</span>
+                        <span className={`sbadge ${a.status}`}>{localizeStatusText(a.status, isJapanese)}</span>
                       </div>
                       <div className="card-metrics">
                         <div className="cm"><div className="cml">{t("Anomaly")}</div><div className="cmv">{a.anomaly_score}</div></div>
@@ -1143,13 +1187,13 @@ export default function App() {
                 <div className="msgs">
                   {agentMsgs.map((m, i) => (
                     <div className="msg" key={`${m.role}-${i}`}>
-                      <div className={`av ${m.role === "user" ? "user" : "agent"}`}>{m.role === "user" ? "ME" : "AI"}</div>
+                      <div className={`av ${m.role === "user" ? "user" : "agent"}`}>{m.role === "user" ? t("ME") : t("AI")}</div>
                       <div className={`bubble ${m.role === "user" ? "user" : ""}`}>
                         {m.role === "agent" && <div className="bubble-lbl">{m.label}</div>}
                         {m.role === "agent" ? renderSimpleMarkdown(m.text) : m.text}
                         {m.role === "agent" && Array.isArray(m.references) && m.references.length > 0 && (
                           <div style={{ marginTop: 8, borderTop: "1px solid var(--border)", paddingTop: 6, fontSize: 11, color: "var(--muted)" }}>
-                            <div style={{ marginBottom: 4 }}>Sources</div>
+                            <div style={{ marginBottom: 4 }}>{t("Sources")}</div>
                             {m.references.slice(0, 4).map((r, idx) => (
                               <div key={`agent-ref-${i}-${idx}`}>[{r.source}] {(Number(r.score || 0) * 100).toFixed(0)}%</div>
                             ))}
@@ -1160,14 +1204,14 @@ export default function App() {
                   ))}
                   {agentPending && (
                     <div className="msg">
-                      <div className="av agent">AI</div>
+                      <div className="av agent">{t("AI")}</div>
                       <div className="bubble bubble-thinking">
                         <div className="bubble-lbl">{t("Maintenance Supervisor AI")}</div>
                         <div className="thinking-row">
                           <span className="thinking-dot" />
                           <span className="thinking-dot" />
                           <span className="thinking-dot" />
-                          <span>Thinking...</span>
+                          <span>{t("Thinking...")}</span>
                         </div>
                       </div>
                     </div>
@@ -1289,7 +1333,7 @@ export default function App() {
                     <div key={`dec-${i}`} className="exec-decision-row">
                       <div>
                         <div className="exec-wo-id">{d.title || d.equipment_id}</div>
-                        <div className="exec-wo-meta">{d.equipment_id} · {t("Payback")} {Number(d.payback_days || 0).toFixed(1)}d · {t("Disruption")} {d.disruption_score}/10</div>
+                        <div className="exec-wo-meta">{d.equipment_id} · {t("Payback")} {Number(d.payback_days || 0).toFixed(1)}{shortDayUnit} · {t("Disruption")} {d.disruption_score}/10</div>
                       </div>
                       <div className="exec-wo-impact">{d.value_uplift_fmt || "—"}</div>
                     </div>
@@ -1322,7 +1366,7 @@ export default function App() {
               <div className="exec-finance-row">
                 <div className="exec-fin-card">
                   <div className="exec-fin-label">
-                    EBIT Saved
+                    {t("EBIT Saved")}
                     <span className="exec-tip" data-tip={execTips.ebit_saved || ""} aria-label={execTips.ebit_saved || ""} tabIndex={0}>i</span>
                   </div>
                   <div className="exec-fin-val" title={execTips.ebit_saved || ""}>{executive.ebit_saved_fmt || "—"}</div>
@@ -1334,29 +1378,29 @@ export default function App() {
                 </div>
                 <div className="exec-fin-card">
                   <div className="exec-fin-label">
-                    ROI
+                    {t("ROI")}
                     <span className="exec-tip" data-tip={execTips.roi_pct || ""} aria-label={execTips.roi_pct || ""} tabIndex={0}>i</span>
                   </div>
                   <div className="exec-fin-val" title={execTips.roi_pct || ""}>{Number(executive.roi_pct || 0).toFixed(1)}%</div>
                   <div className="exec-fin-sub">
-                    Savings versus intervention + platform cost
+                    {t("Savings versus intervention + platform cost")}
                     <span className="exec-tip" data-tip={execTips.roi_pct || ""} aria-label={execTips.roi_pct || ""} tabIndex={0}>i</span>
                   </div>
                 </div>
                 <div className="exec-fin-card">
                   <div className="exec-fin-label">
-                    Payback
+                    {t("Payback")}
                     <span className="exec-tip" data-tip={execTips.payback_days || ""} aria-label={execTips.payback_days || ""} tabIndex={0}>i</span>
                   </div>
-                  <div className="exec-fin-val" title={execTips.payback_days || ""}>{Number(executive.payback_days || 0).toFixed(1)} days</div>
+                  <div className="exec-fin-val" title={execTips.payback_days || ""}>{Number(executive.payback_days || 0).toFixed(1)} {dayUnit}</div>
                   <div className="exec-fin-sub">
-                    Estimated time to recover investment
+                    {t("Estimated time to recover investment")}
                     <span className="exec-tip" data-tip={execTips.payback_days || ""} aria-label={execTips.payback_days || ""} tabIndex={0}>i</span>
                   </div>
                 </div>
                 <div className="exec-fin-card">
                   <div className="exec-fin-label">
-                    EBIT Margin Lift
+                    {t("EBIT Margin Lift")}
                     <span className="exec-tip" data-tip={execTips.ebit_margin_bps || ""} aria-label={execTips.ebit_margin_bps || ""} tabIndex={0}>i</span>
                   </div>
                   <div className="exec-fin-val" title={execTips.ebit_margin_bps || ""}>{Number(executive.ebit_margin_bps || 0).toFixed(1)} bps</div>
@@ -1397,7 +1441,7 @@ export default function App() {
                     <div><span className="exec-erp-k">Account</span><span className="exec-erp-v">{executive.erp?.reference_account || "—"}</span></div>
                   </div>
                   <div className="exec-erp-source" title={execTips.source_table || ""}>
-                    Source table: {executive.source_table || "simulated model"}
+                    {t("Source table:")} {executive.source_table || "simulated model"}
                     <span
                       className="exec-tip"
                       title={execTips.source_table || ""}
@@ -1458,7 +1502,7 @@ export default function App() {
                 <div className="p2-meta">
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <div className="p2-id">{assetDetail.id}</div>
-                    <span className={`sbadge ${assetDetail.status}`}>{assetDetail.status}</span>
+                    <span className={`sbadge ${assetDetail.status}`}>{localizeStatusText(assetDetail.status, isJapanese)}</span>
                   </div>
                   <div className="p2-type">{assetDetail.type}</div>
                   <div className="p2-crumb">{assetDetail.crumb}</div>
@@ -2144,12 +2188,23 @@ export default function App() {
                 <div className="exec-hero-eyebrow">{t("Executive command center")}</div>
                 <div className="exec-hero-title">{executive.value_statement || EMPTY_EXECUTIVE.value_statement}</div>
                 <div className="exec-hero-sub">{t("One-pane financial view for predictive maintenance value realization.")}</div>
+                <div className="exec-hero-actions">
+                  <button
+                    className="exec-jump-btn"
+                    onClick={() => {
+                      setPage("p1");
+                      setView("executive");
+                    }}
+                  >
+                    {t("Back to Executive View")}
+                  </button>
+                </div>
               </div>
 
               <div className="exec-finance-row">
                 <div className="exec-fin-card">
                   <div className="exec-fin-label">
-                    EBIT Saved
+                    {t("EBIT Saved")}
                     <span className="exec-tip" data-tip={execTips.ebit_saved || ""} aria-label={execTips.ebit_saved || ""} tabIndex={0}>i</span>
                   </div>
                   <div className="exec-fin-val" title={execTips.ebit_saved || ""}>{executive.ebit_saved_fmt || "—"}</div>
@@ -2161,21 +2216,21 @@ export default function App() {
                 </div>
                 <div className="exec-fin-card">
                   <div className="exec-fin-label">
-                    ROI
+                    {t("ROI")}
                     <span className="exec-tip" data-tip={execTips.roi_pct || ""} aria-label={execTips.roi_pct || ""} tabIndex={0}>i</span>
                   </div>
                   <div className="exec-fin-val" title={execTips.roi_pct || ""}>{Number(executive.roi_pct || 0).toFixed(1)}%</div>
                 </div>
                 <div className="exec-fin-card">
                   <div className="exec-fin-label">
-                    Payback
+                    {t("Payback")}
                     <span className="exec-tip" data-tip={execTips.payback_days || ""} aria-label={execTips.payback_days || ""} tabIndex={0}>i</span>
                   </div>
-                  <div className="exec-fin-val" title={execTips.payback_days || ""}>{Number(executive.payback_days || 0).toFixed(1)} days</div>
+                  <div className="exec-fin-val" title={execTips.payback_days || ""}>{Number(executive.payback_days || 0).toFixed(1)} {dayUnit}</div>
                 </div>
                 <div className="exec-fin-card">
                   <div className="exec-fin-label">
-                    Margin Lift
+                    {t("Margin Lift")}
                     <span className="exec-tip" data-tip={execTips.ebit_margin_bps || ""} aria-label={execTips.ebit_margin_bps || ""} tabIndex={0}>i</span>
                   </div>
                   <div className="exec-fin-val" title={execTips.ebit_margin_bps || ""}>{Number(executive.ebit_margin_bps || 0).toFixed(1)} bps</div>
@@ -2211,6 +2266,62 @@ export default function App() {
                       <span className={`exec-bridge-val ${b.kind === "negative" ? "neg" : "pos"}`} title={b.tooltip || execTips.source_table || ""}>{b.amount_fmt}</span>
                     </div>
                   ))}
+                </div>
+              </div>
+
+              <div className="p7-insights-grid">
+                <div className="exec-trend-card">
+                  <div className="exec-card-title">{t("Executive scenario outlook")}</div>
+                  <div className="exec-wow-row">
+                    <span>{t("30d protected with actions")}</span>
+                    <strong>{executive.forward_outlook?.horizon_30_days?.protected_with_actions_fmt || executive.ebit_saved_fmt || "—"}</strong>
+                  </div>
+                  <div className="exec-wow-row">
+                    <span>{t("30d protected if deferred")}</span>
+                    <strong>{executive.forward_outlook?.horizon_30_days?.protected_without_actions_fmt || "—"}</strong>
+                  </div>
+                  <div className="exec-wow-row">
+                    <span>{t("90d EBIT at risk if deferred")}</span>
+                    <strong>{executive.forward_outlook?.horizon_90_days?.at_risk_if_deferred_fmt || execScenario.atRiskFmt}</strong>
+                  </div>
+                  <div className="exec-fin-sub">
+                    {t("Confidence")} {Number(executive.executive_summary?.confidence_pct || 0).toFixed(1)}%
+                    <span className="exec-tip" data-tip={execTips.confidence_pct || ""} aria-label={execTips.confidence_pct || ""} tabIndex={0}>i</span>
+                  </div>
+                </div>
+
+                <div className="exec-trend-card">
+                  <div className="exec-card-title">{t("Top decision actions")}</div>
+                  {(executive.decision_cockpit || []).slice(0, 3).map((d, i) => (
+                    <div key={`p7-decision-${i}`} className="exec-decision-row">
+                      <div>
+                        <div className="exec-wo-id">{d.title || d.equipment_id || "Action"}</div>
+                        <div className="exec-wo-meta">
+                          {d.equipment_id || "—"} · {t("Payback")} {Number(d.payback_days || 0).toFixed(1)}{shortDayUnit} · {t("Disruption")} {d.disruption_score || 0}/10
+                        </div>
+                      </div>
+                      <div className="exec-wo-impact">{d.value_uplift_fmt || "—"}</div>
+                    </div>
+                  ))}
+                  {!(executive.decision_cockpit || []).length && (
+                    <div className="exec-fin-sub">{t("No decision actions available in current window.")}</div>
+                  )}
+                </div>
+
+                <div className="exec-trend-card">
+                  <div className="exec-card-title">{t("Executive briefing metadata")}</div>
+                  <div className="exec-erp-grid">
+                    <div><span className="exec-erp-k">{t("Industry")}</span><span className="exec-erp-v">{industryLabel(industry)}</span></div>
+                    <div><span className="exec-erp-k">{t("Currency")}</span><span className="exec-erp-v">{effectiveUiCurrency}</span></div>
+                    <div><span className="exec-erp-k">{t("Annual run-rate")}</span><span className="exec-erp-v">{executive.executive_summary?.annualized_ebit_saved_fmt || "—"}</span></div>
+                    <div><span className="exec-erp-k">{t("Annual target")}</span><span className="exec-erp-v">{executive.executive_summary?.annual_ebit_target_fmt || "—"}</span></div>
+                    <div><span className="exec-erp-k">{t("Run-rate to annual target")}</span><span className="exec-erp-v">{Number(executive.executive_summary?.run_rate_to_target_pct || 0).toFixed(1)}%</span></div>
+                    <div><span className="exec-erp-k">{t("Prepared at")}</span><span className="exec-erp-v">{briefingStamp}</span></div>
+                  </div>
+                  <div className="exec-erp-source">
+                    {t("Source table")}: {executive.source_table || "—"}
+                    <span className="exec-tip" data-tip={execTips.source_table || ""} aria-label={execTips.source_table || ""} tabIndex={0}>i</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2251,7 +2362,7 @@ export default function App() {
                           <span className="thinking-dot" />
                           <span className="thinking-dot" />
                           <span className="thinking-dot" />
-                          <span>Thinking...</span>
+                          <span>{t("Thinking...")}</span>
                         </div>
                       </div>
                     </div>

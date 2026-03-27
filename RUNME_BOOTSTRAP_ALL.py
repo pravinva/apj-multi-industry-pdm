@@ -8,6 +8,7 @@ Single notebook to make the demo usable in a fresh workspace after bundle deploy
 - Backfills 2 years of daily finance data
 - Applies access grants
 - Triggers one run each of training/scoring/finance jobs (optional)
+- Supports idempotent reruns with reset/non-reset modes
 """
 
 import json
@@ -38,42 +39,54 @@ def _resolve_repo_root() -> Path:
 ROOT = _resolve_repo_root()
 
 
-def _runtime_params() -> tuple[list[str], int, str, bool]:
+def _runtime_params() -> tuple[list[str], int, str, bool, bool, bool]:
     defaults = {
         "industries_csv": "mining,energy,water,automotive,semiconductor",
         "history_days": "730",
         "grant_principal": "account users",
         "trigger_jobs": "true",
+        "reset_existing": "true",
+        "seed_demo_planning_case": "true",
     }
     try:
         dbutils.widgets.text("industries_csv", defaults["industries_csv"])  # type: ignore[name-defined] # noqa: F821
         dbutils.widgets.text("history_days", defaults["history_days"])  # type: ignore[name-defined] # noqa: F821
         dbutils.widgets.text("grant_principal", defaults["grant_principal"])  # type: ignore[name-defined] # noqa: F821
         dbutils.widgets.dropdown("trigger_jobs", defaults["trigger_jobs"], ["true", "false"])  # type: ignore[name-defined] # noqa: F821
+        dbutils.widgets.dropdown("reset_existing", defaults["reset_existing"], ["true", "false"])  # type: ignore[name-defined] # noqa: F821
+        dbutils.widgets.dropdown("seed_demo_planning_case", defaults["seed_demo_planning_case"], ["true", "false"])  # type: ignore[name-defined] # noqa: F821
         industries_csv = dbutils.widgets.get("industries_csv")  # type: ignore[name-defined] # noqa: F821
         history_days_raw = dbutils.widgets.get("history_days")  # type: ignore[name-defined] # noqa: F821
         grant_principal = dbutils.widgets.get("grant_principal")  # type: ignore[name-defined] # noqa: F821
         trigger_jobs_raw = dbutils.widgets.get("trigger_jobs")  # type: ignore[name-defined] # noqa: F821
+        reset_existing_raw = dbutils.widgets.get("reset_existing")  # type: ignore[name-defined] # noqa: F821
+        seed_demo_planning_case_raw = dbutils.widgets.get("seed_demo_planning_case")  # type: ignore[name-defined] # noqa: F821
     except Exception:
         parser = ArgumentParser(add_help=False)
         parser.add_argument("--industries_csv", default=defaults["industries_csv"])
         parser.add_argument("--history_days", default=defaults["history_days"])
         parser.add_argument("--grant_principal", default=defaults["grant_principal"])
         parser.add_argument("--trigger_jobs", default=defaults["trigger_jobs"])
+        parser.add_argument("--reset_existing", default=defaults["reset_existing"])
+        parser.add_argument("--seed_demo_planning_case", default=defaults["seed_demo_planning_case"])
         args, _ = parser.parse_known_args()
         industries_csv = args.industries_csv
         history_days_raw = args.history_days
         grant_principal = args.grant_principal
         trigger_jobs_raw = args.trigger_jobs
+        reset_existing_raw = args.reset_existing
+        seed_demo_planning_case_raw = args.seed_demo_planning_case
 
     industries = [i.strip().lower() for i in industries_csv.split(",") if i.strip()]
     history_days = max(30, int(history_days_raw or "730"))
     principal = (grant_principal or defaults["grant_principal"]).strip()
     trigger = str(trigger_jobs_raw).strip().lower() == "true"
-    return industries, history_days, principal, trigger
+    reset_existing = str(reset_existing_raw).strip().lower() == "true"
+    seed_demo_planning_case = str(seed_demo_planning_case_raw).strip().lower() == "true"
+    return industries, history_days, principal, trigger, reset_existing, seed_demo_planning_case
 
 
-INDUSTRIES, HISTORY_DAYS, GRANT_PRINCIPAL, TRIGGER_JOBS = _runtime_params()
+INDUSTRIES, HISTORY_DAYS, GRANT_PRINCIPAL, TRIGGER_JOBS, RESET_EXISTING, SEED_DEMO_PLANNING_CASE = _runtime_params()
 
 
 def _safe(v: str) -> str:
@@ -156,6 +169,41 @@ def _create_finance_table(catalog: str) -> None:
         ) USING DELTA
         """
     )
+    _run_sql(
+        f"""
+        CREATE TABLE IF NOT EXISTS {catalog}.finance.pm_bootstrap_runs (
+          run_ts TIMESTAMP,
+          industries_csv STRING,
+          history_days INT,
+          reset_existing BOOLEAN,
+          trigger_jobs BOOLEAN,
+          seed_demo_planning_case BOOLEAN,
+          executed_by STRING,
+          notes STRING
+        ) USING DELTA
+        """
+    )
+    _run_sql(
+        f"""
+        CREATE TABLE IF NOT EXISTS {catalog}.finance.pm_demo_planning_case (
+          ds DATE,
+          industry STRING,
+          equipment_id STRING,
+          anomaly_score DOUBLE,
+          risk_rank INT,
+          has_maintenance_window BOOLEAN,
+          crew_available BOOLEAN,
+          shift_label STRING,
+          maintenance_window_start TIMESTAMP,
+          maintenance_window_end TIMESTAMP,
+          threshold_risk_flag BOOLEAN,
+          combined_risk_score DOUBLE,
+          combined_risk_flag BOOLEAN,
+          recommendation STRING,
+          updated_at TIMESTAMP
+        ) USING DELTA
+        """
+    )
 
 
 def _grant_access(catalog: str) -> None:
@@ -174,6 +222,8 @@ def _grant_access(catalog: str) -> None:
         "lakebase.maintenance_schedule",
         "bronze.asset_metadata",
         "finance.pm_financial_daily",
+        "finance.pm_demo_planning_case",
+        "finance.pm_bootstrap_runs",
     ]:
         try:
             _run_sql(f"GRANT SELECT ON TABLE {catalog}.{tbl} TO `{p}`")
@@ -192,6 +242,7 @@ def _truncate_seed_targets(catalog: str) -> None:
         "lakebase.maintenance_schedule",
         "bronze.asset_metadata",
         "finance.pm_financial_daily",
+        "finance.pm_demo_planning_case",
     ]:
         try:
             _run_sql(f"DELETE FROM {catalog}.{tbl} WHERE TRUE")
@@ -349,6 +400,116 @@ def _seed_finance(industry: str, cfg: dict[str, Any], days: int) -> None:
     _seed_json_table(catalog, "finance.pm_financial_daily", rows)
 
 
+def _seed_demo_planning_case(industry: str, cfg: dict[str, Any]) -> None:
+    """Seed deterministic planning case rows so scenario demos are portable."""
+    catalog = cfg["catalog"]
+    now = datetime.now(timezone.utc).replace(second=0, microsecond=0)
+    ds = now.date().isoformat()
+
+    if industry == "mining":
+        rows = [
+            {
+                "ds": ds,
+                "industry": industry,
+                "equipment_id": "HT-001",
+                "anomaly_score": 0.94,
+                "risk_rank": 1,
+                "has_maintenance_window": False,
+                "crew_available": False,
+                "shift_label": None,
+                "maintenance_window_start": None,
+                "maintenance_window_end": None,
+                "threshold_risk_flag": True,
+                "combined_risk_score": 0.93,
+                "combined_risk_flag": True,
+                "recommendation": "Highest risk but no maintenance window or crew assignment. Escalate scheduler and assign emergency crew.",
+                "updated_at": now.strftime("%Y-%m-%d %H:%M:%S"),
+            },
+            {
+                "ds": ds,
+                "industry": industry,
+                "equipment_id": "HT-012",
+                "anomaly_score": 0.78,
+                "risk_rank": 2,
+                "has_maintenance_window": True,
+                "crew_available": True,
+                "shift_label": "Day Shift",
+                "maintenance_window_start": (now + timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S"),
+                "maintenance_window_end": (now + timedelta(hours=10)).strftime("%Y-%m-%d %H:%M:%S"),
+                "threshold_risk_flag": True,
+                "combined_risk_score": 0.81,
+                "combined_risk_flag": True,
+                "recommendation": "Planned window and crew available. Execute planned intervention this shift.",
+                "updated_at": now.strftime("%Y-%m-%d %H:%M:%S"),
+            },
+            {
+                "ds": ds,
+                "industry": industry,
+                "equipment_id": "HT-007",
+                "anomaly_score": 0.71,
+                "risk_rank": 3,
+                "has_maintenance_window": True,
+                "crew_available": True,
+                "shift_label": "Night Shift",
+                "maintenance_window_start": (now + timedelta(hours=14)).strftime("%Y-%m-%d %H:%M:%S"),
+                "maintenance_window_end": (now + timedelta(hours=16)).strftime("%Y-%m-%d %H:%M:%S"),
+                "threshold_risk_flag": True,
+                "combined_risk_score": 0.74,
+                "combined_risk_flag": True,
+                "recommendation": "Planned window and crew available. Schedule maintenance in upcoming night shift.",
+                "updated_at": now.strftime("%Y-%m-%d %H:%M:%S"),
+            },
+        ]
+    else:
+        assets = [a.get("id") for a in cfg.get("simulator", {}).get("assets", []) if a.get("id")][:3]
+        if len(assets) < 3:
+            assets = (assets + ["ASSET-001", "ASSET-002", "ASSET-003"])[:3]
+        rows = []
+        for i, aid in enumerate(assets):
+            has_window = i != 0
+            anomaly = round(max(0.52, 0.86 - (i * 0.12)), 2)
+            rows.append(
+                {
+                    "ds": ds,
+                    "industry": industry,
+                    "equipment_id": aid,
+                    "anomaly_score": anomaly,
+                    "risk_rank": i + 1,
+                    "has_maintenance_window": has_window,
+                    "crew_available": has_window,
+                    "shift_label": None if not has_window else ("Day Shift" if i == 1 else "Night Shift"),
+                    "maintenance_window_start": None if not has_window else (now + timedelta(hours=6 + (i * 6))).strftime("%Y-%m-%d %H:%M:%S"),
+                    "maintenance_window_end": None if not has_window else (now + timedelta(hours=8 + (i * 6))).strftime("%Y-%m-%d %H:%M:%S"),
+                    "threshold_risk_flag": anomaly >= 0.65,
+                    "combined_risk_score": round(min(0.98, anomaly * 0.96 + 0.03), 2),
+                    "combined_risk_flag": True,
+                    "recommendation": "Use combined risk score for prioritization when maintenance window data is missing.",
+                    "updated_at": now.strftime("%Y-%m-%d %H:%M:%S"),
+                }
+            )
+    _seed_json_table(catalog, "finance.pm_demo_planning_case", rows)
+
+
+def _record_bootstrap_run(catalog: str, notes: str = "") -> None:
+    _run_sql(
+        f"""
+        INSERT INTO {catalog}.finance.pm_bootstrap_runs
+        (run_ts, industries_csv, history_days, reset_existing, trigger_jobs, seed_demo_planning_case, executed_by, notes)
+        VALUES
+        (
+          current_timestamp(),
+          {_lit(",".join(INDUSTRIES))},
+          {HISTORY_DAYS},
+          {str(RESET_EXISTING).upper()},
+          {str(TRIGGER_JOBS).upper()},
+          {str(SEED_DEMO_PLANNING_CASE).upper()},
+          current_user(),
+          {_lit(notes)}
+        )
+        """
+    )
+
+
 def bootstrap_industry(industry: str) -> None:
     cfg_path = ROOT / "industries" / industry / "config.yaml"
     seed_root = ROOT / "industries" / industry / "seed"
@@ -365,14 +526,18 @@ def bootstrap_industry(industry: str) -> None:
 
     _render_schema_sql(catalog)
     _create_finance_table(catalog)
-    _truncate_seed_targets(catalog)
+    if RESET_EXISTING:
+        _truncate_seed_targets(catalog)
 
     _seed_json_table(catalog, "lakebase.parts_inventory", _load_json(seed_root / "parts_inventory.json"))
     _seed_json_table(catalog, "lakebase.maintenance_schedule", _load_json(seed_root / "maintenance_schedule.json"))
     _seed_asset_metadata(industry, cfg)
     _seed_feature_vectors(cfg)
     _seed_finance(industry, cfg, HISTORY_DAYS)
+    if SEED_DEMO_PLANNING_CASE:
+        _seed_demo_planning_case(industry, cfg)
     _grant_access(catalog)
+    _record_bootstrap_run(catalog, notes=f"bootstrap_industry={industry}")
 
     print(f"[ok] {industry} ready")
 
