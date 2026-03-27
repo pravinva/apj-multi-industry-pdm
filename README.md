@@ -40,6 +40,21 @@ OT source (simulator or Zerobus)
 - **Page 4 - Stream**: near-real-time row stream with quality/protocol flags.
 - **Page 5 - Model**: model status and explainability views.
 - **Page 6 - Simulator**: fault controls, configuration and connector setup.
+- **Advanced PdM Command Layer** (on Model page): failure-mode ranking, prescriptive optimizer, spare-parts risk, MLOps health, and manual-aware guidance.
+- **Manual Upload + Index**: upload PDF/MD/TXT manuals from UI, parse text, and persist chunked references in UC Delta (`bronze.manual_reference_chunks`) for retrieval/citations.
+
+## Manual RAG Pattern (Demo)
+
+Manual retrieval is wired as a lightweight RAG pattern:
+
+- Ingestion: manuals from `industries/<skin>/manuals` and UI uploads
+- Parsing: text extraction for `.md`, `.txt`, and `.pdf` (`pypdf`)
+- Index: chunked rows persisted in UC Delta table `pdm_<industry>.bronze.manual_reference_chunks`
+- Retrieval: token-overlap ranking against user prompt and asset context
+- Grounding: top snippets injected into Genie prompt with source-aware instructions
+- Citations: source list shown in chat bubbles (maintenance and finance panels)
+
+For production-scale semantic retrieval, add vector embeddings + Databricks Vector Search on top of this Delta index.
 
 ## Executive Value Layer (Finance + ERP Simulation)
 

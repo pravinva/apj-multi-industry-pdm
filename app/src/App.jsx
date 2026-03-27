@@ -26,7 +26,11 @@ const EMPTY_EXECUTIVE = {
   erp: { plant_code: "", fiscal_period: "", cost_centers: [], work_centers: [], planner_group: "", reference_account: "" },
   value_bridge: [],
   ebit_trend: [],
-  work_orders: []
+  work_orders: [],
+  executive_summary: {},
+  forward_outlook: {},
+  decision_cockpit: [],
+  portfolio_insights: {}
 };
 const EMPTY_OVERVIEW = {
   assets: [],
@@ -93,7 +97,50 @@ const JA_UI = {
   Stopped: "停止中",
   "readings emitted": "件の読み取りを送信",
   "Live ingestion flow": "ライブ取り込みフロー",
-  "3 stages: Bronze → Silver → Gold (5 recent rows each)": "3段階: Bronze → Silver → Gold（各5行）"
+  "3 stages: Bronze → Silver → Gold (5 recent rows each)": "3段階: Bronze → Silver → Gold（各5行）",
+  Anomaly: "異常度",
+  RUL: "残存寿命",
+  Exposure: "影響額",
+  "Executive command center": "経営コマンドセンター",
+  "One-pane financial view for predictive maintenance value realization.": "予知保全の価値実現を1画面で確認できます。",
+  "Finance Scenario Genie": "財務シナリオGenie",
+  "Ask financial what-if scenarios in predictive maintenance context": "予知保全に関する財務のWhat-ifを質問",
+  "Processing scenario...": "シナリオを処理中...",
+  "Ask: If we defer maintenance by 2 weeks, what is EBIT impact?": "質問例: 保全を2週間延期した場合のEBIT影響は？",
+  Ask: "質問",
+  "EBIT trend": "EBIT推移",
+  "Value bridge": "価値ブリッジ",
+  "Forward outlook (30/90 days)": "将来見通し（30日/90日）",
+  "30d protected EBIT (with actions)": "30日間の保護EBIT（推奨アクション実行時）",
+  "30d protected EBIT (if deferred)": "30日間の保護EBIT（延期時）",
+  "90d EBIT at risk if deferred": "延期時の90日EBITリスク",
+  Confidence: "信頼度",
+  "Decision cockpit": "意思決定コックピット",
+  "Defer top actions by weeks": "上位アクションの延期週数",
+  "Scenario at-risk EBIT": "シナリオ上のリスクEBIT",
+  Disruption: "業務影響",
+  "Portfolio concentration": "ポートフォリオ集中度",
+  "Top 5 assets share of risk exposure": "上位5資産のリスク露出シェア",
+  "Run-rate to annual target": "年次目標に対するランレート",
+  "Model trained": "モデル学習日時",
+  "RUL accuracy (R²)": "RUL精度 (R²)",
+  RMSE: "RMSE",
+  "RUL degradation curve": "RUL劣化曲線",
+  "Current RUL": "現在のRUL",
+  "Feature importance — anomaly model": "特徴量重要度（異常モデル）",
+  "Anomaly score decomposition": "異常スコア分解",
+  "Executive briefing value statement": "経営向け価値サマリー",
+  "Open Finance Command Center": "財務コマンドセンターを開く",
+  "Export Board Briefing (PDF)": "経営ブリーフィングをPDF出力",
+  "Board-ready financial operating view": "経営会議向けの財務オペレーティングビュー",
+  "EBIT Protected (Quarter)": "保護されたEBIT（四半期）",
+  "Variance (MoM / YoY)": "変化率（前月比 / 前年比）",
+  "Annual run-rate": "年換算ランレート",
+  "Annual target": "年次目標",
+  "Financial impact by work order": "作業指示別の財務影響",
+  "Value bridge to EBIT": "EBITへの価値ブリッジ",
+  "ERP and work-order context": "ERP・作業指示コンテキスト",
+  "EBIT impact trend (simulated)": "EBIT影響推移（シミュレーション）"
 };
 
 function localizeAlertText(text, isJapanese) {
@@ -127,6 +174,19 @@ async function postJson(url, body, fallback) {
   } catch {
     return fallback;
   }
+}
+
+function toBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const out = String(reader.result || "");
+      const idx = out.indexOf(",");
+      resolve(idx >= 0 ? out.slice(idx + 1) : out);
+    };
+    reader.onerror = () => reject(new Error("Failed to read file."));
+    reader.readAsDataURL(file);
+  });
 }
 
 function statusColor(status) {
@@ -289,6 +349,12 @@ export default function App() {
   const [hierarchy, setHierarchy] = useState(null);
   const [hierSelection, setHierSelection] = useState(null);
   const [model, setModel] = useState(null);
+  const [advancedPdm, setAdvancedPdm] = useState(null);
+  const [manualInput, setManualInput] = useState("");
+  const [manualParse, setManualParse] = useState(null);
+  const [manualParsePending, setManualParsePending] = useState(false);
+  const [manualFile, setManualFile] = useState(null);
+  const [manualUploadPending, setManualUploadPending] = useState(false);
 
   const [streamRows, setStreamRows] = useState([]);
   const [streamCount, setStreamCount] = useState(0);
@@ -302,6 +368,7 @@ export default function App() {
   const [financeMsgs, setFinanceMsgs] = useState([]);
   const [financeConversationByIndustry, setFinanceConversationByIndustry] = useState({});
   const [financePending, setFinancePending] = useState(false);
+  const [execDelayWeeks, setExecDelayWeeks] = useState(0);
 
   const [simState, setSimState] = useState({
     running: false,
@@ -431,13 +498,15 @@ export default function App() {
     if (!selectedAssetId) return;
     let cancelled = false;
     (async () => {
-      const [detail, modelData] = await Promise.all([
+      const [detail, modelData, advData] = await Promise.all([
         getJson(`/api/ui/asset/${selectedAssetId}?industry=${industry}${currencyParam}`, null),
-        getJson(`/api/ui/model/${selectedAssetId}?industry=${industry}${currencyParam}`, null)
+        getJson(`/api/ui/model/${selectedAssetId}?industry=${industry}${currencyParam}`, null),
+        getJson(`/api/ui/advanced_pdm?asset_id=${encodeURIComponent(selectedAssetId)}&industry=${industry}${currencyParam}`, null)
       ]);
       if (cancelled) return;
       setAssetDetail(detail);
       setModel(modelData);
+      setAdvancedPdm(advData);
     })();
     return () => {
       cancelled = true;
@@ -561,6 +630,22 @@ export default function App() {
   const isJapanese = effectiveUiCurrency === "JPY";
   const t = (text) => (isJapanese ? (JA_UI[text] || text) : text);
   const industryLabel = (ind) => (isJapanese ? (JA_INDUSTRY_LABELS[ind] || ind) : (ind.charAt(0).toUpperCase() + ind.slice(1)));
+  const execScenario = useMemo(() => {
+    const decisions = executive.decision_cockpit || [];
+    const baseRisk = decisions.reduce((acc, d) => acc + Number(d.value_uplift || 0), 0);
+    const delayMultiplier = 1 + (Number(execDelayWeeks || 0) * 0.12);
+    const atRisk = baseRisk * delayMultiplier;
+    const atRiskFmt = new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: effectiveUiCurrency || "USD",
+      maximumFractionDigits: 0
+    }).format(atRisk || 0);
+    return {
+      atRisk,
+      atRiskFmt,
+      withAction30Fmt: executive.forward_outlook?.horizon_30_days?.protected_with_actions_fmt || executive.ebit_saved_fmt || "—"
+    };
+  }, [executive, execDelayWeeks, effectiveUiCurrency]);
 
   const sdtWindowInsights = useMemo(() => {
     const summary = sdtReport.summary || [];
@@ -609,7 +694,8 @@ export default function App() {
         setGenieConversationByIndustry((prev) => ({ ...prev, [industry]: reply.conversation_id }));
       }
       const answer = reply?.choices?.[0]?.message?.content || "No response.";
-      setAgentMsgs((prev) => [...prev, { role: "agent", text: answer, label: t("Maintenance Supervisor AI") }]);
+      const refs = Array.isArray(reply?.references) ? reply.references : [];
+      setAgentMsgs((prev) => [...prev, { role: "agent", text: answer, label: t("Maintenance Supervisor AI"), references: refs }]);
     } finally {
       setAgentPending(false);
     }
@@ -673,10 +759,58 @@ export default function App() {
         setFinanceConversationByIndustry((prev) => ({ ...prev, [industry]: reply.conversation_id }));
       }
       const answer = reply?.choices?.[0]?.message?.content || "No response.";
-      setFinanceMsgs((prev) => [...prev, { role: "agent", text: answer, label: isJapanese ? "財務コマンドAI" : "Finance Command AI" }]);
+      const refs = Array.isArray(reply?.references) ? reply.references : [];
+      setFinanceMsgs((prev) => [...prev, { role: "agent", text: answer, label: isJapanese ? "財務コマンドAI" : "Finance Command AI", references: refs }]);
     } finally {
       setFinancePending(false);
     }
+  }
+
+  async function parseManualText() {
+    if (!manualInput.trim() || manualParsePending) return;
+    setManualParsePending(true);
+    try {
+      const res = await postJson(
+        "/api/ui/manuals/parse",
+        { industry, text: manualInput, asset_id: selectedAssetId },
+        { ok: false, message: "Unable to parse manual text." }
+      );
+      setManualParse(res);
+    } finally {
+      setManualParsePending(false);
+    }
+  }
+
+  async function uploadManualFile() {
+    if (!manualFile || manualUploadPending) return;
+    setManualUploadPending(true);
+    try {
+      const contentBase64 = await toBase64(manualFile);
+      const res = await postJson(
+        "/api/ui/manuals/upload",
+        { industry, filename: manualFile.name, content_base64: contentBase64 },
+        { ok: false, message: "Manual upload failed." }
+      );
+      if (res?.ok) {
+        setManualParse(res);
+        setManualInput("");
+        setManualFile(null);
+      } else {
+        setManualParse(res);
+      }
+    } finally {
+      setManualUploadPending(false);
+    }
+  }
+
+  function exportExecutiveBriefing() {
+    setPage("p1");
+    setView("executive");
+    setTimeout(() => {
+      if (typeof window !== "undefined" && typeof window.print === "function") {
+        window.print();
+      }
+    }, 120);
   }
 
   async function updateFault(assetId, patch) {
@@ -989,9 +1123,9 @@ export default function App() {
                         <span className={`sbadge ${a.status}`}>{a.status}</span>
                       </div>
                       <div className="card-metrics">
-                        <div className="cm"><div className="cml">Anomaly</div><div className="cmv">{a.anomaly_score}</div></div>
-                        <div className="cm"><div className="cml">RUL</div><div className="cmv">{a.rul_hours}h</div></div>
-                        <div className="cm"><div className="cml">Exposure</div><div className="cmv">{a.cost_exposure}</div></div>
+                        <div className="cm"><div className="cml">{t("Anomaly")}</div><div className="cmv">{a.anomaly_score}</div></div>
+                        <div className="cm"><div className="cml">{t("RUL")}</div><div className="cmv">{a.rul_hours}h</div></div>
+                        <div className="cm"><div className="cml">{t("Exposure")}</div><div className="cmv">{a.cost_exposure}</div></div>
                       </div>
                     </div>
                   ))}
@@ -1013,6 +1147,14 @@ export default function App() {
                       <div className={`bubble ${m.role === "user" ? "user" : ""}`}>
                         {m.role === "agent" && <div className="bubble-lbl">{m.label}</div>}
                         {m.role === "agent" ? renderSimpleMarkdown(m.text) : m.text}
+                        {m.role === "agent" && Array.isArray(m.references) && m.references.length > 0 && (
+                          <div style={{ marginTop: 8, borderTop: "1px solid var(--border)", paddingTop: 6, fontSize: 11, color: "var(--muted)" }}>
+                            <div style={{ marginBottom: 4 }}>Sources</div>
+                            {m.references.slice(0, 4).map((r, idx) => (
+                              <div key={`agent-ref-${i}-${idx}`}>[{r.source}] {(Number(r.score || 0) * 100).toFixed(0)}%</div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -1044,15 +1186,17 @@ export default function App() {
                 {(overview.alerts || []).map((a, i) => (
                   <div key={`${a.text}-${i}`} className={`arow ${a.severity}`} title={a.tooltip || ""}>
                     <div className={`apip ${a.severity}`} />
-                    <span className="atext">{localizeAlertText(a.text, isJapanese)}</span>
-                    <span
-                      className="alert-tip"
-                      title={a.tooltip || ""}
-                      data-tip={a.tooltip || ""}
-                      aria-label={a.tooltip || ""}
-                      tabIndex={0}
-                    >
-                      i
+                    <span className="alert-text-wrap">
+                      <span className="atext">{localizeAlertText(a.text, isJapanese)}</span>
+                      <span
+                        className="alert-tip"
+                        title={a.tooltip || ""}
+                        data-tip={a.tooltip || ""}
+                        aria-label={a.tooltip || ""}
+                        tabIndex={0}
+                      >
+                        i
+                      </span>
                     </span>
                     <span className="atime">{t(a.time)}</span>
                   </div>
@@ -1064,13 +1208,114 @@ export default function App() {
           <div className={`view-panel ${view === "executive" ? "active" : ""}`}>
             <div className="exec-wrap">
               <div className="exec-hero-card">
-                <div className="exec-hero-eyebrow">Executive briefing value statement</div>
-                <div className="exec-hero-title">{executive.value_statement || EMPTY_EXECUTIVE.value_statement}</div>
-                <div className="exec-hero-sub">
-                  Financial summary for {industry.charAt(0).toUpperCase() + industry.slice(1)} operations over the last 30 days.
+                <div className="exec-hero-eyebrow">{t("Executive briefing value statement")}</div>
+                <div className="exec-board-hero">
+                  <div className="exec-board-left">
+                    <div className="exec-hero-title">{executive.value_statement || EMPTY_EXECUTIVE.value_statement}</div>
+                    <div className="exec-hero-sub">
+                      {t("Board-ready financial operating view")} - {industryLabel(industry)}.
+                    </div>
+                    <div className="exec-board-kpi-row">
+                      <div className="exec-board-kpi">
+                        <div className="exec-fin-label">{t("EBIT Protected (Quarter)")}</div>
+                        <div className="exec-board-big">{executive.ebit_saved_fmt || "—"}</div>
+                      </div>
+                      <div className="exec-board-kpi">
+                        <div className="exec-fin-label">{t("Variance (MoM / YoY)")}</div>
+                        <div className="exec-board-mini">
+                          MoM {Number(executive.mom_ebit_pct || 0) >= 0 ? "+" : ""}{Number(executive.mom_ebit_pct || 0).toFixed(1)}% · YoY {Number(executive.yoy_ebit_pct || 0) >= 0 ? "+" : ""}{Number(executive.yoy_ebit_pct || 0).toFixed(1)}%
+                        </div>
+                      </div>
+                      <div className="exec-board-kpi">
+                        <div className="exec-fin-label">{t("Annual run-rate")}</div>
+                        <div className="exec-board-mini">{executive.executive_summary?.annualized_ebit_saved_fmt || "—"}</div>
+                      </div>
+                      <div className="exec-board-kpi">
+                        <div className="exec-fin-label">{t("Annual target")}</div>
+                        <div className="exec-board-mini">{executive.executive_summary?.annual_ebit_target_fmt || "—"}</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="exec-board-right">
+                    <TrendLine values={(executive.ebit_trend || []).map((p) => Number(p.value || 0))} color="#22c55e" height={90} />
+                    <div className="exec-fin-sub" style={{ justifyContent: "flex-end" }}>
+                      {t("Run-rate to annual target")}: {Number(executive.executive_summary?.run_rate_to_target_pct || 0).toFixed(1)}%
+                    </div>
+                  </div>
                 </div>
                 <div className="exec-hero-actions">
-                  <button className="exec-jump-btn" onClick={() => setPage("p7")}>Open Finance Command Center</button>
+                  <button className="exec-jump-btn" onClick={() => setPage("p7")}>{t("Open Finance Command Center")}</button>
+                  <button className="exec-jump-btn" onClick={exportExecutiveBriefing}>{t("Export Board Briefing (PDF)")}</button>
+                </div>
+              </div>
+
+              <div className="exec-wow-grid">
+                <div className="exec-trend-card">
+                  <div className="exec-card-title">{t("Forward outlook (30/90 days)")}</div>
+                  <div className="exec-wow-row">
+                    <span>{t("30d protected EBIT (with actions)")}</span>
+                    <strong>{executive.forward_outlook?.horizon_30_days?.protected_with_actions_fmt || executive.ebit_saved_fmt || "—"}</strong>
+                  </div>
+                  <div className="exec-wow-row">
+                    <span>{t("30d protected EBIT (if deferred)")}</span>
+                    <strong>{executive.forward_outlook?.horizon_30_days?.protected_without_actions_fmt || "—"}</strong>
+                  </div>
+                  <div className="exec-wow-row">
+                    <span>{t("90d EBIT at risk if deferred")}</span>
+                    <strong>{executive.forward_outlook?.horizon_90_days?.at_risk_if_deferred_fmt || "—"}</strong>
+                  </div>
+                  <div className="exec-fin-sub">
+                    {t("Confidence")} {Number(executive.executive_summary?.confidence_pct || 0).toFixed(1)}%
+                    <span className="exec-tip" data-tip={execTips.confidence_pct || ""} aria-label={execTips.confidence_pct || ""} tabIndex={0}>i</span>
+                  </div>
+                </div>
+
+                <div className="exec-trend-card">
+                  <div className="exec-card-title">{t("Decision cockpit")}</div>
+                  <div className="exec-slider-wrap">
+                    <label className="exec-fin-sub" htmlFor="exec-delay-slider">{t("Defer top actions by weeks")}: {execDelayWeeks}</label>
+                    <input
+                      id="exec-delay-slider"
+                      type="range"
+                      min="0"
+                      max="4"
+                      step="1"
+                      value={execDelayWeeks}
+                      onChange={(e) => setExecDelayWeeks(Number(e.target.value || 0))}
+                    />
+                    <div className="exec-wow-risk">{t("Scenario at-risk EBIT")}: {execScenario.atRiskFmt}</div>
+                  </div>
+                  {(executive.decision_cockpit || []).slice(0, 3).map((d, i) => (
+                    <div key={`dec-${i}`} className="exec-decision-row">
+                      <div>
+                        <div className="exec-wo-id">{d.title || d.equipment_id}</div>
+                        <div className="exec-wo-meta">{d.equipment_id} · {t("Payback")} {Number(d.payback_days || 0).toFixed(1)}d · {t("Disruption")} {d.disruption_score}/10</div>
+                      </div>
+                      <div className="exec-wo-impact">{d.value_uplift_fmt || "—"}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="exec-trend-card">
+                  <div className="exec-card-title">{t("Portfolio concentration")}</div>
+                  <div className="exec-fin-val" style={{ fontSize: 30 }}>
+                    {Number(executive.portfolio_insights?.concentration_top5_pct || 0).toFixed(1)}%
+                  </div>
+                  <div className="exec-fin-sub">
+                    {t("Top 5 assets share of risk exposure")}
+                    <span className="exec-tip" data-tip={execTips.concentration_top5_pct || ""} aria-label={execTips.concentration_top5_pct || ""} tabIndex={0}>i</span>
+                  </div>
+                  <div className="exec-chip-row">
+                    {(executive.portfolio_insights?.top_risk_assets || []).slice(0, 5).map((a) => (
+                      <span key={`risk-${a.asset_id}`} className="exec-chip">
+                        {a.asset_id} {a.exposure_fmt}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="exec-fin-sub">
+                    {t("Run-rate to annual target")}: {Number(executive.executive_summary?.run_rate_to_target_pct || 0).toFixed(1)}%
+                    <span className="exec-tip" data-tip={execTips.run_rate_to_target_pct || ""} aria-label={execTips.run_rate_to_target_pct || ""} tabIndex={0}>i</span>
+                  </div>
                 </div>
               </div>
 
@@ -1124,7 +1369,7 @@ export default function App() {
 
               <div className="exec-finance-grid">
                 <div className="exec-trend-card">
-                  <div className="exec-card-title">Value bridge to EBIT</div>
+                  <div className="exec-card-title">{t("Value bridge to EBIT")}</div>
                   {(executive.value_bridge || []).map((b) => (
                     <div key={b.label} className="exec-bridge-row">
                       <span className="exec-bridge-label">
@@ -1144,7 +1389,7 @@ export default function App() {
                   ))}
                 </div>
                 <div className="exec-trend-card">
-                  <div className="exec-card-title">ERP and work-order context</div>
+                  <div className="exec-card-title">{t("ERP and work-order context")}</div>
                   <div className="exec-erp-grid">
                     <div><span className="exec-erp-k">Plant</span><span className="exec-erp-v">{executive.erp?.plant_code || "—"}</span></div>
                     <div><span className="exec-erp-k">Fiscal period</span><span className="exec-erp-v">{executive.erp?.fiscal_period || "—"}</span></div>
@@ -1171,7 +1416,7 @@ export default function App() {
 
               <div className="exec-summary-grid">
                 <div className="exec-trend-card">
-                  <div className="exec-card-title">EBIT impact trend (simulated)</div>
+                  <div className="exec-card-title">{t("EBIT impact trend (simulated)")}</div>
                   <TrendLine values={(executive.ebit_trend || []).map((p) => Number(p.value || 0))} color="#0F766E" height={120} />
                   <div className="exec-chip-row">
                     {(executive.ebit_trend || []).map((p) => (
@@ -1181,7 +1426,7 @@ export default function App() {
                 </div>
                 <div className="exec-trend-card">
                   <div className="exec-card-title">
-                    Financial impact by work order
+                    {t("Financial impact by work order")}
                     <span className="exec-tip" data-tip={execTips.work_orders || ""} aria-label={execTips.work_orders || ""} tabIndex={0}>i</span>
                   </div>
                   {(executive.work_orders || []).slice(0, 6).map((w) => (
@@ -1347,7 +1592,7 @@ export default function App() {
         <div className={`page ${page === "p5" ? "active" : ""}`} id="p5">
           <div className="p5-wrap">
             <div className="p5-asset-sel">
-              <span className="p5-label">Asset</span>
+              <span className="p5-label">{t("Asset")}</span>
               <select className="p5-select" value={selectedAssetId} onChange={(e) => setSelectedAssetId(e.target.value)}>
                 {overview.assets.map((a) => <option key={`p5-${a.id}`} value={a.id}>{a.id} — {a.type}</option>)}
               </select>
@@ -1356,20 +1601,20 @@ export default function App() {
             {model && (
               <>
                 <div className="model-meta">
-                  <div className="mm-item"><div className="mm-label">Model trained</div><div className="mm-val">{model.model_meta.trained}</div></div>
-                  <div className="mm-item"><div className="mm-label">RUL accuracy (R²)</div><div className="mm-val">{model.model_meta.r2}</div></div>
-                  <div className="mm-item"><div className="mm-label">RMSE</div><div className="mm-val">{model.model_meta.rmse}</div></div>
+                  <div className="mm-item"><div className="mm-label">{t("Model trained")}</div><div className="mm-val">{model.model_meta.trained}</div></div>
+                  <div className="mm-item"><div className="mm-label">{t("RUL accuracy (R²)")}</div><div className="mm-val">{model.model_meta.r2}</div></div>
+                  <div className="mm-item"><div className="mm-label">{t("RMSE")}</div><div className="mm-val">{model.model_meta.rmse}</div></div>
                 </div>
                 <div className="p5-grid">
                   <div className="chart-card full">
-                    <div className="cc-title">RUL degradation curve</div>
+                    <div className="cc-title">{t("RUL degradation curve")}</div>
                     <div className="rul-stats">
-                      <div className="rul-stat"><span className="rul-stat-l">Current RUL</span><span className="rul-stat-v">{model.rul_hours}h</span></div>
+                      <div className="rul-stat"><span className="rul-stat-l">{t("Current RUL")}</span><span className="rul-stat-v">{model.rul_hours}h</span></div>
                     </div>
                     <TrendLine values={model.rul_curve.values || []} color="#1B2431" height={180} showXLabels />
                   </div>
                   <div className="chart-card">
-                    <div className="cc-title">Feature importance — anomaly model</div>
+                    <div className="cc-title">{t("Feature importance — anomaly model")}</div>
                     <div className="anomaly-decomp">
                       {model.feature_importance.map((f) => (
                         <div key={f.name} className="ad-row">
@@ -1381,7 +1626,7 @@ export default function App() {
                     </div>
                   </div>
                   <div className="chart-card">
-                    <div className="cc-title">Anomaly score decomposition</div>
+                    <div className="cc-title">{t("Anomaly score decomposition")}</div>
                     <div className="anomaly-decomp">
                       {model.anomaly_decomposition.map((f) => (
                         <div key={`d-${f.name}`} className="ad-row">
@@ -1393,6 +1638,118 @@ export default function App() {
                     </div>
                   </div>
                 </div>
+
+                {advancedPdm && (
+                  <div className="chart-card full">
+                    <div className="cc-title">Advanced PdM Command Layer</div>
+                    <div className="exec-summary-grid">
+                      <div className="exec-trend-card">
+                        <div className="exec-card-title">Failure mode-centric PdM</div>
+                        {(advancedPdm.failure_mode_centric || []).slice(0, 6).map((m) => (
+                          <div key={`fm-${m.mode}`} className="exec-wo-row">
+                            <div>
+                              <div className="exec-wo-id">{m.mode}</div>
+                              <div className="exec-wo-meta">Sensors: {m.sensor_count} · Confidence: {(Number(m.confidence || 0) * 100).toFixed(0)}%</div>
+                            </div>
+                            <div className="exec-wo-impact">{(Number(m.likelihood || 0) * 100).toFixed(0)}% risk · {m.priority}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="exec-trend-card">
+                        <div className="exec-card-title">Prescriptive optimizer</div>
+                        <div className="exec-fin-sub">Window: {(advancedPdm.prescriptive_optimizer || {}).recommended_window || "n/a"}</div>
+                        <div className="exec-fin-val" style={{ fontSize: 24 }}>
+                          {(advancedPdm.prescriptive_optimizer || {}).expected_avoided_loss_fmt || "—"}
+                        </div>
+                        <div className="exec-fin-sub">
+                          Planned intervention: {(advancedPdm.prescriptive_optimizer || {}).planned_intervention_cost_fmt || "—"}
+                        </div>
+                        <div className="exec-chip-row">
+                          {((advancedPdm.prescriptive_optimizer || {}).actions || []).map((a, i) => (
+                            <span key={`act-${i}`} className="exec-chip">{a}</span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="exec-summary-grid" style={{ marginTop: 12 }}>
+                      <div className="exec-trend-card">
+                        <div className="exec-card-title">Spare parts risk planning</div>
+                        {(advancedPdm.spare_parts_risk_planning || []).slice(0, 5).map((p) => (
+                          <div key={`sp-${p.part_number}`} className="exec-wo-row">
+                            <div>
+                              <div className="exec-wo-id">{p.part_number}</div>
+                              <div className="exec-wo-meta">{p.description} · lead {p.lead_time_days}d</div>
+                            </div>
+                            <div className="exec-wo-impact">
+                              on-hand {p.quantity_on_hand} / need {p.required_qty_risk_adjusted} · reorder {p.recommended_reorder_qty}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="exec-trend-card">
+                        <div className="exec-card-title">MLOps for industrial AI</div>
+                        <div className="exec-fin-sub">Anomaly model: {(advancedPdm.mlops_industrial_ai || {}).anomaly_model_version || "n/a"}</div>
+                        <div className="exec-fin-sub">RUL model: {(advancedPdm.mlops_industrial_ai || {}).rul_model_version || "n/a"}</div>
+                        <div className="exec-fin-sub">Data drift index: {(advancedPdm.mlops_industrial_ai || {}).data_drift_index}</div>
+                        <div className="exec-fin-sub">Feedback coverage: {(advancedPdm.mlops_industrial_ai || {}).label_feedback_coverage_pct}%</div>
+                        <div className="exec-fin-sub">
+                          Retrain recommended: {(advancedPdm.mlops_industrial_ai || {}).retrain_recommended ? "yes" : "no"}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="exec-trend-card" style={{ marginTop: 12 }}>
+                      <div className="exec-card-title">Manual-aware recommendations (PDF/text references)</div>
+                      {(advancedPdm.manual_references || []).length ? (
+                        (advancedPdm.manual_references || []).map((r, i) => (
+                          <div key={`ref-${i}`} className="exec-exp-row">
+                            <div className="exec-exp-asset">[{r.source}]</div>
+                            <div className="exec-exp-bar-wrap" />
+                            <div className="exec-exp-val">{(Number(r.score || 0) * 100).toFixed(0)}%</div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="exec-fin-sub">No manual snippets found for this query context.</div>
+                      )}
+
+                      <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
+                        <textarea
+                          value={manualInput}
+                          onChange={(e) => setManualInput(e.target.value)}
+                          placeholder="Paste manual excerpt here to demo parsing (supports PDF-extracted text)."
+                          style={{ flex: 1, minHeight: 90, border: "1px solid var(--border)", borderRadius: 6, padding: 8, fontSize: 12 }}
+                        />
+                        <button className="sbtn" onClick={parseManualText} disabled={manualParsePending}>
+                          {manualParsePending ? "Parsing..." : "Parse manual"}
+                        </button>
+                      </div>
+                      <div style={{ marginTop: 8, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                        <input
+                          type="file"
+                          accept=".pdf,.md,.txt"
+                          onChange={(e) => setManualFile((e.target.files && e.target.files[0]) || null)}
+                        />
+                        <button className="sbtn" onClick={uploadManualFile} disabled={!manualFile || manualUploadPending}>
+                          {manualUploadPending ? "Uploading..." : "Upload and index manual"}
+                        </button>
+                        {manualFile && <span style={{ fontSize: 12, color: "var(--muted)" }}>{manualFile.name}</span>}
+                      </div>
+                      {manualParse && (
+                        <div style={{ marginTop: 8, fontSize: 12, color: "var(--muted)" }}>
+                          {(manualParse.summary || manualParse.message || "").toString()}
+                          {!!Object.keys(manualParse.fields || {}).length && (
+                            <div style={{ marginTop: 6 }}>
+                              {Object.entries(manualParse.fields || {}).map(([k, v]) => (
+                                <div key={`fld-${k}`}><strong>{k}:</strong> {String(v)}</div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -1784,9 +2141,9 @@ export default function App() {
           <div className="p7-wrap">
             <div className="p7-left">
               <div className="exec-hero-card">
-                <div className="exec-hero-eyebrow">Executive command center</div>
+                <div className="exec-hero-eyebrow">{t("Executive command center")}</div>
                 <div className="exec-hero-title">{executive.value_statement || EMPTY_EXECUTIVE.value_statement}</div>
-                <div className="exec-hero-sub">One-pane financial view for predictive maintenance value realization.</div>
+                <div className="exec-hero-sub">{t("One-pane financial view for predictive maintenance value realization.")}</div>
               </div>
 
               <div className="exec-finance-row">
@@ -1827,7 +2184,7 @@ export default function App() {
 
               <div className="p7-grid">
                 <div className="exec-trend-card">
-                  <div className="exec-card-title">EBIT trend</div>
+                  <div className="exec-card-title">{t("EBIT trend")}</div>
                   <TrendLine values={(executive.ebit_trend || []).map((p) => Number(p.value || 0))} color="#0F766E" height={140} />
                   <div className="exec-chip-row">
                     {(executive.ebit_trend || []).map((p) => (
@@ -1836,7 +2193,7 @@ export default function App() {
                   </div>
                 </div>
                 <div className="exec-trend-card">
-                  <div className="exec-card-title">Value bridge</div>
+                  <div className="exec-card-title">{t("Value bridge")}</div>
                   {(executive.value_bridge || []).map((b) => (
                     <div key={`p7-bridge-${b.label}`} className="exec-bridge-row">
                       <span className="exec-bridge-label">
@@ -1863,8 +2220,8 @@ export default function App() {
                 <div className="agent-hdr">
                   <div className="adot" />
                   <div>
-                    <div className="atitle">Finance Scenario Genie</div>
-                    <div className="asubt">Ask financial what-if scenarios in predictive maintenance context</div>
+                    <div className="atitle">{t("Finance Scenario Genie")}</div>
+                    <div className="asubt">{t("Ask financial what-if scenarios in predictive maintenance context")}</div>
                   </div>
                 </div>
                 <div className="msgs">
@@ -1874,6 +2231,14 @@ export default function App() {
                       <div className={`bubble ${m.role === "user" ? "user" : ""}`}>
                         {m.role === "agent" && <div className="bubble-lbl">{m.label}</div>}
                         {m.role === "agent" ? renderSimpleMarkdown(m.text) : m.text}
+                        {m.role === "agent" && Array.isArray(m.references) && m.references.length > 0 && (
+                          <div style={{ marginTop: 8, borderTop: "1px solid var(--border)", paddingTop: 6, fontSize: 11, color: "var(--muted)" }}>
+                            <div style={{ marginBottom: 4 }}>{isJapanese ? "参照ソース" : "Sources"}</div>
+                            {m.references.slice(0, 4).map((r, idx) => (
+                              <div key={`fin-ref-${i}-${idx}`}>[{r.source}] {(Number(r.score || 0) * 100).toFixed(0)}%</div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -1881,7 +2246,7 @@ export default function App() {
                     <div className="msg">
                       <div className="av agent">AI</div>
                       <div className="bubble bubble-thinking">
-                        <div className="bubble-lbl">Finance Command AI</div>
+                        <div className="bubble-lbl">{isJapanese ? "財務コマンドAI" : "Finance Command AI"}</div>
                         <div className="thinking-row">
                           <span className="thinking-dot" />
                           <span className="thinking-dot" />
@@ -1898,10 +2263,10 @@ export default function App() {
                     value={financeInput}
                     onChange={(e) => setFinanceInput(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && sendFinanceMessage()}
-                    placeholder={financePending ? "Processing scenario..." : "Ask: If we defer maintenance by 2 weeks, what is EBIT impact?"}
+                    placeholder={financePending ? t("Processing scenario...") : t("Ask: If we defer maintenance by 2 weeks, what is EBIT impact?")}
                     disabled={financePending}
                   />
-                  <button className="sbtn" onClick={sendFinanceMessage} disabled={financePending}>{financePending ? "Processing..." : "Ask"}</button>
+                  <button className="sbtn" onClick={sendFinanceMessage} disabled={financePending}>{financePending ? t("Processing...") : t("Ask")}</button>
                 </div>
               </div>
             </div>

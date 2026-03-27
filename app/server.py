@@ -5,6 +5,8 @@ import csv
 import os
 import random
 import re
+import base64
+import io
 import shutil
 import subprocess
 import time
@@ -46,6 +48,7 @@ ISA_EMOJI = {
 SIM_STATE: dict[str, dict[str, Any]] = {}
 _SQL_CACHE: dict[str, tuple[float, list[dict[str, Any]]]] = {}
 _CACHE_TTL_S = 20.0
+_MANUAL_KB_CACHE: dict[str, list[dict[str, Any]]] = {}
 _WAREHOUSE_ID = os.getenv("OT_PDM_WAREHOUSE_ID") or os.getenv("DATABRICKS_SQL_WAREHOUSE_ID") or "4b9b953939869799"
 _DEFAULT_ZEROBUS_WORKSPACE_URL = os.getenv("OT_PDM_DEFAULT_WORKSPACE_URL", "https://e2-demo-field-eng.cloud.databricks.com")
 _DEFAULT_ZEROBUS_ENDPOINT = os.getenv(
@@ -1059,6 +1062,361 @@ def _sanitize_zerobus_config_for_response(cfg: dict[str, Any]) -> dict[str, Any]
     return safe
 
 
+def _industry_manual_dir(industry: str) -> Path:
+    candidates = [
+        ROOT.parent / "industries" / industry / "manuals",
+        ROOT / "industries" / industry / "manuals",
+    ]
+    for p in candidates:
+        if p.exists():
+            return p
+    return candidates[0]
+
+
+def _manual_text_from_file(path: Path) -> str:
+    suffix = path.suffix.lower()
+    if suffix in {".txt", ".md"}:
+        try:
+            return path.read_text(encoding="utf-8")
+        except Exception:
+            return ""
+    if suffix == ".pdf":
+        try:
+            from pypdf import PdfReader  # type: ignore
+
+            reader = PdfReader(str(path))
+            out: list[str] = []
+            for page in reader.pages:
+                txt = page.extract_text() or ""
+                if txt.strip():
+                    out.append(txt)
+            return "\n".join(out)
+        except Exception:
+            return ""
+    return ""
+
+
+def _manual_text_from_bytes(filename: str, raw: bytes) -> str:
+    suffix = Path(filename).suffix.lower()
+    if suffix in {".txt", ".md"}:
+        try:
+            return raw.decode("utf-8", errors="ignore")
+        except Exception:
+            return ""
+    if suffix == ".pdf":
+        try:
+            from pypdf import PdfReader  # type: ignore
+
+            reader = PdfReader(io.BytesIO(raw))
+            out: list[str] = []
+            for page in reader.pages:
+                txt = page.extract_text() or ""
+                if txt.strip():
+                    out.append(txt)
+            return "\n".join(out)
+        except Exception:
+            return ""
+    return ""
+
+
+def _manual_tokenize(text: str) -> set[str]:
+    return {t for t in re.findall(r"[a-z0-9_]{3,}", str(text).lower())}
+
+
+def _manual_index_table(industry: str) -> str:
+    catalog = _industry_cfg(industry).get("catalog", f"pdm_{industry}")
+    return f"{catalog}.bronze.manual_reference_chunks"
+
+
+def _manual_chunk_rows(source: str, text: str, chunk_chars: int = 900, overlap: int = 140) -> list[dict[str, Any]]:
+    norm = " ".join(str(text or "").split())
+    if not norm:
+        return []
+    rows: list[dict[str, Any]] = []
+    i = 0
+    chunk_id = 1
+    n = len(norm)
+    while i < n:
+        chunk = norm[i : i + chunk_chars].strip()
+        if chunk:
+            rows.append(
+                {
+                    "source": source,
+                    "chunk_id": chunk_id,
+                    "chunk_text": chunk,
+                    "token_count": len(_manual_tokenize(chunk)),
+                }
+            )
+            chunk_id += 1
+        if i + chunk_chars >= n:
+            break
+        i += max(80, chunk_chars - overlap)
+    return rows
+
+
+def _ensure_manual_index_table(industry: str) -> None:
+    if WorkspaceClient is None or sql_service is None:
+        return
+    table_name = _manual_index_table(industry)
+    ddl = f"""
+    CREATE TABLE IF NOT EXISTS {table_name} (
+      industry STRING,
+      source STRING,
+      chunk_id INT,
+      chunk_text STRING,
+      token_count INT,
+      updated_at TIMESTAMP
+    ) USING DELTA
+    """
+    try:
+        WorkspaceClient().statement_execution.execute_statement(
+            statement=ddl,
+            warehouse_id=_WAREHOUSE_ID,
+            wait_timeout="20s",
+            disposition=sql_service.Disposition.INLINE,
+        )
+    except Exception as e:
+        print(f"[manual-index] create table failed: {e}")
+
+
+def _persist_manual_chunks(industry: str, source: str, text: str) -> int:
+    if WorkspaceClient is None or sql_service is None:
+        return 0
+    rows = _manual_chunk_rows(source, text)
+    if not rows:
+        return 0
+    _ensure_manual_index_table(industry)
+    table_name = _manual_index_table(industry)
+    try:
+        client = WorkspaceClient()
+        delete_stmt = (
+            f"DELETE FROM {table_name} "
+            f"WHERE industry = '{_sql_escape(industry)}' AND source = '{_sql_escape(source)}'"
+        )
+        client.statement_execution.execute_statement(
+            statement=delete_stmt,
+            warehouse_id=_WAREHOUSE_ID,
+            wait_timeout="20s",
+            disposition=sql_service.Disposition.INLINE,
+        )
+        values_sql: list[str] = []
+        now_ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        for r in rows:
+            values_sql.append(
+                "("
+                + ", ".join(
+                    [
+                        f"'{_sql_escape(industry)}'",
+                        f"'{_sql_escape(str(r['source']))}'",
+                        str(int(r["chunk_id"])),
+                        f"'{_sql_escape(str(r['chunk_text']))}'",
+                        str(int(r["token_count"])),
+                        f"TIMESTAMP '{_sql_escape(now_ts)}'",
+                    ]
+                )
+                + ")"
+            )
+        chunk = 150
+        for i in range(0, len(values_sql), chunk):
+            insert_stmt = (
+                f"INSERT INTO {table_name} (industry, source, chunk_id, chunk_text, token_count, updated_at) VALUES "
+                + ", ".join(values_sql[i : i + chunk])
+            )
+            client.statement_execution.execute_statement(
+                statement=insert_stmt,
+                warehouse_id=_WAREHOUSE_ID,
+                wait_timeout="20s",
+                disposition=sql_service.Disposition.INLINE,
+            )
+    except Exception as e:
+        print(f"[manual-index] persist failed for {source}: {e}")
+        return 0
+    return len(rows)
+
+
+def _load_manual_chunks(industry: str) -> list[dict[str, Any]]:
+    table_name = _manual_index_table(industry)
+    stmt = f"""
+    SELECT source, chunk_id, chunk_text, token_count
+    FROM {table_name}
+    WHERE industry = '{_sql_escape(industry)}'
+    ORDER BY source, chunk_id
+    LIMIT 5000
+    """
+    return _run_sql(stmt, cache_key=f"{table_name}:{industry}:{int(time.time() // 60)}")
+
+
+def _manual_kb(industry: str) -> list[dict[str, Any]]:
+    if industry in _MANUAL_KB_CACHE:
+        return _MANUAL_KB_CACHE[industry]
+    docs: list[dict[str, Any]] = []
+    chunk_rows = _load_manual_chunks(industry)
+    if chunk_rows:
+        grouped: dict[str, list[str]] = {}
+        for r in chunk_rows:
+            src = str(r.get("source") or "")
+            if not src:
+                continue
+            grouped.setdefault(src, []).append(str(r.get("chunk_text") or ""))
+        for src, chunks in grouped.items():
+            txt = "\n".join(chunks).strip()
+            if not txt:
+                continue
+            compact = " ".join(txt.split())
+            docs.append(
+                {
+                    "source": src,
+                    "text": txt,
+                    "excerpt": compact[:1200],
+                    "tokens": _manual_tokenize(compact),
+                }
+            )
+    else:
+        manual_dir = _industry_manual_dir(industry)
+        if manual_dir.exists():
+            for p in sorted(manual_dir.glob("*")):
+                if not p.is_file():
+                    continue
+                txt = _manual_text_from_file(p).strip()
+                if not txt:
+                    continue
+                _persist_manual_chunks(industry, p.name, txt)
+                compact = " ".join(txt.split())
+                docs.append(
+                    {
+                        "source": p.name,
+                        "text": txt,
+                        "excerpt": compact[:1200],
+                        "tokens": _manual_tokenize(compact),
+                    }
+                )
+    _MANUAL_KB_CACHE[industry] = docs
+    return docs
+
+
+def _manual_references(industry: str, query: str, limit: int = 3) -> list[dict[str, Any]]:
+    q_tokens = _manual_tokenize(query)
+    if not q_tokens:
+        return []
+    scored: list[tuple[float, dict[str, Any]]] = []
+    for d in _manual_kb(industry):
+        overlap = len(q_tokens & set(d.get("tokens", set())))
+        if overlap <= 0:
+            continue
+        score = overlap / max(1, len(q_tokens))
+        scored.append((score, d))
+    scored.sort(key=lambda x: x[0], reverse=True)
+    out: list[dict[str, Any]] = []
+    for score, d in scored[: max(1, int(limit))]:
+        out.append(
+            {
+                "source": d.get("source", ""),
+                "score": round(float(score), 3),
+                "excerpt": str(d.get("excerpt", ""))[:420],
+            }
+        )
+    return out
+
+
+def _advanced_pdm_payload(industry: str, asset_id: str, display_currency: str | None = None) -> dict[str, Any]:
+    detail = _asset_detail(industry, asset_id, display_currency=display_currency)
+    anomaly = _to_float(detail.get("anomaly_score"), 0.2)
+    rul_h = max(1.0, _to_float(detail.get("rul_hours"), 24.0))
+    fault_mode = str(detail.get("fault_mode") or "degradation")
+    asset_type = str(detail.get("type") or "")
+
+    sensors = _sensor_defs(industry, asset_type)
+    by_mode: dict[str, int] = {}
+    for s in sensors:
+        m = str(s.get("failure_mode") or "degradation")
+        by_mode[m] = by_mode.get(m, 0) + 1
+    failure_modes: list[dict[str, Any]] = []
+    for mode, sensor_cnt in sorted(by_mode.items(), key=lambda x: x[1], reverse=True):
+        base = 0.32 + 0.45 * anomaly
+        if mode == fault_mode:
+            base += 0.22
+        likelihood = max(0.05, min(0.99, base))
+        confidence = max(0.35, min(0.98, 0.5 + sensor_cnt * 0.06))
+        failure_modes.append(
+            {
+                "mode": mode,
+                "likelihood": round(likelihood, 3),
+                "confidence": round(confidence, 3),
+                "sensor_count": sensor_cnt,
+                "priority": "high" if likelihood >= 0.75 else "medium" if likelihood >= 0.5 else "low",
+            }
+        )
+
+    currency = _effective_demo_currency(display_currency, _industry_cfg(industry).get("agent", {}).get("terminology", {}).get("cost_currency", "USD"))
+    profile = _executive_profile(industry, _industry_cfg(industry))
+    labor_rate = _to_float(profile.get("labor_cost_per_hour"), 0.0)
+    dispatch = _to_float(profile.get("dispatch_cost"), 0.0)
+    planned_h = max(2.0, min(10.0, rul_h * 0.25))
+    planned_cost_native = planned_h * labor_rate + dispatch
+    expected_unplanned_native = anomaly * _to_float(profile.get("downtime_cost_per_hour"), 0.0) * max(2.0, min(12.0, rul_h * 0.4))
+    planned_cost = _fx_convert(planned_cost_native, str(profile.get("currency", currency)), currency)
+    expected_unplanned = _fx_convert(expected_unplanned_native, str(profile.get("currency", currency)), currency)
+    recommended_window = "within_8h" if anomaly >= 0.8 else "within_24h" if anomaly >= 0.55 else "within_72h"
+    prescriptive = {
+        "recommended_window": recommended_window,
+        "expected_avoided_loss": round(max(0.0, expected_unplanned - planned_cost), 2),
+        "expected_avoided_loss_fmt": _fmt_money(max(0.0, expected_unplanned - planned_cost), currency),
+        "planned_intervention_cost": round(planned_cost, 2),
+        "planned_intervention_cost_fmt": _fmt_money(planned_cost, currency),
+        "actions": [
+            "Create planned work order aligned to next production window.",
+            "Reserve technician and lock spare parts before dispatch.",
+            "Run confirmation inspection and close-loop outcome for retraining.",
+        ],
+    }
+
+    parts_rows = _parts_rows(industry)
+    parts_plan: list[dict[str, Any]] = []
+    for p in parts_rows[:6]:
+        qty = int(_to_float(p.get("quantity"), 0.0))
+        reorder = int(_to_float(p.get("reorder_point"), 0.0))
+        needed = max(1, int(round(1 + anomaly * 4)))
+        shortage = max(0, needed - qty)
+        parts_plan.append(
+            {
+                "part_number": p.get("part_number"),
+                "description": p.get("description"),
+                "quantity_on_hand": qty,
+                "reorder_point": reorder,
+                "lead_time_days": int(_to_float(p.get("lead_time_days"), 0.0)),
+                "required_qty_risk_adjusted": needed,
+                "recommended_reorder_qty": max(0, shortage + max(0, reorder - qty)),
+                "supply_risk": "high" if shortage > 0 else "medium" if qty <= reorder else "low",
+            }
+        )
+
+    rng = _asset_rng(industry, asset_id)
+    drift = max(0.0, min(0.35, 0.08 + anomaly * 0.14 + rng.uniform(-0.03, 0.04)))
+    mlops = {
+        "anomaly_model_version": detail.get("model_version_anomaly") or "iforest_v3",
+        "rul_model_version": detail.get("model_version_rul") or "xgb_rul_v2",
+        "prediction_timestamp": detail.get("prediction_timestamp") or datetime.now(timezone.utc).isoformat(),
+        "data_drift_index": round(drift, 3),
+        "label_feedback_coverage_pct": round(max(8.0, min(92.0, 24 + (1 - anomaly) * 60)), 1),
+        "champion_challenger_gap_pct": round(max(0.5, min(8.0, 1.8 + drift * 10)), 2),
+        "retrain_recommended": drift >= 0.18,
+    }
+
+    manual_refs = _manual_references(industry, f"{asset_id} {fault_mode} {asset_type}".strip(), limit=3)
+    if not manual_refs:
+        manual_refs = _manual_references(industry, f"{fault_mode} {asset_type}", limit=3)
+
+    return {
+        "asset_id": asset_id,
+        "industry": industry,
+        "currency": currency,
+        "failure_mode_centric": failure_modes,
+        "prescriptive_optimizer": prescriptive,
+        "spare_parts_risk_planning": parts_plan,
+        "mlops_industrial_ai": mlops,
+        "manual_references": manual_refs,
+    }
+
 def _asset_rng(industry: str, asset_id: str) -> random.Random:
     return random.Random(f"{industry}:{asset_id}")
 
@@ -1512,6 +1870,56 @@ def _executive_value(industry: str, assets: list[dict[str, Any]], display_curren
             v = ebit_saved * mult
             ebit_trend.append({"label": lbl, "value": round(v, 2), "value_fmt": _fmt_money(v, currency)})
 
+    ranked_work_orders = sorted(work_orders, key=lambda w: _to_float(w.get("net_ebit_impact"), 0.0), reverse=True)
+    top_decisions = ranked_work_orders[:3]
+    decision_value_30 = sum(_to_float(w.get("net_ebit_impact"), 0.0) for w in top_decisions)
+    decision_value_90 = decision_value_30 * 2.6
+    protected_no_action_30 = max(0.0, ebit_saved - decision_value_30)
+    protected_no_action_90 = max(0.0, (ebit_saved * 2.6) - decision_value_90)
+    confidence_pct = 68.0 + (12.0 if data_mode == "financial_daily_table" else 0.0) + min(14.0, len(financial_rows) / 55.0)
+    confidence_pct = max(55.0, min(96.0, confidence_pct))
+
+    annualized_ebit_saved = ebit_saved * 12.0
+    annual_target = max(1.0, _cv(baseline_monthly_ebit_native) * 12.0 * 0.02)
+    run_rate_to_target_pct = (annualized_ebit_saved / annual_target) * 100.0
+
+    portfolio_rows = sorted(
+        [
+            {
+                "asset_id": str(a.get("id") or a.get("equipment_id") or ""),
+                "status": str(a.get("status") or "healthy"),
+                "anomaly_score": round(_to_float(a.get("anomaly_score"), 0.0), 2),
+                "exposure_value": round(_to_float(a.get("cost_exposure_value"), 0.0), 2),
+                "exposure_fmt": _fmt_money(_to_float(a.get("cost_exposure_value"), 0.0), currency),
+            }
+            for a in assets
+        ],
+        key=lambda r: _to_float(r.get("exposure_value"), 0.0),
+        reverse=True,
+    )
+    top_exposure = sum(_to_float(r.get("exposure_value"), 0.0) for r in portfolio_rows[:5])
+    all_exposure = sum(_to_float(r.get("exposure_value"), 0.0) for r in portfolio_rows)
+    concentration_top5_pct = ((top_exposure / all_exposure) * 100.0) if all_exposure > 1e-9 else 0.0
+
+    decision_cards = []
+    for w in top_decisions:
+        v = _to_float(w.get("net_ebit_impact"), 0.0)
+        c = max(1.0, _to_float(w.get("intervention_cost"), 0.0))
+        payback_local = c / max(1.0, v / 30.0) if v > 0 else 999.0
+        disruption = 7 if str(w.get("priority")) == "P1" else 4
+        decision_cards.append(
+            {
+                "title": f"Approve {w.get('wo_id', 'WO')} intervention",
+                "equipment_id": w.get("equipment_id"),
+                "value_uplift": round(v, 2),
+                "value_uplift_fmt": _fmt_money(v, currency),
+                "cost_fmt": _fmt_money(c, currency),
+                "payback_days": round(payback_local, 1),
+                "disruption_score": disruption,
+                "confidence_pct": round(min(98.0, 72.0 + (_to_float(w.get('failure_probability'), 0.5) * 20.0)), 1),
+            }
+        )
+
     return {
         "audience": "finance_executive",
         "window": "last_30_days",
@@ -1535,6 +1943,11 @@ def _executive_value(industry: str, assets: list[dict[str, Any]], display_curren
             "source_table": f"Primary source table: {source_table}. Aggregation window: {source_window}. Data mode: {data_mode}.",
             "work_orders": "Work orders are ranked by anomaly risk and mapped to plant work centers/cost centers; values are converted to display currency.",
             "work_order_net_ebit_impact": "Net EBIT impact per work order is expected failure cost avoided minus planned intervention cost.",
+            "confidence_pct": "Confidence score reflects data recency, data mode, and sample depth from daily financial rows.",
+            "run_rate_to_target_pct": "Run-rate to target = annualized current EBIT saved / annual EBIT target.",
+            "concentration_top5_pct": "Portfolio concentration = share of exposure represented by top 5 assets.",
+            "protected_30_with_actions": "Projected EBIT protected over 30 days if top recommended interventions are executed.",
+            "protected_30_without_actions": "Projected EBIT protected over 30 days if top interventions are deferred.",
         },
         "baseline_monthly_ebit": round(_cv(baseline_monthly_ebit_native), 2),
         "baseline_monthly_ebit_fmt": _fmt_money(_cv(baseline_monthly_ebit_native), currency),
@@ -1565,6 +1978,37 @@ def _executive_value(industry: str, assets: list[dict[str, Any]], display_curren
         "value_bridge": value_bridge,
         "ebit_trend": ebit_trend,
         "work_orders": work_orders,
+        "executive_summary": {
+            "confidence_pct": round(confidence_pct, 1),
+            "annualized_ebit_saved": round(annualized_ebit_saved, 2),
+            "annualized_ebit_saved_fmt": _fmt_money(annualized_ebit_saved, currency),
+            "annual_ebit_target": round(annual_target, 2),
+            "annual_ebit_target_fmt": _fmt_money(annual_target, currency),
+            "run_rate_to_target_pct": round(run_rate_to_target_pct, 1),
+        },
+        "forward_outlook": {
+            "horizon_30_days": {
+                "protected_with_actions": round(ebit_saved, 2),
+                "protected_with_actions_fmt": _fmt_money(ebit_saved, currency),
+                "protected_without_actions": round(protected_no_action_30, 2),
+                "protected_without_actions_fmt": _fmt_money(protected_no_action_30, currency),
+                "at_risk_if_deferred": round(decision_value_30, 2),
+                "at_risk_if_deferred_fmt": _fmt_money(decision_value_30, currency),
+            },
+            "horizon_90_days": {
+                "protected_with_actions": round(ebit_saved * 2.6, 2),
+                "protected_with_actions_fmt": _fmt_money(ebit_saved * 2.6, currency),
+                "protected_without_actions": round(protected_no_action_90, 2),
+                "protected_without_actions_fmt": _fmt_money(protected_no_action_90, currency),
+                "at_risk_if_deferred": round(decision_value_90, 2),
+                "at_risk_if_deferred_fmt": _fmt_money(decision_value_90, currency),
+            },
+        },
+        "decision_cockpit": decision_cards,
+        "portfolio_insights": {
+            "concentration_top5_pct": round(concentration_top5_pct, 1),
+            "top_risk_assets": portfolio_rows[:8],
+        },
     }
 
 
@@ -2337,6 +2781,96 @@ def ui_model(asset_id: str, industry: str = "mining", currency: str = "") -> dic
     }
 
 
+@app.get("/api/ui/advanced_pdm")
+def ui_advanced_pdm(asset_id: str, industry: str = "mining", currency: str = "") -> dict:
+    if industry not in INDUSTRIES:
+        raise HTTPException(status_code=400, detail="Invalid industry")
+    return _advanced_pdm_payload(industry, asset_id, display_currency=currency)
+
+
+@app.post("/api/ui/manuals/parse")
+def ui_manuals_parse(payload: dict[str, Any]) -> dict:
+    industry = str(payload.get("industry", "automotive") or "automotive").lower()
+    if industry not in INDUSTRIES:
+        industry = "automotive"
+    raw_text = str(payload.get("text", "") or "").strip()
+    manual_name = str(payload.get("filename", "") or "").strip()
+    b64 = str(payload.get("content_base64", "") or "").strip()
+    if not raw_text and b64:
+        try:
+            raw_text = _manual_text_from_bytes(manual_name or "manual.pdf", base64.b64decode(b64))
+        except Exception:
+            raw_text = ""
+    if not raw_text and manual_name:
+        p = _industry_manual_dir(industry) / manual_name
+        if p.exists():
+            raw_text = _manual_text_from_file(p).strip()
+    if not raw_text:
+        return {"ok": False, "message": "No manual content provided.", "fields": {}, "snippets": []}
+
+    fields: dict[str, str] = {}
+    patterns = {
+        "part_number": r"(?:part(?:\s*number)?|pn)\s*[:#]\s*([A-Z0-9\-_]+)",
+        "torque_spec": r"(?:torque|締付けトルク)\s*[:：]\s*([0-9\.\-]+\s*(?:N·m|Nm|kgf·m))",
+        "inspection_interval": r"(?:inspection interval|点検周期)\s*[:：]\s*([^\n\r;,.]{3,60})",
+        "temperature_limit": r"(?:temperature limit|温度上限)\s*[:：]\s*([0-9\.\-]+\s*(?:°C|C))",
+        "vibration_limit": r"(?:vibration(?:\s*limit)?|振動上限)\s*[:：]\s*([0-9\.\-]+\s*(?:mm/s|g))",
+    }
+    for k, pat in patterns.items():
+        m = re.search(pat, raw_text, flags=re.IGNORECASE)
+        if m:
+            fields[k] = m.group(1).strip()
+
+    lines = [ln.strip() for ln in raw_text.splitlines() if ln.strip()]
+    snippets = lines[:8]
+    return {
+        "ok": True,
+        "industry": industry,
+        "filename": manual_name or "manual_text_input",
+        "fields": fields,
+        "snippets": snippets,
+        "summary": f"Extracted {len(fields)} structured fields from manual text.",
+    }
+
+
+@app.post("/api/ui/manuals/upload")
+def ui_manuals_upload(payload: dict[str, Any]) -> dict:
+    industry = str(payload.get("industry", "automotive") or "automotive").lower()
+    if industry not in INDUSTRIES:
+        industry = "automotive"
+    filename = str(payload.get("filename", "") or "").strip()
+    b64 = str(payload.get("content_base64", "") or "").strip()
+    if not filename or not b64:
+        return {"ok": False, "message": "filename and content_base64 are required."}
+    try:
+        raw = base64.b64decode(b64)
+    except Exception:
+        return {"ok": False, "message": "Invalid base64 payload."}
+    text = _manual_text_from_bytes(filename, raw).strip()
+    if not text:
+        return {"ok": False, "message": "Unsupported file or no extractable text."}
+
+    manual_dir = _industry_manual_dir(industry)
+    manual_dir.mkdir(parents=True, exist_ok=True)
+    file_path = manual_dir / filename
+    try:
+        file_path.write_bytes(raw)
+    except Exception as e:
+        return {"ok": False, "message": f"Failed to save file: {e}"}
+
+    chunks = _persist_manual_chunks(industry, filename, text)
+    _MANUAL_KB_CACHE.pop(industry, None)
+    refs = _manual_references(industry, text[:1200], limit=3)
+    return {
+        "ok": True,
+        "industry": industry,
+        "filename": filename,
+        "chunk_count": chunks,
+        "references": refs,
+        "summary": f"Uploaded {filename} and indexed {chunks} chunks in UC Delta manual index.",
+    }
+
+
 @app.get("/api/ui/simulator/state")
 def ui_simulator_state(industry: str = "mining") -> dict:
     if industry not in INDUSTRIES:
@@ -2935,6 +3469,23 @@ def agent_chat(payload: dict) -> dict:
             f"{effective_user_text}\n\n"
             "Language note: respond entirely in English."
         )
+    manual_refs = _manual_references(
+        industry,
+        f"{effective_user_text} {resolved_asset or ''}".strip(),
+        limit=3,
+    )
+    if manual_refs:
+        ref_lines = "\n".join(
+            [
+                f"- [{r.get('source')}] {r.get('excerpt')}"
+                for r in manual_refs
+            ]
+        )
+        effective_user_text = (
+            f"{effective_user_text}\n\n"
+            "Reference manuals (ground recommendations in these excerpts and cite filename in brackets):\n"
+            f"{ref_lines}"
+        )
 
     room_map = _load_genie_room_map()
     space_id = room_map.get(industry) or room_map.get("default", "")
@@ -2950,7 +3501,10 @@ def agent_chat(payload: dict) -> dict:
                 "対応: 次シフトで点検を計画し、部品在庫を確認し、保全ウィンドウを確保してください。 "
                 f"ユーザーメッセージ: {effective_user_text}"
             )
-        return {"choices": [{"message": {"content": answer}}]}
+        if manual_refs:
+            refs = "\n".join([f"- [{r.get('source')}]" for r in manual_refs])
+            answer = f"{answer}\n\nReferences:\n{refs}"
+        return {"choices": [{"message": {"content": answer}}], "references": manual_refs}
 
     try:
         w = WorkspaceClient()
@@ -3000,6 +3554,7 @@ def agent_chat(payload: dict) -> dict:
         return {
             "conversation_id": conversation_id,
             "choices": [{"message": {"content": text}}],
+            "references": manual_refs,
         }
     except Exception as e:
         return {
