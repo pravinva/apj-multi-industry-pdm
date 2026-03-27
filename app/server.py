@@ -1355,17 +1355,25 @@ def _executive_value(industry: str, assets: list[dict[str, Any]], display_curren
     if financial_rows:
         data_mode = "financial_daily_table"
         last = financial_rows[-1]
+        recent_rows = financial_rows[-30:] if len(financial_rows) >= 30 else financial_rows
         native_from_table = str(last.get("currency") or native_currency)
-        avoided_downtime = _fx_convert(_to_float(last.get("avoided_downtime_cost"), 0.0), native_from_table, currency)
-        avoided_quality = _fx_convert(_to_float(last.get("avoided_quality_cost"), 0.0), native_from_table, currency)
-        avoided_energy = _fx_convert(_to_float(last.get("avoided_energy_cost"), 0.0), native_from_table, currency)
-        intervention_cost = _fx_convert(_to_float(last.get("intervention_cost"), 0.0), native_from_table, currency)
-        platform_cost = _fx_convert(_to_float(last.get("platform_cost"), 0.0), native_from_table, currency)
-        net_benefit = _fx_convert(_to_float(last.get("net_benefit"), 0.0), native_from_table, currency)
-        ebit_saved = _fx_convert(_to_float(last.get("ebit_saved"), 0.0), native_from_table, currency)
+        avoided_downtime_native = sum(_to_float(r.get("avoided_downtime_cost"), 0.0) for r in recent_rows)
+        avoided_quality_native = sum(_to_float(r.get("avoided_quality_cost"), 0.0) for r in recent_rows)
+        avoided_energy_native = sum(_to_float(r.get("avoided_energy_cost"), 0.0) for r in recent_rows)
+        intervention_cost_native = sum(_to_float(r.get("intervention_cost"), 0.0) for r in recent_rows)
+        platform_cost_native = sum(_to_float(r.get("platform_cost"), 0.0) for r in recent_rows)
+        net_benefit_native = sum(_to_float(r.get("net_benefit"), 0.0) for r in recent_rows)
+        ebit_saved_native = sum(_to_float(r.get("ebit_saved"), 0.0) for r in recent_rows)
+        avoided_downtime = _fx_convert(avoided_downtime_native, native_from_table, currency)
+        avoided_quality = _fx_convert(avoided_quality_native, native_from_table, currency)
+        avoided_energy = _fx_convert(avoided_energy_native, native_from_table, currency)
+        intervention_cost = _fx_convert(intervention_cost_native, native_from_table, currency)
+        platform_cost = _fx_convert(platform_cost_native, native_from_table, currency)
+        net_benefit = _fx_convert(net_benefit_native, native_from_table, currency)
+        ebit_saved = _fx_convert(ebit_saved_native, native_from_table, currency)
         baseline_monthly_ebit_native = _to_float(last.get("baseline_monthly_ebit"), baseline_monthly_ebit_native)
-        ebit_margin_bps = (_to_float(last.get("ebit_saved"), 0.0) / max(1.0, baseline_monthly_ebit_native)) * 10000.0
-        roi_pct = (max(0.0, _to_float(last.get("ebit_saved"), 0.0)) / max(1.0, _to_float(last.get("intervention_cost"), 0.0) + _to_float(last.get("platform_cost"), 0.0))) * 100.0
+        ebit_margin_bps = (ebit_saved_native / max(1.0, baseline_monthly_ebit_native)) * 10000.0
+        roi_pct = (max(0.0, ebit_saved_native) / max(1.0, intervention_cost_native + platform_cost_native)) * 100.0
 
         month_totals: dict[str, float] = {}
         for r in financial_rows:
