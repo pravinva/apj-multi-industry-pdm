@@ -870,6 +870,13 @@ body {
   margin-top: 2px;
 }
 
+.exec-erp-source {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--muted);
+  font-family: "IBM Plex Mono", monospace;
+}
+
 .exec-chip-row {
   margin-top: 8px;
   display: flex;

@@ -110,3 +110,22 @@ resources:
         quartz_cron_expression: "0 0 2 * * ?"
         timezone_id: UTC
 
+    ot_pdm_financial_backfill_job:
+      name: ot-pdm-financial-backfill-${var.industry}
+      tasks:
+        - task_key: generate_financial_daily
+          existing_cluster_id: 0127-122435-da5izx1u
+          spark_python_task:
+            python_file: core/finance/generate_financials.py
+            parameters:
+              - "--industry"
+              - "${var.industry}"
+              - "--catalog"
+              - "${var.catalog_name}"
+              - "--days"
+              - "730"
+      schedule:
+        pause_status: UNPAUSED
+        quartz_cron_expression: "0 15 1 * * ?"
+        timezone_id: UTC
+

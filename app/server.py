@@ -1267,6 +1267,37 @@ def _executive_work_orders(
     return orders
 
 
+def _financial_daily_rows(industry: str, days: int = 760) -> tuple[str, list[dict[str, Any]]]:
+    cfg = _industry_cfg(industry)
+    catalog = cfg.get("catalog", f"pdm_{industry}")
+    table_fqn = f"{catalog}.finance.pm_financial_daily"
+    stmt = f"""
+    SELECT
+      ds,
+      industry,
+      currency,
+      avoided_downtime_cost,
+      avoided_quality_cost,
+      avoided_energy_cost,
+      intervention_cost,
+      platform_cost,
+      ebit_saved,
+      net_benefit,
+      baseline_monthly_ebit
+    FROM {table_fqn}
+    WHERE industry = '{industry}'
+      AND ds >= date_sub(current_date(), {max(30, int(days))})
+    ORDER BY ds
+    """
+    rows = _run_sql(stmt, cache_key=f"{table_fqn}:{industry}:{int(time.time() // 30)}")
+    return table_fqn, rows
+
+
+def _month_key(ds: str) -> str:
+    s = str(ds or "")
+    return s[:7] if len(s) >= 7 else ""
+
+
 def _executive_value(industry: str, assets: list[dict[str, Any]], display_currency: str | None = None) -> dict[str, Any]:
     cfg = _industry_cfg(industry)
     accounts = cfg.get("accounts", {}) or {}
@@ -1317,20 +1348,95 @@ def _executive_value(industry: str, assets: list[dict[str, Any]], display_curren
         w["intervention_cost_fmt"] = _fmt_money(_to_float(w["intervention_cost"]), currency)
         w["net_ebit_impact_fmt"] = _fmt_money(_to_float(w["net_ebit_impact"]), currency)
 
+    source_table, financial_rows = _financial_daily_rows(industry)
+    data_mode = "simulated_work_order_model"
+    mom_ebit_pct = 0.0
+    yoy_ebit_pct = 0.0
+    if financial_rows:
+        data_mode = "financial_daily_table"
+        last = financial_rows[-1]
+        native_from_table = str(last.get("currency") or native_currency)
+        avoided_downtime = _fx_convert(_to_float(last.get("avoided_downtime_cost"), 0.0), native_from_table, currency)
+        avoided_quality = _fx_convert(_to_float(last.get("avoided_quality_cost"), 0.0), native_from_table, currency)
+        avoided_energy = _fx_convert(_to_float(last.get("avoided_energy_cost"), 0.0), native_from_table, currency)
+        intervention_cost = _fx_convert(_to_float(last.get("intervention_cost"), 0.0), native_from_table, currency)
+        platform_cost = _fx_convert(_to_float(last.get("platform_cost"), 0.0), native_from_table, currency)
+        net_benefit = _fx_convert(_to_float(last.get("net_benefit"), 0.0), native_from_table, currency)
+        ebit_saved = _fx_convert(_to_float(last.get("ebit_saved"), 0.0), native_from_table, currency)
+        baseline_monthly_ebit_native = _to_float(last.get("baseline_monthly_ebit"), baseline_monthly_ebit_native)
+        ebit_margin_bps = (_to_float(last.get("ebit_saved"), 0.0) / max(1.0, baseline_monthly_ebit_native)) * 10000.0
+        roi_pct = (max(0.0, _to_float(last.get("ebit_saved"), 0.0)) / max(1.0, _to_float(last.get("intervention_cost"), 0.0) + _to_float(last.get("platform_cost"), 0.0))) * 100.0
+
+        month_totals: dict[str, float] = {}
+        for r in financial_rows:
+            mk = _month_key(str(r.get("ds") or ""))
+            if not mk:
+                continue
+            month_totals[mk] = month_totals.get(mk, 0.0) + _to_float(r.get("ebit_saved"), 0.0)
+        month_keys = sorted(month_totals.keys())
+        if len(month_keys) >= 2:
+            cur = month_totals[month_keys[-1]]
+            prev = month_totals[month_keys[-2]]
+            mom_ebit_pct = ((cur - prev) / abs(prev) * 100.0) if abs(prev) > 1e-9 else 0.0
+
+        if len(financial_rows) >= 370:
+            recent_30 = sum(_to_float(r.get("ebit_saved"), 0.0) for r in financial_rows[-30:])
+            prev_year_30 = sum(_to_float(r.get("ebit_saved"), 0.0) for r in financial_rows[-395:-365])
+            yoy_ebit_pct = ((recent_30 - prev_year_30) / abs(prev_year_30) * 100.0) if abs(prev_year_30) > 1e-9 else 0.0
+
+        trend_months = month_keys[-6:]
+        ebit_trend = []
+        for mk in trend_months:
+            v_native = month_totals.get(mk, 0.0)
+            v = _fx_convert(v_native, native_from_table, currency)
+            label = mk[5:] + "/" + mk[2:4] if len(mk) == 7 else mk
+            ebit_trend.append({"label": label, "value": round(v, 2), "value_fmt": _fmt_money(v, currency)})
+
     value_bridge = [
-        {"label": "Avoided unplanned downtime", "kind": "positive", "amount": round(avoided_downtime, 2), "amount_fmt": _fmt_money(avoided_downtime, currency)},
-        {"label": "Avoided quality and scrap loss", "kind": "positive", "amount": round(avoided_quality, 2), "amount_fmt": _fmt_money(avoided_quality, currency)},
-        {"label": "Avoided energy waste", "kind": "positive", "amount": round(avoided_energy, 2), "amount_fmt": _fmt_money(avoided_energy, currency)},
-        {"label": "Planned intervention cost", "kind": "negative", "amount": round(-intervention_cost, 2), "amount_fmt": _fmt_money(-intervention_cost, currency)},
-        {"label": "Platform and operations allocation", "kind": "negative", "amount": round(-platform_cost, 2), "amount_fmt": _fmt_money(-platform_cost, currency)},
+        {
+            "label": "Avoided unplanned downtime",
+            "kind": "positive",
+            "amount": round(avoided_downtime, 2),
+            "amount_fmt": _fmt_money(avoided_downtime, currency),
+            "tooltip": f"Source: {source_table}.field=avoided_downtime_cost ({data_mode})",
+        },
+        {
+            "label": "Avoided quality and scrap loss",
+            "kind": "positive",
+            "amount": round(avoided_quality, 2),
+            "amount_fmt": _fmt_money(avoided_quality, currency),
+            "tooltip": f"Source: {source_table}.field=avoided_quality_cost ({data_mode})",
+        },
+        {
+            "label": "Avoided energy waste",
+            "kind": "positive",
+            "amount": round(avoided_energy, 2),
+            "amount_fmt": _fmt_money(avoided_energy, currency),
+            "tooltip": f"Source: {source_table}.field=avoided_energy_cost ({data_mode})",
+        },
+        {
+            "label": "Planned intervention cost",
+            "kind": "negative",
+            "amount": round(-intervention_cost, 2),
+            "amount_fmt": _fmt_money(-intervention_cost, currency),
+            "tooltip": f"Source: {source_table}.field=intervention_cost ({data_mode})",
+        },
+        {
+            "label": "Platform and operations allocation",
+            "kind": "negative",
+            "amount": round(-platform_cost, 2),
+            "amount_fmt": _fmt_money(-platform_cost, currency),
+            "tooltip": f"Source: {source_table}.field=platform_cost ({data_mode})",
+        },
     ]
 
-    trend_scale = [0.72, 0.81, 0.88, 0.94, 1.0, 1.06]
-    trend_labels = ["M-5", "M-4", "M-3", "M-2", "M-1", "Current"]
-    ebit_trend = []
-    for lbl, mult in zip(trend_labels, trend_scale):
-        v = ebit_saved * mult
-        ebit_trend.append({"label": lbl, "value": round(v, 2), "value_fmt": _fmt_money(v, currency)})
+    if not financial_rows:
+        trend_scale = [0.72, 0.81, 0.88, 0.94, 1.0, 1.06]
+        trend_labels = ["M-5", "M-4", "M-3", "M-2", "M-1", "Current"]
+        ebit_trend = []
+        for lbl, mult in zip(trend_labels, trend_scale):
+            v = ebit_saved * mult
+            ebit_trend.append({"label": lbl, "value": round(v, 2), "value_fmt": _fmt_money(v, currency)})
 
     return {
         "audience": "finance_executive",
@@ -1350,9 +1456,14 @@ def _executive_value(industry: str, assets: list[dict[str, Any]], display_curren
             "payback_days": "Payback days = (planned intervention + platform allocation) / (EBIT Saved / 30).",
             "ebit_margin_bps": "EBIT Margin Lift (bps) = EBIT Saved / baseline monthly EBIT * 10,000.",
             "baseline_monthly_ebit": f"Baseline monthly EBIT reference for {industry} scenario: {_fmt_money(_cv(baseline_monthly_ebit_native), currency)}.",
+            "source_table": f"Primary source table: {source_table}. Data mode: {data_mode}.",
         },
         "baseline_monthly_ebit": round(_cv(baseline_monthly_ebit_native), 2),
         "baseline_monthly_ebit_fmt": _fmt_money(_cv(baseline_monthly_ebit_native), currency),
+        "mom_ebit_pct": round(mom_ebit_pct, 1),
+        "yoy_ebit_pct": round(yoy_ebit_pct, 1),
+        "source_table": source_table,
+        "data_mode": data_mode,
         "kpis": {
             "avoided_downtime_cost": round(avoided_downtime, 2),
             "avoided_downtime_cost_fmt": _fmt_money(avoided_downtime, currency),

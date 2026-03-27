@@ -1001,7 +1001,10 @@ export default function App() {
                 <div className="exec-fin-card">
                   <div className="exec-fin-label">EBIT Saved</div>
                   <div className="exec-fin-val" title={execTips.ebit_saved || ""}>{executive.ebit_saved_fmt || "—"}</div>
-                  <div className="exec-fin-sub">Net impact from prescriptive maintenance</div>
+                  <div className="exec-fin-sub" title={execTips.source_table || ""}>
+                    MoM {Number(executive.mom_ebit_pct || 0) >= 0 ? "+" : ""}{Number(executive.mom_ebit_pct || 0).toFixed(1)}% ·
+                    YoY {Number(executive.yoy_ebit_pct || 0) >= 0 ? "+" : ""}{Number(executive.yoy_ebit_pct || 0).toFixed(1)}%
+                  </div>
                 </div>
                 <div className="exec-fin-card">
                   <div className="exec-fin-label">ROI</div>
@@ -1026,7 +1029,7 @@ export default function App() {
                   {(executive.value_bridge || []).map((b) => (
                     <div key={b.label} className="exec-bridge-row">
                       <span className="exec-bridge-label">{b.label}</span>
-                      <span className={`exec-bridge-val ${b.kind === "negative" ? "neg" : "pos"}`} title={execTips.ebit_saved || ""}>{b.amount_fmt}</span>
+                      <span className={`exec-bridge-val ${b.kind === "negative" ? "neg" : "pos"}`} title={b.tooltip || execTips.source_table || ""}>{b.amount_fmt}</span>
                     </div>
                   ))}
                 </div>
@@ -1038,6 +1041,7 @@ export default function App() {
                     <div><span className="exec-erp-k">Planner group</span><span className="exec-erp-v">{executive.erp?.planner_group || "—"}</span></div>
                     <div><span className="exec-erp-k">Account</span><span className="exec-erp-v">{executive.erp?.reference_account || "—"}</span></div>
                   </div>
+                  <div className="exec-erp-source" title={execTips.source_table || ""}>Source table: {executive.source_table || "simulated model"}</div>
                   <div className="exec-chip-row">
                     {(executive.erp?.cost_centers || []).map((c) => <span key={c} className="exec-chip">{c}</span>)}
                   </div>
@@ -1659,6 +1663,10 @@ export default function App() {
                 <div className="exec-fin-card">
                   <div className="exec-fin-label">EBIT Saved</div>
                   <div className="exec-fin-val" title={execTips.ebit_saved || ""}>{executive.ebit_saved_fmt || "—"}</div>
+                  <div className="exec-fin-sub" title={execTips.source_table || ""}>
+                    MoM {Number(executive.mom_ebit_pct || 0) >= 0 ? "+" : ""}{Number(executive.mom_ebit_pct || 0).toFixed(1)}% ·
+                    YoY {Number(executive.yoy_ebit_pct || 0) >= 0 ? "+" : ""}{Number(executive.yoy_ebit_pct || 0).toFixed(1)}%
+                  </div>
                 </div>
                 <div className="exec-fin-card">
                   <div className="exec-fin-label">ROI</div>
@@ -1689,7 +1697,7 @@ export default function App() {
                   {(executive.value_bridge || []).map((b) => (
                     <div key={`p7-bridge-${b.label}`} className="exec-bridge-row">
                       <span className="exec-bridge-label">{b.label}</span>
-                      <span className={`exec-bridge-val ${b.kind === "negative" ? "neg" : "pos"}`} title={execTips.ebit_saved || ""}>{b.amount_fmt}</span>
+                      <span className={`exec-bridge-val ${b.kind === "negative" ? "neg" : "pos"}`} title={b.tooltip || execTips.source_table || ""}>{b.amount_fmt}</span>
                     </div>
                   ))}
                 </div>
