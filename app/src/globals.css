@@ -191,10 +191,13 @@ body {
   flex: 1;
   overflow: hidden;
   flex-direction: column;
+  min-height: 0;
 }
 
 .page.active {
   display: flex;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .kpi-strip {
@@ -286,10 +289,13 @@ body {
   flex: 1;
   overflow: hidden;
   flex-direction: column;
+  min-height: 0;
 }
 
 .view-panel.active {
   display: flex;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .p1-main {
@@ -297,6 +303,7 @@ body {
   grid-template-columns: 1fr 380px;
   flex: 1;
   overflow: hidden;
+  min-height: 0;
 }
 
 .asset-panel {
