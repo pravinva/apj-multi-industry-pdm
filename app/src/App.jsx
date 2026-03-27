@@ -45,6 +45,65 @@ const PAGE_META = [
   ["p6", "Sim", "◎"],
   ["p7", "Finance", "¥"]
 ];
+const JA_INDUSTRY_LABELS = {
+  mining: "鉱業",
+  energy: "エネルギー",
+  water: "水道",
+  automotive: "自動車",
+  semiconductor: "半導体"
+};
+const JA_UI = {
+  Fleet: "フリート",
+  Asset: "資産",
+  "Hier.": "階層",
+  Stream: "ストリーム",
+  Model: "モデル",
+  Sim: "シミュレーター",
+  Finance: "財務",
+  Currency: "通貨",
+  Operator: "オペレーター",
+  Executive: "経営",
+  "Fleet Health": "フリート健全性",
+  "Critical Assets": "重要資産",
+  "Asset Count": "資産数",
+  "Average health score": "平均健全性スコア",
+  "Need immediate action": "即時対応が必要",
+  "In monitored fleet": "監視対象フリート",
+  "Live asset risk matrix": "ライブ資産リスクマトリクス",
+  All: "全て",
+  Critical: "重大",
+  Warning: "警告",
+  "Maintenance Supervisor AI": "保全スーパーバイザーAI",
+  "Operational diagnosis and actions": "運用診断と推奨アクション",
+  "Processing your request...": "リクエストを処理中...",
+  "Ask about risk, RUL, and next action...": "リスク、RUL、次アクションを質問...",
+  "Processing...": "処理中...",
+  Send: "送信",
+  "Recent alerts": "最新アラート",
+  now: "現在",
+  recent: "最近",
+  "Industry Configuration": "業界設定",
+  "Connector Setup": "コネクター設定",
+  "SDT Benchmark": "SDTベンチマーク",
+  "Tick interval": "ティック間隔",
+  "Noise factor": "ノイズ係数",
+  "Start simulator": "シミュレーター開始",
+  Stop: "停止",
+  Running: "実行中",
+  Stopped: "停止中",
+  "readings emitted": "件の読み取りを送信",
+  "Live ingestion flow": "ライブ取り込みフロー",
+  "3 stages: Bronze → Silver → Gold (5 recent rows each)": "3段階: Bronze → Silver → Gold（各5行）"
+};
+
+function localizeAlertText(text, isJapanese) {
+  if (!isJapanese) return text;
+  const immediate = String(text || "").match(/^(.+?) requires immediate intervention \((.+)\)$/);
+  if (immediate) return `${immediate[1]} は即時対応が必要です（${immediate[2]}）`;
+  const schedule = String(text || "").match(/^(.+?) should be scheduled this week \((.+)\)$/);
+  if (schedule) return `${schedule[1]} は今週中の対応推奨です（${schedule[2]}）`;
+  return text;
+}
 
 async function getJson(url, fallback) {
   try {
@@ -339,8 +398,10 @@ export default function App() {
       setAgentMsgs((ov.messages || []).map((m) => ({ role: m.role, text: m.text, label: m.label || "AI" })));
       setFinanceMsgs([{
         role: "agent",
-        label: "Finance Command AI",
-        text: `I can answer financial predictive maintenance scenarios for ${industry} in ${(ov.executive || {}).currency || demoCurrency}.`
+        label: isJapanese ? "財務コマンドAI" : "Finance Command AI",
+        text: isJapanese
+          ? `${industryLabel(industry)}向けに、${(ov.executive || {}).currency || demoCurrency}で予知保全の財務シナリオに回答できます。`
+          : `I can answer financial predictive maintenance scenarios for ${industry} in ${(ov.executive || {}).currency || demoCurrency}.`
       }]);
       const defaultAsset = ov.assets?.[0]?.id || "";
       setSelectedAssetId(defaultAsset);
@@ -496,6 +557,10 @@ export default function App() {
 
   const executive = overview.executive || EMPTY_EXECUTIVE;
   const execTips = executive.explainability || {};
+  const effectiveUiCurrency = demoCurrency === "AUTO" ? (executive.currency || "USD") : demoCurrency;
+  const isJapanese = effectiveUiCurrency === "JPY";
+  const t = (text) => (isJapanese ? (JA_UI[text] || text) : text);
+  const industryLabel = (ind) => (isJapanese ? (JA_INDUSTRY_LABELS[ind] || ind) : (ind.charAt(0).toUpperCase() + ind.slice(1)));
 
   const sdtWindowInsights = useMemo(() => {
     const summary = sdtReport.summary || [];
@@ -544,7 +609,7 @@ export default function App() {
         setGenieConversationByIndustry((prev) => ({ ...prev, [industry]: reply.conversation_id }));
       }
       const answer = reply?.choices?.[0]?.message?.content || "No response.";
-      setAgentMsgs((prev) => [...prev, { role: "agent", text: answer, label: "Maintenance Supervisor AI" }]);
+      setAgentMsgs((prev) => [...prev, { role: "agent", text: answer, label: t("Maintenance Supervisor AI") }]);
     } finally {
       setAgentPending(false);
     }
@@ -608,7 +673,7 @@ export default function App() {
         setFinanceConversationByIndustry((prev) => ({ ...prev, [industry]: reply.conversation_id }));
       }
       const answer = reply?.choices?.[0]?.message?.content || "No response.";
-      setFinanceMsgs((prev) => [...prev, { role: "agent", text: answer, label: "Finance Command AI" }]);
+      setFinanceMsgs((prev) => [...prev, { role: "agent", text: answer, label: isJapanese ? "財務コマンドAI" : "Finance Command AI" }]);
     } finally {
       setFinancePending(false);
     }
@@ -838,21 +903,21 @@ export default function App() {
           <span className="logo-text">Databricks</span>
         </div>
         <div className="topbar-div" />
-        <span className="app-name">OT PdM Intelligence</span>
+        <span className="app-name">{isJapanese ? "OT 予知保全インテリジェンス" : "OT PdM Intelligence"}</span>
         <div className="ind-tabs">
           {INDUSTRIES.map((ind) => (
             <button key={ind} className={`itab ${industry === ind ? "active" : ""}`} onClick={() => setIndustry(ind)}>
-              {ind.charAt(0).toUpperCase() + ind.slice(1)}
+              {industryLabel(ind)}
             </button>
           ))}
         </div>
         <div className="currency-wrap">
-          <span className="currency-lbl">Currency</span>
+          <span className="currency-lbl">{t("Currency")}</span>
           <select className="currency-sel" value={demoCurrency} onChange={(e) => setDemoCurrency(e.target.value)}>
             {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
-        <span className="isa-badge">ISA-95 · Unity Catalog</span>
+        <span className="isa-badge">{isJapanese ? "ISA-95 ・ Unity Catalog" : "ISA-95 · Unity Catalog"}</span>
       </header>
 
       <div className="body-wrap">
@@ -860,7 +925,7 @@ export default function App() {
           {PAGE_META.map(([pid, label, icon]) => (
             <button key={pid} className={`nav-btn ${page === pid ? "active" : ""}`} onClick={() => setPage(pid)}>
               <span style={{ fontSize: 16, lineHeight: 1 }}>{icon}</span>
-              <span>{label}</span>
+              <span>{t(label)}</span>
             </button>
           ))}
         </nav>
@@ -870,24 +935,24 @@ export default function App() {
           <div className="p1-topbar">
             <div className="kpi-strip" style={{ flex: 1, borderBottom: "none" }}>
               <div className="kpi">
-                <div className="kpi-l">Fleet Health</div>
+                <div className="kpi-l">{t("Fleet Health")}</div>
                 <div className="kpi-v g">{overview.kpis.fleet_health_score}%</div>
-                <div className="kpi-d">Average health score</div>
+                <div className="kpi-d">{t("Average health score")}</div>
               </div>
               <div className="kpi">
-                <div className="kpi-l">Critical Assets</div>
+                <div className="kpi-l">{t("Critical Assets")}</div>
                 <div className="kpi-v r">{overview.kpis.critical_assets}</div>
-                <div className="kpi-d">Need immediate action</div>
+                <div className="kpi-d">{t("Need immediate action")}</div>
               </div>
               <div className="kpi">
-                <div className="kpi-l">Asset Count</div>
+                <div className="kpi-l">{t("Asset Count")}</div>
                 <div className="kpi-v a">{overview.kpis.asset_count}</div>
-                <div className="kpi-d">In monitored fleet</div>
+                <div className="kpi-d">{t("In monitored fleet")}</div>
               </div>
             </div>
             <div className="view-toggle-wrap">
-              <button className={`view-btn ${view === "operator" ? "active" : ""}`} onClick={() => setView("operator")}>Operator</button>
-              <button className={`view-btn ${view === "executive" ? "active" : ""}`} onClick={() => setView("executive")}>Executive</button>
+              <button className={`view-btn ${view === "operator" ? "active" : ""}`} onClick={() => setView("operator")}>{t("Operator")}</button>
+              <button className={`view-btn ${view === "executive" ? "active" : ""}`} onClick={() => setView("executive")}>{t("Executive")}</button>
             </div>
           </div>
 
@@ -895,11 +960,11 @@ export default function App() {
             <div className="p1-main">
               <div className="asset-panel">
                 <div className="panel-hdr">
-                  <span className="panel-title">Live asset risk matrix</span>
+                  <span className="panel-title">{t("Live asset risk matrix")}</span>
                   <div className="chips">
-                    <button className="chip active">All</button>
-                    <button className="chip">Critical</button>
-                    <button className="chip">Warning</button>
+                    <button className="chip active">{t("All")}</button>
+                    <button className="chip">{t("Critical")}</button>
+                    <button className="chip">{t("Warning")}</button>
                   </div>
                 </div>
                 <div className="asset-grid">
@@ -937,8 +1002,8 @@ export default function App() {
                 <div className="agent-hdr">
                   <div className="adot" />
                   <div>
-                    <div className="atitle">Maintenance Supervisor AI</div>
-                    <div className="asubt">Operational diagnosis and actions</div>
+                    <div className="atitle">{t("Maintenance Supervisor AI")}</div>
+                    <div className="asubt">{t("Operational diagnosis and actions")}</div>
                   </div>
                 </div>
                 <div className="msgs">
@@ -955,7 +1020,7 @@ export default function App() {
                     <div className="msg">
                       <div className="av agent">AI</div>
                       <div className="bubble bubble-thinking">
-                        <div className="bubble-lbl">Maintenance Supervisor AI</div>
+                        <div className="bubble-lbl">{t("Maintenance Supervisor AI")}</div>
                         <div className="thinking-row">
                           <span className="thinking-dot" />
                           <span className="thinking-dot" />
@@ -967,19 +1032,19 @@ export default function App() {
                   )}
                 </div>
                 <div className="agent-inp">
-                  <input className="ainput" value={agentInput} onChange={(e) => setAgentInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && sendMessage()} placeholder={agentPending ? "Processing your request..." : "Ask about risk, RUL, and next action..."} disabled={agentPending} />
-                  <button className="sbtn" onClick={sendMessage} disabled={agentPending}>{agentPending ? "Processing..." : "Send"}</button>
+                  <input className="ainput" value={agentInput} onChange={(e) => setAgentInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && sendMessage()} placeholder={agentPending ? t("Processing your request...") : t("Ask about risk, RUL, and next action...")} disabled={agentPending} />
+                  <button className="sbtn" onClick={sendMessage} disabled={agentPending}>{agentPending ? t("Processing...") : t("Send")}</button>
                 </div>
               </div>
             </div>
 
             <div className="alert-bar">
-              <div className="alert-hdr">Recent alerts</div>
+              <div className="alert-hdr">{t("Recent alerts")}</div>
               <div className="arows">
                 {(overview.alerts || []).map((a, i) => (
                   <div key={`${a.text}-${i}`} className={`arow ${a.severity}`} title={a.tooltip || ""}>
                     <div className={`apip ${a.severity}`} />
-                    <span className="atext">{a.text}</span>
+                    <span className="atext">{localizeAlertText(a.text, isJapanese)}</span>
                     <span
                       className="alert-tip"
                       title={a.tooltip || ""}
@@ -989,7 +1054,7 @@ export default function App() {
                     >
                       i
                     </span>
-                    <span className="atime">{a.time}</span>
+                    <span className="atime">{t(a.time)}</span>
                   </div>
                 ))}
               </div>
@@ -1335,21 +1400,21 @@ export default function App() {
 
         <div className={`page ${page === "p6" ? "active" : ""}`} id="p6">
           <div className="p6-inner-tabs">
-            <button className={`p6itab ${simTab === "sim" ? "active" : ""}`} onClick={() => setSimTab("sim")}>Simulator</button>
-            <button className={`p6itab ${simTab === "config" ? "active" : ""}`} onClick={() => setSimTab("config")}>Industry Configuration</button>
-            <button className={`p6itab ${simTab === "connector" ? "active" : ""}`} onClick={() => setSimTab("connector")}>Connector Setup</button>
-            <button className={`p6itab ${simTab === "sdt" ? "active" : ""}`} onClick={() => setSimTab("sdt")}>SDT Benchmark</button>
+            <button className={`p6itab ${simTab === "sim" ? "active" : ""}`} onClick={() => setSimTab("sim")}>{t("Sim")}</button>
+            <button className={`p6itab ${simTab === "config" ? "active" : ""}`} onClick={() => setSimTab("config")}>{t("Industry Configuration")}</button>
+            <button className={`p6itab ${simTab === "connector" ? "active" : ""}`} onClick={() => setSimTab("connector")}>{t("Connector Setup")}</button>
+            <button className={`p6itab ${simTab === "sdt" ? "active" : ""}`} onClick={() => setSimTab("sdt")}>{t("SDT Benchmark")}</button>
           </div>
 
           <div className={`p6-panel ${simTab === "sim" ? "active" : ""}`}>
             <div className="p6-wrap">
               <div className="sim-controls">
-                <div className="sim-ctrl-group"><span className="sim-ctrl-label">Tick interval</span><input className="sim-range" type="range" min="200" max="2000" step="100" value={simState.tick_interval_ms || 800} onChange={(e) => setSimState((p) => ({ ...p, tick_interval_ms: Number(e.target.value) }))} /><span className="sim-ctrl-val">{simState.tick_interval_ms || 800}ms</span></div>
-                <div className="sim-ctrl-group"><span className="sim-ctrl-label">Noise factor</span><input className="sim-range" type="range" min="1" max="20" step="1" value={Math.round((simState.noise_factor || 0.02) * 100)} onChange={(e) => setSimState((p) => ({ ...p, noise_factor: Number(e.target.value) / 100 }))} /><span className="sim-ctrl-val">{(simState.noise_factor || 0.02).toFixed(2)}</span></div>
-                <button className="sim-start" style={{ display: simState.running ? "none" : "inline-block" }} onClick={() => setSimRunning(true)}>▶ Start simulator</button>
-                <button className="sim-stop" style={{ display: simState.running ? "inline-block" : "none" }} onClick={() => setSimRunning(false)}>▮▮ Stop</button>
-                <div className="sim-status"><div className={`sim-dot ${simState.running ? "running" : ""}`} /><span>{simState.running ? "Running" : "Stopped"}</span></div>
-                <span className="sim-reading-count">{(simState.reading_count || 0).toLocaleString()} readings emitted</span>
+                <div className="sim-ctrl-group"><span className="sim-ctrl-label">{t("Tick interval")}</span><input className="sim-range" type="range" min="200" max="2000" step="100" value={simState.tick_interval_ms || 800} onChange={(e) => setSimState((p) => ({ ...p, tick_interval_ms: Number(e.target.value) }))} /><span className="sim-ctrl-val">{simState.tick_interval_ms || 800}ms</span></div>
+                <div className="sim-ctrl-group"><span className="sim-ctrl-label">{t("Noise factor")}</span><input className="sim-range" type="range" min="1" max="20" step="1" value={Math.round((simState.noise_factor || 0.02) * 100)} onChange={(e) => setSimState((p) => ({ ...p, noise_factor: Number(e.target.value) / 100 }))} /><span className="sim-ctrl-val">{(simState.noise_factor || 0.02).toFixed(2)}</span></div>
+                <button className="sim-start" style={{ display: simState.running ? "none" : "inline-block" }} onClick={() => setSimRunning(true)}>▶ {t("Start simulator")}</button>
+                <button className="sim-stop" style={{ display: simState.running ? "inline-block" : "none" }} onClick={() => setSimRunning(false)}>▮▮ {t("Stop")}</button>
+                <div className="sim-status"><div className={`sim-dot ${simState.running ? "running" : ""}`} /><span>{simState.running ? t("Running") : t("Stopped")}</span></div>
+                <span className="sim-reading-count">{(simState.reading_count || 0).toLocaleString()} {t("readings emitted")}</span>
               </div>
               <div className="p6-main">
                 <div className="asset-config-panel">
@@ -1396,8 +1461,8 @@ export default function App() {
                 <div className="bronze-panel">
                   <div className="bronze-hdr">
                     <div>
-                      <div className="bronze-title">Live ingestion flow</div>
-                      <div className="bronze-subtitle">3 stages: Bronze → Silver → Gold (5 recent rows each)</div>
+                      <div className="bronze-title">{t("Live ingestion flow")}</div>
+                      <div className="bronze-subtitle">{t("3 stages: Bronze → Silver → Gold (5 recent rows each)")}</div>
                     </div>
                   </div>
                   <div className="flow-viewport">

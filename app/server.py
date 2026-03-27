@@ -1529,8 +1529,12 @@ def _executive_value(industry: str, assets: list[dict[str, Any]], display_curren
             "roi_pct": "ROI = EBIT Saved / (planned intervention + platform allocation).",
             "payback_days": "Payback days = (planned intervention + platform allocation) / (EBIT Saved / 30).",
             "ebit_margin_bps": "EBIT Margin Lift (bps) = EBIT Saved / baseline monthly EBIT * 10,000.",
+            "mom_ebit_pct": "MoM compares current month EBIT Saved vs prior month from daily finance rows.",
+            "yoy_ebit_pct": "YoY compares last 30 days EBIT Saved vs the same 30-day period one year earlier.",
             "baseline_monthly_ebit": f"Baseline monthly EBIT reference for {industry} scenario: {_fmt_money(_cv(baseline_monthly_ebit_native), currency)}.",
             "source_table": f"Primary source table: {source_table}. Aggregation window: {source_window}. Data mode: {data_mode}.",
+            "work_orders": "Work orders are ranked by anomaly risk and mapped to plant work centers/cost centers; values are converted to display currency.",
+            "work_order_net_ebit_impact": "Net EBIT impact per work order is expected failure cost avoided minus planned intervention cost.",
         },
         "baseline_monthly_ebit": round(_cv(baseline_monthly_ebit_native), 2),
         "baseline_monthly_ebit_fmt": _fmt_money(_cv(baseline_monthly_ebit_native), currency),
@@ -1676,7 +1680,11 @@ def _overview(industry: str, display_currency: str | None = None) -> dict[str, A
             {
                 "role": "agent",
                 "label": "Maintenance Supervisor AI",
-                "text": "I can triage top-risk equipment, parts readiness, and recommended actions.",
+                "text": (
+                    "高リスク設備の優先順位付け、部品の準備状況、推奨アクションを案内できます。"
+                    if _effective_demo_currency(display_currency, "USD") == "JPY"
+                    else "I can triage top-risk equipment, parts readiness, and recommended actions."
+                ),
             }
         ],
         "executive": _executive_value(industry, rows, display_currency=display_currency),
@@ -2881,8 +2889,22 @@ def agent_chat(payload: dict) -> dict:
     user_text = ""
     if messages:
         user_text = str(messages[-1].get("content", "") or "").strip()
+    user_text_lc = user_text.lower()
+    force_english = any(
+        p in user_text_lc
+        for p in [
+            "translate to english",
+            "translate in english",
+            "in english",
+            "respond in english",
+            "answer in english",
+        ]
+    ) or ("英語" in user_text)
+    currency = _normalize_currency(str(payload.get("currency", "") or "").strip().upper(), "")
+    respond_japanese = (currency == "JPY") and not force_english
     if not user_text:
-        return {"choices": [{"message": {"content": "Please enter a question."}}]}
+        msg = "質問を入力してください。" if respond_japanese else "Please enter a question."
+        return {"choices": [{"message": {"content": msg}}]}
 
     industry = str(payload.get("industry", "mining") or "mining").lower()
     if industry not in INDUSTRIES:
@@ -2892,11 +2914,26 @@ def agent_chat(payload: dict) -> dict:
     effective_user_text = user_text
     if resolved_asset:
         alias = raw_asset or resolved_asset
+        confirm_q = (
+            f"「'{alias}' を '{resolved_asset}' と解釈しました。この認識でよろしいですか？」"
+            if respond_japanese
+            else f"\"I interpreted '{alias}' as '{resolved_asset}' — is that what you meant?\""
+        )
         effective_user_text = (
             f"{user_text}\n\n"
             f"Resolver note: interpret asset reference '{alias}' as canonical equipment ID '{resolved_asset}'. "
             f"Answer for '{resolved_asset}', and at the end ask a short confirmation question: "
-            f"\"I interpreted '{alias}' as '{resolved_asset}' — is that what you meant?\""
+            f"{confirm_q}"
+        )
+    if respond_japanese:
+        effective_user_text = (
+            f"{effective_user_text}\n\n"
+            "Language note: respond entirely in Japanese. Keep numbers, equipment IDs, and units unchanged."
+        )
+    elif force_english:
+        effective_user_text = (
+            f"{effective_user_text}\n\n"
+            "Language note: respond entirely in English."
         )
 
     room_map = _load_genie_room_map()
@@ -2907,6 +2944,12 @@ def agent_chat(payload: dict) -> dict:
             f"Action: schedule inspection in the next shift, verify parts, and prepare a maintenance window. "
             f"User message: {effective_user_text}"
         )
+        if respond_japanese:
+            answer = (
+                "診断: 選択された設備で故障の兆候が見られます。"
+                "対応: 次シフトで点検を計画し、部品在庫を確認し、保全ウィンドウを確保してください。 "
+                f"ユーザーメッセージ: {effective_user_text}"
+            )
         return {"choices": [{"message": {"content": answer}}]}
 
     try:
@@ -2992,6 +3035,7 @@ def agent_finance_chat(payload: dict) -> dict:
     merged = f"{user_text}\n\n{context}"
     base_payload = {
         "industry": industry,
+        "currency": currency or ex.get("currency", ""),
         "conversation_id": payload.get("conversation_id", ""),
         "messages": [{"role": "user", "content": merged}],
     }
