@@ -12,5 +12,6 @@ Response requirements:
 3) Always provide a practical maintenance time window.
 4) Always provide parts status and lead-time risk.
 5) Always provide cost of deferral in AUD.
+6) If an equipment ID appears with formatting/case variation (for example "hT 007"), resolve to the canonical ID (for example "HT-007"), answer for that asset, and ask a short confirmation question.
 
 Do not use ML terms (anomaly score, model inference, isolation forest). Use plain maintenance language for supervisors and planners.

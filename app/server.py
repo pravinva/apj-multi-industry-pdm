@@ -4,6 +4,7 @@ import json
 import csv
 import os
 import random
+import re
 import shutil
 import subprocess
 import time
@@ -323,6 +324,29 @@ def _asset_ids(industry: str) -> list[str]:
 
     cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
     return [a["id"] for a in cfg.get("simulator", {}).get("assets", [])]
+
+
+def _asset_token_norm(value: str) -> str:
+    return "".join(ch for ch in str(value or "").upper() if ch.isalnum())
+
+
+def _resolve_asset_alias(industry: str, user_text: str) -> tuple[str | None, str | None]:
+    text = str(user_text or "").strip()
+    if not text:
+        return None, None
+    assets = _asset_ids(industry)
+    if not assets:
+        return None, None
+
+    # Exact match while ignoring case and separators (e.g., "hT 007" -> "HT-007").
+    text_norm = _asset_token_norm(text)
+    norm_to_asset: dict[str, str] = {_asset_token_norm(a): a for a in assets if a}
+    for key, canonical in norm_to_asset.items():
+        if key and key in text_norm:
+            variants = re.findall(r"\b[A-Za-z]{1,6}[-_\s]?\d{1,6}\b", text)
+            matched_variant = next((v for v in variants if _asset_token_norm(v) == key), canonical)
+            return canonical, matched_variant
+    return None, None
 
 
 def _industry_cfg(industry: str) -> dict[str, Any]:
@@ -2569,6 +2593,16 @@ def agent_chat(payload: dict) -> dict:
     if industry not in INDUSTRIES:
         industry = "mining"
     conversation_id = str(payload.get("conversation_id", "") or "").strip()
+    resolved_asset, raw_asset = _resolve_asset_alias(industry, user_text)
+    effective_user_text = user_text
+    if resolved_asset:
+        alias = raw_asset or resolved_asset
+        effective_user_text = (
+            f"{user_text}\n\n"
+            f"Resolver note: interpret asset reference '{alias}' as canonical equipment ID '{resolved_asset}'. "
+            f"Answer for '{resolved_asset}', and at the end ask a short confirmation question: "
+            f"\"I interpreted '{alias}' as '{resolved_asset}' — is that what you meant?\""
+        )
 
     room_map = _load_genie_room_map()
     space_id = room_map.get(industry) or room_map.get("default", "")
@@ -2576,7 +2610,7 @@ def agent_chat(payload: dict) -> dict:
         answer = (
             f"Diagnosis: potential developing fault for the selected asset. "
             f"Action: schedule inspection in the next shift, verify parts, and prepare a maintenance window. "
-            f"User message: {user_text}"
+            f"User message: {effective_user_text}"
         )
         return {"choices": [{"message": {"content": answer}}]}
 
@@ -2587,14 +2621,14 @@ def agent_chat(payload: dict) -> dict:
             create_resp = w.api_client.do(
                 "POST",
                 f"/api/2.0/genie/spaces/{space_id}/conversations/{conversation_id}/messages",
-                body={"content": user_text},
+                body={"content": effective_user_text},
             )
             message_obj = create_resp if isinstance(create_resp, dict) else {}
         else:
             start_resp = w.api_client.do(
                 "POST",
                 f"/api/2.0/genie/spaces/{space_id}/start-conversation",
-                body={"content": user_text},
+                body={"content": effective_user_text},
             )
             if not isinstance(start_resp, dict):
                 start_resp = {}
