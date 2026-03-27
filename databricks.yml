@@ -20,6 +20,9 @@ variables:
   catalog_name:
     description: "Unity Catalog catalog name"
     default: "pdm_${var.industry}"
+  job_node_type_id:
+    description: "Node type for scheduled jobs (portable across workspaces)"
+    default: "m5.xlarge"
 
 targets:
   dev:
@@ -82,9 +85,18 @@ resources:
 
     ot_pdm_scoring_job:
       name: ot-pdm-scoring-${var.industry}
+      job_clusters:
+        - job_cluster_key: default_job_cluster
+          new_cluster:
+            spark_version: 15.4.x-scala2.12
+            node_type_id: ${var.job_node_type_id}
+            num_workers: 1
+            aws_attributes:
+              ebs_volume_count: 1
+              ebs_volume_size: 100
       tasks:
         - task_key: batch_score
-          existing_cluster_id: 0127-122435-da5izx1u
+          job_cluster_key: default_job_cluster
           spark_python_task:
             python_file: core/ml/batch_score.py
             parameters:
@@ -97,9 +109,18 @@ resources:
 
     ot_pdm_training_job:
       name: ot-pdm-training-${var.industry}
+      job_clusters:
+        - job_cluster_key: default_job_cluster
+          new_cluster:
+            spark_version: 15.4.x-scala2.12
+            node_type_id: ${var.job_node_type_id}
+            num_workers: 1
+            aws_attributes:
+              ebs_volume_count: 1
+              ebs_volume_size: 100
       tasks:
         - task_key: train_models
-          existing_cluster_id: 0127-122435-da5izx1u
+          job_cluster_key: default_job_cluster
           spark_python_task:
             python_file: core/ml/train.py
             parameters:
@@ -112,9 +133,18 @@ resources:
 
     ot_pdm_financial_backfill_job:
       name: ot-pdm-financial-backfill-${var.industry}
+      job_clusters:
+        - job_cluster_key: default_job_cluster
+          new_cluster:
+            spark_version: 15.4.x-scala2.12
+            node_type_id: ${var.job_node_type_id}
+            num_workers: 1
+            aws_attributes:
+              ebs_volume_count: 1
+              ebs_volume_size: 100
       tasks:
         - task_key: generate_financial_daily
-          existing_cluster_id: 0127-122435-da5izx1u
+          job_cluster_key: default_job_cluster
           spark_python_task:
             python_file: core/finance/generate_financials.py
             parameters:
@@ -126,4 +156,27 @@ resources:
         pause_status: UNPAUSED
         quartz_cron_expression: "0 15 1 * * ?"
         timezone_id: UTC
+
+    ot_pdm_workspace_bootstrap_job:
+      name: ot-pdm-workspace-bootstrap
+      job_clusters:
+        - job_cluster_key: bootstrap_cluster
+          new_cluster:
+            spark_version: 15.4.x-scala2.12
+            node_type_id: ${var.job_node_type_id}
+            num_workers: 1
+            aws_attributes:
+              ebs_volume_count: 1
+              ebs_volume_size: 100
+      tasks:
+        - task_key: bootstrap_all_data_and_setup
+          job_cluster_key: bootstrap_cluster
+          notebook_task:
+            notebook_path: ${workspace.file_path}/RUNME_BOOTSTRAP_ALL
+            source: WORKSPACE
+            base_parameters:
+              industries_csv: "mining,energy,water,automotive,semiconductor"
+              history_days: "730"
+              grant_principal: "account users"
+              trigger_jobs: "true"
 

@@ -70,9 +70,38 @@ These are simulated in backend payload generation and surfaced in the executive 
    - `databricks bundle validate --target dev -p DEFAULT`
 3. Deploy:
    - `databricks bundle deploy --target dev -p DEFAULT`
-4. Open `RUNME.py` in Databricks and run top-to-bottom.
-5. Confirm data appears in Bronze/Silver/Gold tables.
+4. Open `RUNME_BOOTSTRAP_ALL.py` in Databricks and run top-to-bottom.
+5. Confirm data appears in Bronze/Silver/Gold/Finance tables.
 6. Open app endpoint.
+
+## Portable Workspace Bootstrap (single notebook)
+
+Use `RUNME_BOOTSTRAP_ALL.py` as the one notebook for a fresh workspace deployment.
+
+What it does in one run:
+- Creates catalogs/schemas for all configured industry skins.
+- Applies core DDL (`core/catalog/schema.sql`) and finance table setup.
+- Seeds Lakebase and operational demo data from each `industries/*/seed` directory.
+- Backfills 2 years of daily finance data into `finance.pm_financial_daily`.
+- Grants read/use permissions for demo users.
+- Optionally triggers initial runs of training/scoring/finance jobs.
+
+Notebook widgets:
+- `industries_csv` (default: all 5 skins)
+- `history_days` (default: 730)
+- `grant_principal` (default: `account users`)
+- `trigger_jobs` (`true` / `false`)
+
+For portability across workspaces, scheduled jobs now use job-cluster definitions (no hardcoded cluster IDs).
+
+### Bootstrap as a Databricks Job
+
+Bundle now includes `ot_pdm_workspace_bootstrap_job` which runs `RUNME_BOOTSTRAP_ALL.py` as a single task.
+
+Run it after deploy:
+- `databricks bundle run --target dev -p DEFAULT ot_pdm_workspace_bootstrap_job`
+
+This provisions all tables/data/finance history and triggers initial training/scoring/backfill runs.
 
 ## Switching Industries
 
