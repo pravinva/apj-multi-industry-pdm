@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 const INDUSTRIES = ["mining", "energy", "water", "automotive", "semiconductor"];
 const CURRENCIES = ["AUTO", "USD", "AUD", "JPY"];
@@ -215,6 +215,7 @@ function renderSimpleMarkdown(text) {
 }
 
 export default function App() {
+  const mainScrollRef = useRef(null);
   const [industry, setIndustry] = useState("mining");
   const [demoCurrency, setDemoCurrency] = useState("AUTO");
   const [page, setPage] = useState("p1");
@@ -533,6 +534,7 @@ export default function App() {
         "/api/agent/chat",
         {
           industry,
+          currency: demoCurrency === "AUTO" ? executive.currency : demoCurrency,
           conversation_id: genieConversationByIndustry[industry] || "",
           messages: [{ role: "user", content: userText }]
         },
@@ -862,6 +864,7 @@ export default function App() {
             </button>
           ))}
         </nav>
+        <div className="main-scroll" ref={mainScrollRef}>
 
         <div className={`page ${page === "p1" ? "active" : ""}`} id="p1">
           <div className="p1-topbar">
@@ -977,7 +980,15 @@ export default function App() {
                   <div key={`${a.text}-${i}`} className={`arow ${a.severity}`} title={a.tooltip || ""}>
                     <div className={`apip ${a.severity}`} />
                     <span className="atext">{a.text}</span>
-                    <span className="alert-tip" title={a.tooltip || ""}>i</span>
+                    <span
+                      className="alert-tip"
+                      title={a.tooltip || ""}
+                      data-tip={a.tooltip || ""}
+                      aria-label={a.tooltip || ""}
+                      tabIndex={0}
+                    >
+                      i
+                    </span>
                     <span className="atime">{a.time}</span>
                   </div>
                 ))}
@@ -1000,27 +1011,49 @@ export default function App() {
 
               <div className="exec-finance-row">
                 <div className="exec-fin-card">
-                  <div className="exec-fin-label">EBIT Saved</div>
+                  <div className="exec-fin-label">
+                    EBIT Saved
+                    <span className="exec-tip" data-tip={execTips.ebit_saved || ""} aria-label={execTips.ebit_saved || ""} tabIndex={0}>i</span>
+                  </div>
                   <div className="exec-fin-val" title={execTips.ebit_saved || ""}>{executive.ebit_saved_fmt || "—"}</div>
                   <div className="exec-fin-sub" title={execTips.source_table || ""}>
                     MoM {Number(executive.mom_ebit_pct || 0) >= 0 ? "+" : ""}{Number(executive.mom_ebit_pct || 0).toFixed(1)}% ·
                     YoY {Number(executive.yoy_ebit_pct || 0) >= 0 ? "+" : ""}{Number(executive.yoy_ebit_pct || 0).toFixed(1)}%
+                    <span className="exec-tip" data-tip={`${execTips.mom_ebit_pct || ""} ${execTips.yoy_ebit_pct || ""}`.trim()} aria-label={`${execTips.mom_ebit_pct || ""} ${execTips.yoy_ebit_pct || ""}`.trim()} tabIndex={0}>i</span>
                   </div>
                 </div>
                 <div className="exec-fin-card">
-                  <div className="exec-fin-label">ROI</div>
+                  <div className="exec-fin-label">
+                    ROI
+                    <span className="exec-tip" data-tip={execTips.roi_pct || ""} aria-label={execTips.roi_pct || ""} tabIndex={0}>i</span>
+                  </div>
                   <div className="exec-fin-val" title={execTips.roi_pct || ""}>{Number(executive.roi_pct || 0).toFixed(1)}%</div>
-                  <div className="exec-fin-sub">Savings versus intervention + platform cost</div>
+                  <div className="exec-fin-sub">
+                    Savings versus intervention + platform cost
+                    <span className="exec-tip" data-tip={execTips.roi_pct || ""} aria-label={execTips.roi_pct || ""} tabIndex={0}>i</span>
+                  </div>
                 </div>
                 <div className="exec-fin-card">
-                  <div className="exec-fin-label">Payback</div>
+                  <div className="exec-fin-label">
+                    Payback
+                    <span className="exec-tip" data-tip={execTips.payback_days || ""} aria-label={execTips.payback_days || ""} tabIndex={0}>i</span>
+                  </div>
                   <div className="exec-fin-val" title={execTips.payback_days || ""}>{Number(executive.payback_days || 0).toFixed(1)} days</div>
-                  <div className="exec-fin-sub">Estimated time to recover investment</div>
+                  <div className="exec-fin-sub">
+                    Estimated time to recover investment
+                    <span className="exec-tip" data-tip={execTips.payback_days || ""} aria-label={execTips.payback_days || ""} tabIndex={0}>i</span>
+                  </div>
                 </div>
                 <div className="exec-fin-card">
-                  <div className="exec-fin-label">EBIT Margin Lift</div>
+                  <div className="exec-fin-label">
+                    EBIT Margin Lift
+                    <span className="exec-tip" data-tip={execTips.ebit_margin_bps || ""} aria-label={execTips.ebit_margin_bps || ""} tabIndex={0}>i</span>
+                  </div>
                   <div className="exec-fin-val" title={execTips.ebit_margin_bps || ""}>{Number(executive.ebit_margin_bps || 0).toFixed(1)} bps</div>
-                  <div className="exec-fin-sub" title={execTips.baseline_monthly_ebit || ""}>Versus baseline monthly EBIT ({executive.baseline_monthly_ebit_fmt || "n/a"})</div>
+                  <div className="exec-fin-sub" title={execTips.baseline_monthly_ebit || ""}>
+                    Versus baseline monthly EBIT ({executive.baseline_monthly_ebit_fmt || "n/a"})
+                    <span className="exec-tip" data-tip={execTips.baseline_monthly_ebit || ""} aria-label={execTips.baseline_monthly_ebit || ""} tabIndex={0}>i</span>
+                  </div>
                 </div>
               </div>
 
@@ -1082,14 +1115,23 @@ export default function App() {
                   </div>
                 </div>
                 <div className="exec-trend-card">
-                  <div className="exec-card-title">Financial impact by work order</div>
+                  <div className="exec-card-title">
+                    Financial impact by work order
+                    <span className="exec-tip" data-tip={execTips.work_orders || ""} aria-label={execTips.work_orders || ""} tabIndex={0}>i</span>
+                  </div>
                   {(executive.work_orders || []).slice(0, 6).map((w) => (
                     <div key={w.wo_id} className="exec-wo-row">
                       <div>
                         <div className="exec-wo-id">{w.wo_id}</div>
-                        <div className="exec-wo-meta">{w.equipment_id} · {w.priority} · {w.work_center}</div>
+                        <div className="exec-wo-meta">
+                          {w.equipment_id} · {w.priority} · {w.work_center}
+                          <span className="exec-tip" data-tip={execTips.work_orders || ""} aria-label={execTips.work_orders || ""} tabIndex={0}>i</span>
+                        </div>
                       </div>
-                      <div className="exec-wo-impact" title={execTips.ebit_saved || ""}>{w.net_ebit_impact_fmt}</div>
+                      <div className="exec-wo-impact" title={execTips.work_order_net_ebit_impact || execTips.ebit_saved || ""}>
+                        {w.net_ebit_impact_fmt}
+                        <span className="exec-tip" data-tip={execTips.work_order_net_ebit_impact || execTips.ebit_saved || ""} aria-label={execTips.work_order_net_ebit_impact || execTips.ebit_saved || ""} tabIndex={0}>i</span>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1355,7 +1397,7 @@ export default function App() {
                   <div className="bronze-hdr">
                     <div>
                       <div className="bronze-title">Live ingestion flow</div>
-                      <div className="bronze-subtitle">3 stages: Bronze → Silver → Gold (10 recent rows each)</div>
+                      <div className="bronze-subtitle">3 stages: Bronze → Silver → Gold (5 recent rows each)</div>
                     </div>
                   </div>
                   <div className="flow-viewport">
@@ -1393,7 +1435,7 @@ export default function App() {
                               <table className="bronze-table flow-table">
                                 <thead><tr><th>Timestamp</th><th>Equipment</th><th>Tag</th><th>Value</th><th>Q</th><th>Protocol</th></tr></thead>
                                 <tbody>
-                                  {(data.rows || []).slice(0, 10).map((r, i) => (
+                                  {(data.rows || []).slice(0, 5).map((r, i) => (
                                     <tr key={`${data.stage}-row-${i}`} className={r.quality !== "good" ? r.quality : ""}>
                                       <td className="mono">{r.timestamp}</td>
                                       <td className="mono">{r.equipment_id}</td>
@@ -1684,23 +1726,36 @@ export default function App() {
 
               <div className="exec-finance-row">
                 <div className="exec-fin-card">
-                  <div className="exec-fin-label">EBIT Saved</div>
+                  <div className="exec-fin-label">
+                    EBIT Saved
+                    <span className="exec-tip" data-tip={execTips.ebit_saved || ""} aria-label={execTips.ebit_saved || ""} tabIndex={0}>i</span>
+                  </div>
                   <div className="exec-fin-val" title={execTips.ebit_saved || ""}>{executive.ebit_saved_fmt || "—"}</div>
                   <div className="exec-fin-sub" title={execTips.source_table || ""}>
                     MoM {Number(executive.mom_ebit_pct || 0) >= 0 ? "+" : ""}{Number(executive.mom_ebit_pct || 0).toFixed(1)}% ·
                     YoY {Number(executive.yoy_ebit_pct || 0) >= 0 ? "+" : ""}{Number(executive.yoy_ebit_pct || 0).toFixed(1)}%
+                    <span className="exec-tip" data-tip={`${execTips.mom_ebit_pct || ""} ${execTips.yoy_ebit_pct || ""}`.trim()} aria-label={`${execTips.mom_ebit_pct || ""} ${execTips.yoy_ebit_pct || ""}`.trim()} tabIndex={0}>i</span>
                   </div>
                 </div>
                 <div className="exec-fin-card">
-                  <div className="exec-fin-label">ROI</div>
+                  <div className="exec-fin-label">
+                    ROI
+                    <span className="exec-tip" data-tip={execTips.roi_pct || ""} aria-label={execTips.roi_pct || ""} tabIndex={0}>i</span>
+                  </div>
                   <div className="exec-fin-val" title={execTips.roi_pct || ""}>{Number(executive.roi_pct || 0).toFixed(1)}%</div>
                 </div>
                 <div className="exec-fin-card">
-                  <div className="exec-fin-label">Payback</div>
+                  <div className="exec-fin-label">
+                    Payback
+                    <span className="exec-tip" data-tip={execTips.payback_days || ""} aria-label={execTips.payback_days || ""} tabIndex={0}>i</span>
+                  </div>
                   <div className="exec-fin-val" title={execTips.payback_days || ""}>{Number(executive.payback_days || 0).toFixed(1)} days</div>
                 </div>
                 <div className="exec-fin-card">
-                  <div className="exec-fin-label">Margin Lift</div>
+                  <div className="exec-fin-label">
+                    Margin Lift
+                    <span className="exec-tip" data-tip={execTips.ebit_margin_bps || ""} aria-label={execTips.ebit_margin_bps || ""} tabIndex={0}>i</span>
+                  </div>
                   <div className="exec-fin-val" title={execTips.ebit_margin_bps || ""}>{Number(executive.ebit_margin_bps || 0).toFixed(1)} bps</div>
                 </div>
               </div>
@@ -1786,6 +1841,7 @@ export default function App() {
               </div>
             </div>
           </div>
+        </div>
         </div>
       </div>
     </>
