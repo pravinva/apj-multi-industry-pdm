@@ -372,6 +372,7 @@ export default function App() {
   const [page, setPage] = useState("p1");
   const [view, setView] = useState("operator");
   const [simTab, setSimTab] = useState("sim");
+  const [assetSeverityFilter, setAssetSeverityFilter] = useState("all");
 
   const [overview, setOverview] = useState(EMPTY_OVERVIEW);
   const [recActionPending, setRecActionPending] = useState({});
@@ -650,6 +651,13 @@ export default function App() {
     () => overview.assets.find((a) => a.id === selectedAssetId) || overview.assets[0] || null,
     [overview.assets, selectedAssetId]
   );
+
+  const filteredAssets = useMemo(() => {
+    const assets = overview.assets || [];
+    if (assetSeverityFilter === "critical") return assets.filter((a) => a.status === "critical");
+    if (assetSeverityFilter === "warning") return assets.filter((a) => a.status === "warning");
+    return assets;
+  }, [overview.assets, assetSeverityFilter]);
 
   const filteredStream = useMemo(
     () =>
@@ -1140,13 +1148,13 @@ export default function App() {
                 <div className="panel-hdr">
                   <span className="panel-title">{t("Live asset risk matrix")}</span>
                   <div className="chips">
-                    <button className="chip active">{t("All")}</button>
-                    <button className="chip">{t("Critical")}</button>
-                    <button className="chip">{t("Warning")}</button>
+                    <button className={`chip ${assetSeverityFilter === "all" ? "active" : ""}`} onClick={() => setAssetSeverityFilter("all")}>{t("All")}</button>
+                    <button className={`chip ${assetSeverityFilter === "critical" ? "active" : ""}`} onClick={() => setAssetSeverityFilter("critical")}>{t("Critical")}</button>
+                    <button className={`chip ${assetSeverityFilter === "warning" ? "active" : ""}`} onClick={() => setAssetSeverityFilter("warning")}>{t("Warning")}</button>
                   </div>
                 </div>
                 <div className="asset-grid">
-                  {overview.assets.map((a) => (
+                  {filteredAssets.map((a) => (
                     <div
                       key={a.id}
                       className={`asset-card ${a.status}`}
