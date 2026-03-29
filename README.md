@@ -128,6 +128,16 @@ This provisions all tables/data/finance history and triggers initial training/sc
 - `databricks bundle deploy --target dev -p DEFAULT --var industry=automotive`
 - `databricks bundle deploy --target dev -p DEFAULT --var industry=semiconductor`
 
+### Repeatable industry matrix reconcile
+
+Use `industries/deployment_matrix.yaml` as the single source of truth for which
+industries must have matching OT-PDM resources.
+
+- Dry-run audit:
+  - `python tools/reconcile_industry_matrix.py --owner pravin.varma@databricks.com`
+- Reconcile from config (create missing jobs from the existing pattern, then verify):
+  - `python tools/reconcile_industry_matrix.py --owner pravin.varma@databricks.com --apply`
+
 ## Connector Architecture
 
 `core/zerobus_ingest/connector.py` wraps `unified-ot-zerobus-connector` for production OT networks.

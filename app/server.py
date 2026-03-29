@@ -10,6 +10,7 @@ import io
 import shutil
 import subprocess
 import time
+import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -49,7 +50,6 @@ SIM_STATE: dict[str, dict[str, Any]] = {}
 _SQL_CACHE: dict[str, tuple[float, list[dict[str, Any]]]] = {}
 _CACHE_TTL_S = 20.0
 _MANUAL_KB_CACHE: dict[str, list[dict[str, Any]]] = {}
-_WAREHOUSE_ID = os.getenv("OT_PDM_WAREHOUSE_ID") or os.getenv("DATABRICKS_SQL_WAREHOUSE_ID") or "4b9b953939869799"
 _DEFAULT_ZEROBUS_WORKSPACE_URL = os.getenv("OT_PDM_DEFAULT_WORKSPACE_URL", "https://e2-demo-field-eng.cloud.databricks.com")
 _DEFAULT_ZEROBUS_ENDPOINT = os.getenv(
     "OT_PDM_DEFAULT_ZEROBUS_ENDPOINT",
@@ -69,6 +69,7 @@ _LAKEBASE_PG_PASSWORD = os.getenv("OT_PDM_LAKEBASE_PG_PASSWORD", "").strip()
 _LAKEBASE_PG_SSLMODE = os.getenv("OT_PDM_LAKEBASE_PG_SSLMODE", "require").strip() or "require"
 _LAKEBASE_ACTION_TABLE = os.getenv("OT_PDM_LAKEBASE_ACTION_TABLE", "otpdm.operator_recommendation_actions").strip() or "otpdm.operator_recommendation_actions"
 _LIVE_SCORING_STATE: dict[str, dict[str, Any]] = {}
+_LIVE_DLT_STATE: dict[str, dict[str, Any]] = {}
 _SIM_STAGING_READY: dict[str, bool] = {}
 _LIVE_SCORING_MIN_INTERVAL_S = int(os.getenv("OT_PDM_LIVE_SCORING_MIN_INTERVAL_S", "180"))
 _LIVE_SCORING_STALENESS_S = int(os.getenv("OT_PDM_LIVE_SCORING_STALENESS_S", "90"))
@@ -80,6 +81,41 @@ ZEROBUS_STATUS: dict[str, dict[str, bool]] = {
 ZEROBUS_CONFIG_DIR = ROOT / ".zerobus-configs"
 ZEROBUS_KEY_PATH = ROOT / ".zerobus-key"
 _FERNET: Fernet | None = None
+
+
+def _resolve_warehouse_id() -> str:
+    explicit = os.getenv("OT_PDM_WAREHOUSE_ID") or os.getenv("DATABRICKS_SQL_WAREHOUSE_ID")
+    if explicit:
+        return explicit
+    if WorkspaceClient is not None:
+        try:
+            client = WorkspaceClient()
+            running: list[tuple[str, str]] = []
+            fallback: list[tuple[str, str]] = []
+            for wh in client.warehouses.list():
+                wid = str(getattr(wh, "id", "") or "")
+                if wid:
+                    name = str(getattr(wh, "name", "") or "").lower()
+                    fallback.append((wid, name))
+                    if str(getattr(wh, "state", "")).upper().endswith("RUNNING"):
+                        running.append((wid, name))
+            for candidates in (running, fallback):
+                for wid, name in candidates:
+                    if "shared unity catalog serverless" in name:
+                        return wid
+            for candidates in (running, fallback):
+                for wid, name in candidates:
+                    if "unity catalog" in name:
+                        return wid
+            if fallback:
+                return fallback[0][0]
+        except Exception:
+            pass
+    # Last-resort static fallback for environments without discovery access.
+    return "4b9b953939869799"
+
+
+_WAREHOUSE_ID = _resolve_warehouse_id()
 SIMULATED_TAGS: dict[str, list[dict[str, str]]] = {
     "opcua": [
         {"id": "ns=2;s=Engine.EGT", "name": "Engine.EGT", "type": "Float", "desc": "Exhaust gas temperature"},
@@ -107,7 +143,7 @@ SIMULATED_TAGS: dict[str, list[dict[str, str]]] = {
     ],
 }
 
-app = FastAPI(title="OT PdM Intelligence")
+app = FastAPI(title="Predictive Maintenance Hub")
 
 if (DIST / "assets").exists():
     app.mount("/assets", StaticFiles(directory=DIST / "assets"), name="assets")
@@ -150,7 +186,7 @@ def _read_csv_rows(path: Path) -> list[dict[str, Any]]:
 
 
 def _live_stream_points(industry: str, max_ticks: int) -> list[dict[str, Any]]:
-    target_fqn, _ = _zerobus_action_target(industry)
+    target_fqn = _simulator_landing_target(industry)
     limit = max(500, min(30000, max_ticks * 40))
     statement = f"""
     SELECT equipment_id, tag_name, value, quality, timestamp
@@ -274,30 +310,60 @@ def _default_industry_cfg(industry: str) -> dict[str, Any]:
             {"id": "HT-007", "type": "haul_truck", "site": "gudai_darri", "area": "pit_b", "unit": "haul_fleet"},
             {"id": "HT-001", "type": "haul_truck", "site": "gudai_darri", "area": "pit_a", "unit": "haul_fleet"},
             {"id": "CV-003", "type": "conveyor", "site": "gudai_darri", "area": "process", "unit": "crushing"},
+            {"id": "HT-018", "type": "haul_truck", "site": "gudai_darri", "area": "pit_c", "unit": "haul_fleet"},
+            {"id": "HT-021", "type": "haul_truck", "site": "gudai_darri", "area": "pit_b", "unit": "haul_fleet"},
+            {"id": "HT-025", "type": "haul_truck", "site": "gudai_darri", "area": "pit_a", "unit": "haul_fleet"},
+            {"id": "HT-029", "type": "haul_truck", "site": "gudai_darri", "area": "pit_c", "unit": "haul_fleet"},
+            {"id": "CV-006", "type": "conveyor", "site": "gudai_darri", "area": "process", "unit": "crushing"},
+            {"id": "CV-010", "type": "conveyor", "site": "gudai_darri", "area": "process", "unit": "secondary_crushing"},
         ],
         "energy": [
             {"id": "WT-004", "type": "wind_turbine", "site": "northhub", "area": "wind", "unit": "gen"},
             {"id": "BESS-01", "type": "bess", "site": "northhub", "area": "storage", "unit": "battery"},
             {"id": "TX-07", "type": "transformer", "site": "northhub", "area": "substation", "unit": "transmission"},
             {"id": "WT-011", "type": "wind_turbine", "site": "northhub", "area": "wind", "unit": "gen"},
+            {"id": "WT-015", "type": "wind_turbine", "site": "northhub", "area": "wind", "unit": "gen"},
+            {"id": "WT-018", "type": "wind_turbine", "site": "northhub", "area": "wind", "unit": "gen"},
+            {"id": "BESS-03", "type": "bess", "site": "northhub", "area": "storage", "unit": "battery"},
+            {"id": "BESS-04", "type": "bess", "site": "northhub", "area": "storage", "unit": "battery"},
+            {"id": "TX-11", "type": "transformer", "site": "northhub", "area": "substation", "unit": "transmission"},
+            {"id": "TX-15", "type": "transformer", "site": "northhub", "area": "substation", "unit": "transmission"},
         ],
         "water": [
             {"id": "PS-07", "type": "pump", "site": "prospect", "area": "station_7", "unit": "distribution"},
             {"id": "MT-03", "type": "smart_meter", "site": "cbd", "area": "zone_3", "unit": "metering"},
             {"id": "TP-01", "type": "chlorination_unit", "site": "prospect", "area": "treatment", "unit": "dosing"},
             {"id": "VS-11", "type": "vent_shaft", "site": "north", "area": "tunnel", "unit": "ventilation"},
+            {"id": "PS-09", "type": "pump", "site": "prospect", "area": "station_9", "unit": "distribution"},
+            {"id": "PS-12", "type": "pump", "site": "south", "area": "station_12", "unit": "distribution"},
+            {"id": "MT-08", "type": "smart_meter", "site": "west", "area": "zone_8", "unit": "metering"},
+            {"id": "MT-14", "type": "smart_meter", "site": "east", "area": "zone_14", "unit": "metering"},
+            {"id": "TP-03", "type": "chlorination_unit", "site": "prospect", "area": "treatment", "unit": "dosing"},
+            {"id": "VS-15", "type": "vent_shaft", "site": "north", "area": "tunnel", "unit": "ventilation"},
         ],
         "automotive": [
             {"id": "TP-07", "type": "stamping_press", "site": "nagoya", "area": "press", "unit": "line_a"},
             {"id": "WR-14", "type": "robotic_welder", "site": "nagoya", "area": "body", "unit": "line_a"},
             {"id": "CNC-22", "type": "cnc_machine", "site": "nagoya", "area": "machining", "unit": "line_b"},
             {"id": "CV-A3", "type": "assembly_conveyor", "site": "nagoya", "area": "assembly", "unit": "line_c"},
+            {"id": "TP-11", "type": "stamping_press", "site": "nagoya", "area": "press", "unit": "line_b"},
+            {"id": "TP-16", "type": "stamping_press", "site": "nagoya", "area": "press", "unit": "line_c"},
+            {"id": "WR-22", "type": "robotic_welder", "site": "nagoya", "area": "body", "unit": "line_b"},
+            {"id": "WR-28", "type": "robotic_welder", "site": "nagoya", "area": "body", "unit": "line_c"},
+            {"id": "CNC-31", "type": "cnc_machine", "site": "nagoya", "area": "machining", "unit": "line_c"},
+            {"id": "CV-A8", "type": "assembly_conveyor", "site": "nagoya", "area": "assembly", "unit": "line_d"},
         ],
         "semiconductor": [
             {"id": "ET-04", "type": "etch_tool", "site": "naka_fab", "area": "bay_3", "unit": "etch"},
             {"id": "LT-11", "type": "stepper", "site": "naka_fab", "area": "bay_5", "unit": "lithography"},
             {"id": "CMP-07", "type": "cmp_tool", "site": "naka_fab", "area": "bay_2", "unit": "polish"},
             {"id": "IN-02", "type": "inspection_tool", "site": "naka_fab", "area": "bay_6", "unit": "metrology"},
+            {"id": "ET-09", "type": "etch_tool", "site": "naka_fab", "area": "bay_4", "unit": "etch"},
+            {"id": "ET-13", "type": "etch_tool", "site": "naka_fab", "area": "bay_1", "unit": "etch"},
+            {"id": "LT-18", "type": "stepper", "site": "naka_fab", "area": "bay_7", "unit": "lithography"},
+            {"id": "LT-21", "type": "stepper", "site": "naka_fab", "area": "bay_8", "unit": "lithography"},
+            {"id": "CMP-14", "type": "cmp_tool", "site": "naka_fab", "area": "bay_2", "unit": "polish"},
+            {"id": "IN-10", "type": "inspection_tool", "site": "naka_fab", "area": "bay_9", "unit": "metrology"},
         ],
     }
     assets = defaults.get(industry, defaults["mining"])
@@ -321,13 +387,7 @@ def _default_industry_cfg(industry: str) -> dict[str, Any]:
 
 
 def _asset_ids(industry: str) -> list[str]:
-    cfg_path = _industry_config_path(industry)
-    if not cfg_path.exists():
-        return [a["id"] for a in _default_industry_cfg(industry).get("simulator", {}).get("assets", [])]
-    import yaml
-
-    cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
-    return [a["id"] for a in cfg.get("simulator", {}).get("assets", [])]
+    return [a.get("id") for a in _asset_defs(industry) if a.get("id")]
 
 
 def _asset_token_norm(value: str) -> str:
@@ -360,12 +420,83 @@ def _industry_cfg(industry: str) -> dict[str, Any]:
     return yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
 
 
+def _asset_defs_from_table(industry: str) -> list[dict[str, Any]]:
+    cfg = _industry_cfg(industry)
+    catalog = cfg.get("catalog", f"pdm_{industry}")
+    table_fqn = f"{catalog}.bronze.asset_metadata"
+    safe_industry = _sql_escape(industry)
+    stmt = f"""
+    SELECT equipment_id, site_id, area_id, unit_id, asset_type, asset_model
+    FROM {table_fqn}
+    WHERE lower(industry) = lower('{safe_industry}')
+    ORDER BY equipment_id
+    """
+    rows = _run_sql(stmt, cache_key=f"{table_fqn}:{industry}:asset_defs:{int(time.time() // 30)}")
+    if not rows:
+        return []
+    return [
+        {
+            # Preserve canonical keys exactly as stored in UC so joins/mapping
+            # with Gold predictions and config metadata remain stable.
+            "id": str(r.get("equipment_id") or "UNKNOWN"),
+            "type": str(r.get("asset_type") or "equipment"),
+            "site": str(r.get("site_id") or "site_1"),
+            "area": str(r.get("area_id") or "area_1"),
+            "unit": str(r.get("unit_id") or "unit_1"),
+            "model": str(r.get("asset_model") or ""),
+        }
+        for r in rows
+        if r.get("equipment_id")
+    ]
+
+
 def _asset_defs(industry: str) -> list[dict[str, Any]]:
-    return _industry_cfg(industry).get("simulator", {}).get("assets", [])
+    cfg_assets = _industry_cfg(industry).get("simulator", {}).get("assets", [])
+    table_assets = _asset_defs_from_table(industry)
+    if table_assets:
+        cfg_by_id = {_asset_token_norm(str(a.get("id"))): a for a in cfg_assets if a.get("id")}
+        merged: list[dict[str, Any]] = []
+        for row in table_assets:
+            aid = _asset_token_norm(str(row.get("id", "")))
+            merged.append({**cfg_by_id.get(aid, {}), **row})
+        return merged
+    return cfg_assets
 
 
 def _sensor_defs(industry: str, asset_type: str) -> list[dict[str, Any]]:
     return _industry_cfg(industry).get("sensors", {}).get(asset_type, [])
+
+
+def _rows_from_external_links(resp: Any, columns: list[str]) -> list[dict[str, Any]]:
+    result = getattr(resp, "result", None)
+    links = getattr(result, "external_links", None) or []
+    values: list[list[Any]] = []
+    for link in links:
+        url = getattr(link, "external_link", None)
+        if not url:
+            continue
+        try:
+            with urllib.request.urlopen(url, timeout=20) as r:
+                payload = json.loads(r.read().decode("utf-8"))
+            if isinstance(payload, dict):
+                data = payload.get("data_array")
+                if isinstance(data, list):
+                    values.extend(data)
+            elif isinstance(payload, list):
+                values.extend(payload)
+        except Exception:
+            continue
+
+    rows: list[dict[str, Any]] = []
+    for r in values:
+        if isinstance(r, dict):
+            rows.append(r)
+        elif isinstance(r, list):
+            if columns:
+                rows.append({columns[i]: r[i] for i in range(min(len(columns), len(r)))})
+            else:
+                rows.append({str(i): v for i, v in enumerate(r)})
+    return rows
 
 
 def _run_sql(statement: str, cache_key: str | None = None) -> list[dict[str, Any]]:
@@ -401,6 +532,20 @@ def _run_sql(statement: str, cache_key: str | None = None) -> list[dict[str, Any
                 rows.append({columns[i]: r[i] for i in range(min(len(columns), len(r)))})
             else:
                 rows.append({str(i): v for i, v in enumerate(r)})
+        # INLINE uses Arrow and can omit data_array in some runtimes even when rows exist.
+        if not rows:
+            total_row_count = int(getattr(manifest, "total_row_count", 0) or 0) if manifest else 0
+            if total_row_count > 0:
+                ext = client.statement_execution.execute_statement(
+                    statement=statement,
+                    warehouse_id=_WAREHOUSE_ID,
+                    wait_timeout="20s",
+                    disposition=sql_service.Disposition.EXTERNAL_LINKS,
+                    format=sql_service.Format.JSON_ARRAY,
+                )
+                est = getattr(ext, "status", None)
+                if est is not None and est.state == sql_service.StatementState.SUCCEEDED:
+                    rows = _rows_from_external_links(ext, columns)
         _SQL_CACHE[key] = (now, rows)
         return rows
     except Exception as e:
@@ -457,12 +602,55 @@ def _parse_dt(v: Any) -> datetime | None:
 
 def _resolve_scoring_job_id(client: WorkspaceClient, industry: str) -> int | None:
     state = _LIVE_SCORING_STATE.setdefault(industry, {})
+    job_name = f"ot-pdm-scoring-{industry}"
+    owner_user = str(os.getenv("OT_PDM_OWNER_USER", "") or "").strip().lower()
+    if not owner_user:
+        try:
+            me = client.current_user.me()
+            # Databricks Apps often run as a service principal; those identities can
+            # break creator-based filtering for user-owned jobs. Only use owner-based
+            # filtering when the principal looks like a real user email.
+            candidate_owner = str(getattr(me, "user_name", "") or "").strip().lower()
+            owner_user = candidate_owner if "@" in candidate_owner else ""
+        except Exception:
+            owner_user = ""
+
+    def _name_matches(candidate: Any) -> bool:
+        name = str(candidate or "").strip().lower()
+        target = job_name.lower()
+        if not name:
+            return False
+        # Accept exact match and bundle-prefixed names like:
+        # "[dev user] ot-pdm-scoring-mining"
+        return name == target or name.endswith(f" {target}") or target in name
+
+    def _job_id_matches_industry(job_id: int, enforce_owner: bool = True) -> bool:
+        try:
+            detail = client.api_client.do("GET", "/api/2.1/jobs/get", query={"job_id": int(job_id)})
+            creator = str((detail or {}).get("creator_user_name") or "").strip().lower()
+            settings = (detail or {}).get("settings", {}) or {}
+            if enforce_owner and owner_user and creator and creator != owner_user:
+                return False
+            return _name_matches(settings.get("name"))
+        except Exception:
+            return False
+
     cached = state.get("job_id")
     if cached:
-        return int(cached)
+        try:
+            cached_id = int(cached)
+            if _job_id_matches_industry(cached_id):
+                return cached_id
+        except Exception:
+            pass
+        state.pop("job_id", None)
 
     env_key = f"OT_PDM_SCORING_JOB_ID_{industry.upper()}"
-    env_val = os.getenv(env_key) or os.getenv("OT_PDM_SCORING_JOB_ID")
+    # Keep env override strict per industry.
+    # In Databricks Apps runtimes, service principals may not have enough
+    # permission to resolve job metadata via jobs/get or jobs/list, even when
+    # they can run a known job ID. Treat explicit env IDs as authoritative.
+    env_val = os.getenv(env_key)
     if env_val:
         try:
             job_id = int(env_val)
@@ -470,14 +658,15 @@ def _resolve_scoring_job_id(client: WorkspaceClient, industry: str) -> int | Non
             return job_id
         except Exception:
             pass
-
-    job_name = f"ot-pdm-scoring-{industry}"
     try:
         listing = client.api_client.do("GET", "/api/2.1/jobs/list", query={"name": job_name, "limit": "100"})
         jobs = listing.get("jobs", []) if isinstance(listing, dict) else []
         for j in jobs:
+            creator = str(j.get("creator_user_name") or "").strip().lower()
             settings = j.get("settings", {}) or {}
-            if settings.get("name") == job_name and j.get("job_id"):
+            if owner_user and creator and creator != owner_user:
+                continue
+            if _name_matches(settings.get("name")) and j.get("job_id"):
                 state["job_id"] = int(j["job_id"])
                 return int(j["job_id"])
     except Exception:
@@ -485,16 +674,82 @@ def _resolve_scoring_job_id(client: WorkspaceClient, industry: str) -> int | Non
 
     # Fallback in case `name` server-side filtering is unavailable.
     try:
-        listing = client.api_client.do("GET", "/api/2.1/jobs/list", query={"limit": "100"})
-        jobs = listing.get("jobs", []) if isinstance(listing, dict) else []
-        for j in jobs:
-            settings = j.get("settings", {}) or {}
-            if settings.get("name") == job_name and j.get("job_id"):
-                state["job_id"] = int(j["job_id"])
-                return int(j["job_id"])
+        page_token = None
+        for _ in range(0, 50):
+            query = {"limit": "100"}
+            if page_token:
+                query["page_token"] = page_token
+            listing = client.api_client.do("GET", "/api/2.1/jobs/list", query=query)
+            jobs = listing.get("jobs", []) if isinstance(listing, dict) else []
+            for j in jobs:
+                creator = str(j.get("creator_user_name") or "").strip().lower()
+                settings = j.get("settings", {}) or {}
+                if owner_user and creator and creator != owner_user:
+                    continue
+                if _name_matches(settings.get("name")) and j.get("job_id"):
+                    state["job_id"] = int(j["job_id"])
+                    return int(j["job_id"])
+            page_token = listing.get("next_page_token") if isinstance(listing, dict) else None
+            if not page_token:
+                break
     except Exception:
         pass
     return None
+
+
+def _resolve_dlt_pipeline_id(client: WorkspaceClient, industry: str) -> str | None:
+    state = _LIVE_DLT_STATE.setdefault(industry, {})
+    pipeline_name = f"ot-pdm-dlt-{industry}"
+
+    def _name_matches(candidate: Any) -> bool:
+        name = str(candidate or "").strip().lower()
+        target = pipeline_name.lower()
+        if not name:
+            return False
+        return name == target or name.endswith(f" {target}") or target in name
+
+    cached = state.get("pipeline_id")
+    if cached:
+        return str(cached)
+
+    env_key = f"OT_PDM_DLT_PIPELINE_ID_{industry.upper()}"
+    env_val = str(os.getenv(env_key, "") or "").strip()
+    if env_val:
+        state["pipeline_id"] = env_val
+        return env_val
+
+    try:
+        page_token = None
+        for _ in range(0, 50):
+            query = {"max_results": "100"}
+            if page_token:
+                query["page_token"] = page_token
+            listing = client.api_client.do("GET", "/api/2.0/pipelines", query=query)
+            items = listing.get("statuses", []) if isinstance(listing, dict) else []
+            for p in items:
+                pid = str(p.get("pipeline_id") or "").strip()
+                if pid and _name_matches(p.get("name")):
+                    state["pipeline_id"] = pid
+                    return pid
+            page_token = listing.get("next_page_token") if isinstance(listing, dict) else None
+            if not page_token:
+                break
+    except Exception:
+        pass
+
+    return None
+
+
+def _trigger_dlt_update(client: WorkspaceClient, industry: str) -> dict[str, Any]:
+    pipeline_id = _resolve_dlt_pipeline_id(client, industry)
+    if not pipeline_id:
+        return {"ok": False, "error": f"DLT pipeline not found for industry={industry}"}
+    try:
+        resp = client.api_client.do("POST", f"/api/2.0/pipelines/{pipeline_id}/updates", body={})
+        update_id = (resp or {}).get("update_id") if isinstance(resp, dict) else None
+        return {"ok": True, "pipeline_id": pipeline_id, "update_id": update_id}
+    except Exception as e:
+        return {"ok": False, "pipeline_id": pipeline_id, "error": str(e)}
 
 
 def _is_prediction_stale(industry: str) -> bool:
@@ -556,13 +811,35 @@ def _sql_escape(v: str) -> str:
     return v.replace("'", "''")
 
 
+def _simulator_landing_target(industry: str) -> str:
+    # Write to the same landing table configured for the active DLT ingest source.
+    # This keeps injected events on the real bronze -> silver -> gold path.
+    target_fqn, _ = _zerobus_action_target(industry)
+    return target_fqn
+
+
 def _persist_simulator_rows(industry: str, rows: list[dict[str, Any]]) -> None:
     if not rows:
         return
     if WorkspaceClient is None or sql_service is None:
         return
-    target_fqn, _ = _zerobus_action_target(industry)
+    target_fqn = _simulator_landing_target(industry)
     client = WorkspaceClient()
+
+    def _exec_checked(statement: str) -> None:
+        resp = client.statement_execution.execute_statement(
+            statement=statement,
+            warehouse_id=_WAREHOUSE_ID,
+            wait_timeout="50s",
+            disposition=sql_service.Disposition.INLINE,
+        )
+        status = getattr(resp, "status", None)
+        if status is None or status.state != sql_service.StatementState.SUCCEEDED:
+            state = getattr(status, "state", None) if status is not None else None
+            err = getattr(status, "error", None) if status is not None else None
+            msg = getattr(err, "message", None) if err is not None else None
+            raise RuntimeError(f"SQL statement failed state={state} message={msg or 'unknown error'}")
+
     if not _SIM_STAGING_READY.get(industry):
         ddl = f"""
         CREATE TABLE IF NOT EXISTS {target_fqn} (
@@ -581,12 +858,7 @@ def _persist_simulator_rows(industry: str, rows: list[dict[str, Any]]) -> None:
         ) USING DELTA
         """
         try:
-            client.statement_execution.execute_statement(
-                statement=ddl,
-                warehouse_id=_WAREHOUSE_ID,
-                wait_timeout="20s",
-                disposition=sql_service.Disposition.INLINE,
-            )
+            _exec_checked(ddl)
         finally:
             _SIM_STAGING_READY[industry] = True
 
@@ -622,22 +894,19 @@ def _persist_simulator_rows(industry: str, rows: list[dict[str, Any]]) -> None:
             "(site_id, area_id, unit_id, equipment_id, component_id, tag_name, value, unit, quality, quality_code, source_protocol, timestamp) VALUES "
             + ", ".join(values_sql[i : i + chunk])
         )
-        client.statement_execution.execute_statement(
-            statement=stmt,
-            warehouse_id=_WAREHOUSE_ID,
-            wait_timeout="20s",
-            disposition=sql_service.Disposition.INLINE,
-        )
+        _exec_checked(stmt)
 
 
 def _sensor_features_map(industry: str) -> dict[tuple[str, str], dict[str, Any]]:
     catalog = _industry_cfg(industry).get("catalog", f"pdm_{industry}")
     statement = f"""
-    SELECT equipment_id, tag_name, mean_15m, stddev_15m, slope_1h, zscore_30d, reading_count, window_end
+    SELECT equipment_id, tag_name, mean_15m, stddev_15m, slope_1h, zscore_30d,
+           CAST(NULL AS BIGINT) AS reading_count,
+           timestamp AS window_end
     FROM (
       SELECT *,
-             ROW_NUMBER() OVER (PARTITION BY equipment_id, tag_name ORDER BY window_end DESC) AS rn
-      FROM {catalog}.silver.sensor_features
+             ROW_NUMBER() OVER (PARTITION BY equipment_id, tag_name ORDER BY timestamp DESC) AS rn
+      FROM {catalog}.bronze.sensor_features
     ) t
     WHERE rn = 1
     """
@@ -920,15 +1189,11 @@ def _zerobus_action_target(industry: str) -> tuple[str, dict[str, Any]]:
     catalog = cfg.get("catalog", f"pdm_{industry}")
     protocol = _normalize_zerobus_protocol(cfg.get("simulator", {}).get("protocol"))
     zcfg = _load_zerobus_config(protocol) or {}
-    if not zcfg:
-        # Fallback to any saved protocol config if current protocol has none.
-        for p in ZEROBUS_PROTOCOLS:
-            cand = _load_zerobus_config(p)
-            if cand:
-                zcfg = cand
-                break
     target = (zcfg.get("target", {}) or {}) if isinstance(zcfg, dict) else {}
-    target_catalog = str(target.get("catalog") or catalog).strip()
+    # Always keep simulator landing writes scoped to the active industry catalog.
+    # This prevents cross-industry leakage when a saved connector config points to
+    # a different catalog (for example mining while viewing automotive).
+    target_catalog = str(catalog).strip()
     target_schema = str(target.get("schema") or "bronze").strip()
     target_table = str(target.get("table") or "_zerobus_staging").strip()
     return f"{target_catalog}.{target_schema}.{target_table}", zcfg
@@ -970,8 +1235,9 @@ def _bronze_latest(industry: str, limit: int) -> list[dict[str, Any]]:
     """
     return _run_sql(statement, cache_key=f"{catalog}:bronze:{max(1, min(200, int(limit)))}")
 
-def _normalize_text(value: str) -> str:
-    return value.replace("_", " ").title()
+def _normalize_text(value: Any, fallback: str = "") -> str:
+    text = str(value or fallback or "")
+    return text.replace("_", " ").title()
 
 
 def _zerobus_protocol(payload: dict[str, Any]) -> str:
@@ -2382,6 +2648,138 @@ def _sim_custom_stage(
     }
 
 
+def _count_recent_rows(rows: list[dict[str, Any]], ts_field: str = "timestamp") -> tuple[int, int, int, Any]:
+    now = datetime.now(timezone.utc)
+    rows_5m = 0
+    rows_30m = 0
+    rows_prev_5m = 0
+    latest_ts = None
+    for r in rows:
+        ts = _parse_dt(r.get(ts_field))
+        if ts is None:
+            continue
+        if latest_ts is None or ts > latest_ts:
+            latest_ts = ts
+        age_s = (now - ts).total_seconds()
+        if age_s <= 300:
+            rows_5m += 1
+            rows_30m += 1
+        elif age_s <= 600:
+            rows_prev_5m += 1
+            rows_30m += 1
+        elif age_s <= 1800:
+            rows_30m += 1
+    return rows_30m, rows_5m, rows_prev_5m, latest_ts
+
+
+def _sim_recent_bronze_rows(industry: str, limit: int) -> list[dict[str, Any]]:
+    st = _sim_state(industry)
+    max_rows = max(5, min(120, int(limit)))
+    rows = list(st.get("recent_rows") or [])[:max_rows]
+    # Ensure rows are normalized for the simulator flow table.
+    normalized: list[dict[str, Any]] = []
+    for r in rows:
+        normalized.append(
+            {
+                "timestamp": r.get("timestamp"),
+                "equipment_id": r.get("equipment_id"),
+                "tag_name": r.get("tag_name"),
+                "value": r.get("value"),
+                "unit": r.get("unit"),
+                "quality": r.get("quality"),
+                "source_protocol": r.get("source_protocol"),
+            }
+        )
+    return normalized
+
+
+def _sim_recent_silver_rows(industry: str, limit: int) -> list[dict[str, Any]]:
+    source = _sim_recent_bronze_rows(industry, max(20, int(limit) * 3))
+    buckets: dict[tuple[str, str], dict[str, Any]] = {}
+    for r in source:
+        eid = str(r.get("equipment_id") or "")
+        tag = str(r.get("tag_name") or "")
+        if not eid or not tag:
+            continue
+        key = (eid, tag)
+        b = buckets.setdefault(
+            key,
+            {
+                "timestamp": r.get("timestamp"),
+                "equipment_id": eid,
+                "tag_name": tag,
+                "sum_value": 0.0,
+                "count": 0,
+                "quality_counts": {},
+            },
+        )
+        ts = _parse_dt(r.get("timestamp"))
+        bts = _parse_dt(b.get("timestamp"))
+        if ts and (bts is None or ts > bts):
+            b["timestamp"] = r.get("timestamp")
+        try:
+            b["sum_value"] += float(r.get("value") or 0.0)
+            b["count"] += 1
+        except Exception:
+            pass
+        q = str(r.get("quality") or "unknown")
+        qc = b["quality_counts"]
+        qc[q] = int(qc.get(q) or 0) + 1
+
+    rows: list[dict[str, Any]] = []
+    for b in buckets.values():
+        qc = b.get("quality_counts", {})
+        quality = max(qc.items(), key=lambda kv: kv[1])[0] if qc else "unknown"
+        rows.append(
+            {
+                "timestamp": b.get("timestamp"),
+                "equipment_id": b.get("equipment_id"),
+                "tag_name": b.get("tag_name"),
+                "value": round((b.get("sum_value") or 0.0) / max(1, int(b.get("count") or 0)), 3),
+                "quality": quality,
+                "source_protocol": "SILVER_PENDING_DLT",
+            }
+        )
+
+    rows.sort(key=lambda x: str(x.get("timestamp") or ""), reverse=True)
+    return rows[: max(5, min(120, int(limit)))]
+
+
+def _apply_live_fallback(
+    stage: dict[str, Any],
+    fallback_rows: list[dict[str, Any]],
+    *,
+    ts_field: str = "timestamp",
+    force_if_stale_s: int = 120,
+) -> dict[str, Any]:
+    if not fallback_rows:
+        return stage
+    table_rows = stage.get("rows") or []
+    latest_ts = _parse_dt(stage.get("latest_ts"))
+    stale = latest_ts is None or (datetime.now(timezone.utc) - latest_ts).total_seconds() > force_if_stale_s
+    if table_rows and not stale:
+        return stage
+
+    rows_30m, rows_5m, rows_prev_5m, fb_latest = _count_recent_rows(fallback_rows, ts_field=ts_field)
+    if rows_prev_5m <= 0:
+        rate_change_pct = 100.0 if rows_5m > 0 else 0.0
+    else:
+        rate_change_pct = ((rows_5m - rows_prev_5m) / rows_prev_5m) * 100.0
+
+    stage.update(
+        {
+            "rows": fallback_rows,
+            "rows_30m": rows_30m,
+            "rows_5m": rows_5m,
+            "rows_prev_5m": rows_prev_5m,
+            "rate_change_pct": round(rate_change_pct, 1),
+            "latest_ts": fb_latest.isoformat() if isinstance(fb_latest, datetime) else stage.get("latest_ts"),
+            "live_fallback": True,
+        }
+    )
+    return stage
+
+
 def _sim_silver_stage(table_fqn: str, limit: int) -> dict[str, Any]:
     latest_stmt = f"""
     SELECT timestamp, equipment_id, tag_name,
@@ -2408,14 +2806,22 @@ def _sim_silver_stage(table_fqn: str, limit: int) -> dict[str, Any]:
 
 
 def _sim_gold_stage(table_fqn: str, limit: int) -> dict[str, Any]:
+    catalog = table_fqn.split(".", 1)[0]
     latest_stmt = f"""
-    SELECT prediction_timestamp AS timestamp,
-           equipment_id,
+    WITH latest_protocol AS (
+      SELECT equipment_id, source_protocol,
+             ROW_NUMBER() OVER (PARTITION BY equipment_id ORDER BY timestamp DESC) AS rn
+      FROM {catalog}.bronze.sensor_readings
+    )
+    SELECT p.prediction_timestamp AS timestamp,
+           p.equipment_id,
            'anomaly_score' AS tag_name,
-           anomaly_score AS value,
-           anomaly_label AS quality,
-           'GOLD' AS source_protocol
-    FROM {table_fqn}
+           p.anomaly_score AS value,
+           p.anomaly_label AS quality,
+           COALESCE(lp.source_protocol, 'unknown') AS source_protocol
+    FROM {table_fqn} p
+    LEFT JOIN latest_protocol lp
+      ON p.equipment_id = lp.equipment_id AND lp.rn = 1
     ORDER BY prediction_timestamp DESC
     LIMIT {{limit}}
     """
@@ -2908,9 +3314,13 @@ def ui_simulator_flow(industry: str = "mining", limit: int = 30) -> dict:
     catalog = cfg.get("catalog", f"pdm_{industry}")
     bronze_fqn = f"{catalog}.bronze.sensor_readings"
     features_fqn = f"{catalog}.bronze.sensor_features"
-    predictions_fqn = f"{catalog}.bronze.pdm_predictions"
+    predictions_fqn = f"{catalog}.gold.pdm_predictions"
     bronze = _sim_flow_stage(bronze_fqn, "bronze_curated", limit, "bronze")
+    bronze = _apply_live_fallback(bronze, _sim_recent_bronze_rows(industry, limit))
+
     silver = _sim_silver_stage(features_fqn, limit)
+    silver = _apply_live_fallback(silver, _sim_recent_silver_rows(industry, limit))
+
     gold = _sim_gold_stage(predictions_fqn, limit)
     return {
         "industry": industry,
@@ -2936,6 +3346,129 @@ def ui_simulator_control(payload: dict) -> dict:
     return {"running": st["running"], "tick_interval_ms": st["tick_interval_ms"], "noise_factor": st["noise_factor"]}
 
 
+@app.post("/api/ui/scoring/run")
+def ui_scoring_run(payload: dict) -> dict:
+    industry = str(payload.get("industry", "mining") or "mining")
+    if industry not in INDUSTRIES:
+        raise HTTPException(status_code=400, detail="Invalid industry")
+    if WorkspaceClient is None:
+        raise HTTPException(status_code=500, detail="WorkspaceClient unavailable in this runtime")
+
+    try:
+        client = WorkspaceClient()
+        job_id = _resolve_scoring_job_id(client, industry)
+        if not job_id:
+            raise HTTPException(status_code=404, detail=f"Scoring job not found for industry={industry}")
+        # Use the configured per-industry job directly. This works for
+        # serverless task environments and avoids manual ad-hoc task submission.
+        resp = client.api_client.do("POST", "/api/2.1/jobs/run-now", body={"job_id": int(job_id)})
+        run_id = (resp or {}).get("run_id") if isinstance(resp, dict) else None
+        if not run_id:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Scoring run submission returned no run_id for industry={industry}. Response={resp}",
+            )
+        state = _LIVE_SCORING_STATE.setdefault(industry, {})
+        state["last_trigger_s"] = time.time()
+        if isinstance(resp, dict):
+            state["last_run_id"] = resp.get("run_id")
+            state["last_number_in_job"] = resp.get("number_in_job")
+        catalog = _industry_cfg(industry).get("catalog", f"pdm_{industry}")
+        keys = [k for k in _SQL_CACHE.keys() if isinstance(k, str) and k.startswith(f"{catalog}:predictions")]
+        for k in keys:
+            _SQL_CACHE.pop(k, None)
+        return {
+            "ok": True,
+            "industry": industry,
+            "job_id": int(job_id),
+            "run_id": run_id,
+            "number_in_job": (resp or {}).get("number_in_job") if isinstance(resp, dict) else None,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unable to trigger scoring run: {e}")
+
+
+@app.get("/api/ui/scoring/status")
+def ui_scoring_status(run_id: int) -> dict:
+    if WorkspaceClient is None:
+        raise HTTPException(status_code=500, detail="WorkspaceClient unavailable in this runtime")
+    try:
+        client = WorkspaceClient()
+        payload = client.api_client.do("GET", "/api/2.1/jobs/runs/get", query={"run_id": int(run_id)})
+        state = (payload or {}).get("state", {}) if isinstance(payload, dict) else {}
+        tasks = (payload or {}).get("tasks", []) if isinstance(payload, dict) else []
+        task_state = (tasks[0].get("state", {}) if tasks and isinstance(tasks[0], dict) else {})
+        return {
+            "ok": True,
+            "run_id": int(run_id),
+            "run_name": (payload or {}).get("run_name"),
+            "run_page_url": (payload or {}).get("run_page_url"),
+            "life_cycle_state": state.get("life_cycle_state"),
+            "result_state": state.get("result_state"),
+            "state_message": state.get("state_message"),
+            "task_life_cycle_state": task_state.get("life_cycle_state"),
+            "task_result_state": task_state.get("result_state"),
+            "task_state_message": task_state.get("state_message"),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unable to fetch scoring run status: {e}")
+
+
+@app.post("/api/ui/simulator/inject_and_score")
+def ui_simulator_inject_and_score(payload: dict) -> dict:
+    industry = str(payload.get("industry", "mining") or "mining")
+    if industry not in INDUSTRIES:
+        raise HTTPException(status_code=400, detail="Invalid industry")
+    ticks = max(1, min(120, int(payload.get("ticks", 12) or 12)))
+    wait_seconds = max(0.0, min(30.0, float(payload.get("wait_seconds", 6.0) or 0.0)))
+
+    st = _sim_state(industry)
+    enabled_assets = [aid for aid, cfg in (st.get("faults") or {}).items() if bool((cfg or {}).get("enabled"))]
+    if not enabled_assets:
+        raise HTTPException(status_code=400, detail="No enabled fault assets. Enable a fault before injecting.")
+
+    was_running = bool(st.get("running"))
+    keep_running = bool(payload.get("keep_running", True))
+    emitted = 0
+    try:
+        st["running"] = True
+        for _ in range(ticks):
+            before = int(st.get("reading_count", 0))
+            ui_simulator_tick({"industry": industry})
+            after = int(st.get("reading_count", 0))
+            emitted += max(0, after - before)
+    finally:
+        st["running"] = True if keep_running else was_running
+
+    dlt_resp: dict[str, Any] = {"ok": False, "error": "DLT update not triggered."}
+    try:
+        client = WorkspaceClient()
+        dlt_resp = _trigger_dlt_update(client, industry)
+    except Exception as e:
+        dlt_resp = {"ok": False, "error": f"Unable to trigger DLT update: {e}"}
+
+    if wait_seconds > 0:
+        time.sleep(wait_seconds)
+    try:
+        score_resp = ui_scoring_run({"industry": industry})
+    except HTTPException as e:
+        score_resp = {"ok": False, "error": str(getattr(e, "detail", "") or "Unable to trigger scoring run.")}
+    except Exception as e:
+        score_resp = {"ok": False, "error": f"Unable to trigger scoring run: {e}"}
+    return {
+        "ok": True,
+        "industry": industry,
+        "ticks": ticks,
+        "keep_running": keep_running,
+        "rows_emitted": emitted,
+        "enabled_fault_assets": enabled_assets,
+        "dlt": dlt_resp,
+        "score": score_resp,
+    }
+
+
 @app.post("/api/ui/simulator/tick")
 def ui_simulator_tick(payload: dict) -> dict:
     industry = payload.get("industry", "mining")
@@ -2947,10 +3480,24 @@ def ui_simulator_tick(payload: dict) -> dict:
     cfg = _industry_cfg(industry)
     protocol = cfg.get("simulator", {}).get("protocol", "OPC-UA")
     rows: list[dict[str, Any]] = []
-    for asset in _asset_defs(industry):
+    assets = _asset_defs(industry)
+    cfg_assets = _industry_cfg(industry).get("simulator", {}).get("assets", [])
+    cfg_by_id = {_asset_token_norm(str(a.get("id") or "")): a for a in cfg_assets if a.get("id")}
+    all_sensor_sets = list((_industry_cfg(industry).get("sensors", {}) or {}).values())
+    default_sensor_set = next((s for s in all_sensor_sets if isinstance(s, list) and s), [])
+
+    for asset in assets:
         aid = asset["id"]
         fault_cfg = st.get("faults", {}).get(aid, {"enabled": False, "severity": 0, "mode": "degradation"})
-        sensors = _sensor_defs(industry, asset.get("type", ""))[:3]
+        asset_type = str(asset.get("type", "") or "")
+        sensors = _sensor_defs(industry, asset_type)[:3]
+        if not sensors:
+            cfg_asset = cfg_by_id.get(_asset_token_norm(aid), {})
+            cfg_asset_type = str(cfg_asset.get("type", "") or "")
+            if cfg_asset_type:
+                sensors = _sensor_defs(industry, cfg_asset_type)[:3]
+        if not sensors:
+            sensors = default_sensor_set[:3]
         for sensor in sensors:
             low, high = sensor.get("normal_range", [10, 100])
             v = random.uniform(low, high)
@@ -2986,7 +3533,7 @@ def ui_simulator_tick(payload: dict) -> dict:
     try:
         _persist_simulator_rows(industry, rows)
     except Exception as e:
-        print(f"[simulator] failed to persist rows for {industry}: {e}")
+        raise HTTPException(status_code=500, detail=f"Simulator ingest failed for {industry}: {e}")
     return {"rows": st["recent_rows"], "reading_count": st["reading_count"], "running": True}
 
 

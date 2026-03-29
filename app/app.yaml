@@ -7,3 +7,16 @@ command:
   - "0.0.0.0"
   - "--port"
   - "8000"
+env:
+  - name: OT_PDM_OWNER_USER
+    value: "pravin.varma@databricks.com"
+  - name: OT_PDM_SCORING_JOB_ID_MINING
+    value: "946602210024255"
+  - name: OT_PDM_SCORING_JOB_ID_ENERGY
+    value: "778299542538872"
+  - name: OT_PDM_SCORING_JOB_ID_WATER
+    value: "985647723345135"
+  - name: OT_PDM_SCORING_JOB_ID_AUTOMOTIVE
+    value: "602507818889830"
+  - name: OT_PDM_SCORING_JOB_ID_SEMICONDUCTOR
+    value: "41975658448352"

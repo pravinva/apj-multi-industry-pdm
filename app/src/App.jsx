@@ -388,6 +388,22 @@ export default function App() {
   const [manualParsePending, setManualParsePending] = useState(false);
   const [manualFile, setManualFile] = useState(null);
   const [manualUploadPending, setManualUploadPending] = useState(false);
+  const [simScoringPending, setSimScoringPending] = useState(false);
+  const [simScoringRunId, setSimScoringRunId] = useState("");
+  const [simPipeline, setSimPipeline] = useState({
+    active: false,
+    phase: "",
+    runId: "",
+    runUrl: "",
+    runStatus: "",
+    runResult: "",
+    rowsEmitted: 0,
+    enabledAssets: [],
+    baseline: null,
+    startedAt: "",
+    completedAt: "",
+    error: ""
+  });
 
   const [streamRows, setStreamRows] = useState([]);
   const [streamCount, setStreamCount] = useState(0);
@@ -484,6 +500,15 @@ export default function App() {
   const currencyParam = demoCurrency === "AUTO" ? "" : `&currency=${encodeURIComponent(demoCurrency)}`;
 
   useEffect(() => {
+    // Prevent stale cross-industry asset IDs from triggering 404 API calls
+    // while the next industry's overview payload is loading.
+    setSelectedAssetId("");
+    setAssetDetail(null);
+    setModel(null);
+    setAdvancedPdm(null);
+  }, [industry]);
+
+  useEffect(() => {
     let cancelled = false;
     (async () => {
       const [ov, h, sim] = await Promise.all([
@@ -495,7 +520,16 @@ export default function App() {
       setOverview(ov);
       setHierarchy(h);
       setHierSelection(h);
-      setSimState(sim || {});
+      setSimState((prev) => {
+        const next = sim || {};
+        // Avoid a late initial fetch flipping the simulator to stopped
+        // if the user already started it.
+        return {
+          ...prev,
+          ...next,
+          running: Boolean(prev?.running || next?.running)
+        };
+      });
       setAgentMsgs((ov.messages || []).map((m) => ({ role: m.role, text: m.text, label: m.label || "AI" })));
       setFinanceMsgs([{
         role: "agent",
@@ -643,6 +677,36 @@ export default function App() {
   }, [page, simTab, industry]);
 
   useEffect(() => {
+    const rid = simPipeline.runId;
+    if (!rid || !simPipeline.active) return undefined;
+    let alive = true;
+    const poll = async () => {
+      const st = await getJson(`/api/ui/scoring/status?run_id=${encodeURIComponent(rid)}`, { ok: false });
+      if (!alive || !st?.ok) return;
+      const life = String(st.life_cycle_state || "");
+      const result = String(st.result_state || "");
+      setSimPipeline((prev) => ({
+        ...prev,
+        runStatus: life || prev.runStatus,
+        runResult: result || prev.runResult,
+        runUrl: st.run_page_url || prev.runUrl,
+        phase:
+          life === "TERMINATED"
+            ? (result === "SUCCESS" ? "Scoring completed successfully." : "Scoring completed with failure.")
+            : "Scoring job running...",
+        active: life !== "TERMINATED",
+        completedAt: life === "TERMINATED" ? new Date().toISOString() : prev.completedAt
+      }));
+    };
+    poll();
+    const timer = setInterval(poll, 3000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [simPipeline.runId, simPipeline.active]);
+
+  useEffect(() => {
     const timer = setInterval(() => setLiveClock(new Date().toLocaleString()), 1000);
     return () => clearInterval(timer);
   }, []);
@@ -658,6 +722,16 @@ export default function App() {
     if (assetSeverityFilter === "warning") return assets.filter((a) => a.status === "warning");
     return assets;
   }, [overview.assets, assetSeverityFilter]);
+
+  const simFlowDelta = useMemo(() => {
+    const b = simPipeline.baseline;
+    if (!b) return { bronze: 0, silver: 0, gold: 0 };
+    return {
+      bronze: Number(simFlow?.bronze?.rows_5m || 0) - Number(b.bronze || 0),
+      silver: Number(simFlow?.silver?.rows_5m || 0) - Number(b.silver || 0),
+      gold: Number(simFlow?.gold?.rows_5m || 0) - Number(b.gold || 0)
+    };
+  }, [simPipeline.baseline, simFlow?.bronze?.rows_5m, simFlow?.silver?.rows_5m, simFlow?.gold?.rows_5m]);
 
   const filteredStream = useMemo(
     () =>
@@ -760,6 +834,71 @@ export default function App() {
       simState
     );
     setSimState((prev) => ({ ...prev, ...next }));
+  }
+
+  async function triggerSimScoring() {
+    if (simScoringPending) return;
+    const baseline = {
+      bronze: Number(simFlow?.bronze?.rows_5m || 0),
+      silver: Number(simFlow?.silver?.rows_5m || 0),
+      gold: Number(simFlow?.gold?.rows_5m || 0)
+    };
+    setSimPipeline({
+      active: true,
+      phase: "Injecting faults and emitting simulator ticks...",
+      runId: "",
+      runUrl: "",
+      runStatus: "PENDING",
+      runResult: "",
+      rowsEmitted: 0,
+      enabledAssets: [],
+      baseline,
+      startedAt: new Date().toISOString(),
+      completedAt: "",
+      error: ""
+    });
+    setSimScoringPending(true);
+    try {
+      const res = await postJson(
+        "/api/ui/simulator/inject_and_score",
+        { industry, ticks: 12, wait_seconds: 6, keep_running: true },
+        { ok: false }
+      );
+      const rid = String(res?.run_id || res?.score?.run_id || "");
+      if (res?.ok && rid) {
+        setSimScoringRunId(rid);
+        setSimPipeline((prev) => ({
+          ...prev,
+          phase: "Scoring run submitted. Waiting for completion...",
+          runId: rid,
+          runStatus: "RUNNING",
+          rowsEmitted: Number(res?.rows_emitted || 0),
+          enabledAssets: Array.isArray(res?.enabled_fault_assets) ? res.enabled_fault_assets : []
+        }));
+      } else {
+        const scoreError = String(res?.score?.error || res?.detail || "").trim();
+        const flowHint = Number(res?.rows_emitted || 0) <= 0 ? " No simulator rows were emitted; check asset metadata/sensor mappings." : "";
+        setSimPipeline((prev) => ({
+          ...prev,
+          active: false,
+          runStatus: "FAILED",
+          rowsEmitted: Number(res?.rows_emitted || 0),
+          enabledAssets: Array.isArray(res?.enabled_fault_assets) ? res.enabled_fault_assets : [],
+          error: scoreError ? `${scoreError}${flowHint}` : `Unable to trigger end-to-end scoring run.${flowHint}`,
+          completedAt: new Date().toISOString()
+        }));
+      }
+    } catch {
+      setSimPipeline((prev) => ({
+        ...prev,
+        active: false,
+        runStatus: "FAILED",
+        error: "Unable to trigger end-to-end scoring run.",
+        completedAt: new Date().toISOString()
+      }));
+    } finally {
+      setSimScoringPending(false);
+    }
   }
 
   async function actOnRecommendation(equipmentId, decision) {
@@ -1081,15 +1220,15 @@ export default function App() {
     <>
       <header className="topbar">
         <div className="logo">
-          <svg width="24" height="24" viewBox="0 0 26 26" fill="none">
-            <polygon points="13,1 24,7 24,19 13,25 2,19 2,7" fill="#FF3621" />
-            <polygon points="13,6 20,10 20,18 13,22 6,18 6,10" fill="rgba(0,0,0,.25)" />
-            <polygon points="13,10 17,12 17,17 13,19 9,17 9,12" fill="rgba(255,255,255,.35)" />
+          <svg className="dbx-mark" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+            <polygon points="8,18 32,6 56,18 48,22 32,14 16,22" fill="#FF3621" />
+            <polygon points="8,32 32,20 56,32 48,36 32,28 16,36" fill="#FF3621" />
+            <polygon points="8,46 32,34 56,46 32,58" fill="#FF3621" />
           </svg>
           <span className="logo-text">Databricks</span>
         </div>
         <div className="topbar-div" />
-        <span className="app-name">{isJapanese ? "予知保全 オペレーション＆ビジネス価値ハブ" : "Predictive Maintenance Operations & Business Value Hub"}</span>
+        <span className="app-name">{isJapanese ? "予知保全 オペレーション＆ビジネス価値ハブ" : "Predictive Maintenance Hub"}</span>
         <div className="ind-tabs">
           {INDUSTRIES.map((ind) => (
             <button key={ind} className={`itab ${industry === ind ? "active" : ""}`} onClick={() => setIndustry(ind)}>
@@ -1110,7 +1249,7 @@ export default function App() {
         <nav className="sidebar">
           {PAGE_META.map(([pid, label, icon]) => (
             <button key={pid} className={`nav-btn ${page === pid ? "active" : ""}`} onClick={() => setPage(pid)}>
-              <span style={{ fontSize: 16, lineHeight: 1 }}>{icon}</span>
+              <span className="nav-icon">{icon}</span>
               <span>{t(label)}</span>
             </button>
           ))}
@@ -1822,8 +1961,30 @@ export default function App() {
                 <div className="sim-ctrl-group"><span className="sim-ctrl-label">{t("Noise factor")}</span><input className="sim-range" type="range" min="1" max="20" step="1" value={Math.round((simState.noise_factor || 0.02) * 100)} onChange={(e) => setSimState((p) => ({ ...p, noise_factor: Number(e.target.value) / 100 }))} /><span className="sim-ctrl-val">{(simState.noise_factor || 0.02).toFixed(2)}</span></div>
                 <button className="sim-start" style={{ display: simState.running ? "none" : "inline-block" }} onClick={() => setSimRunning(true)}>▶ {t("Start simulator")}</button>
                 <button className="sim-stop" style={{ display: simState.running ? "inline-block" : "none" }} onClick={() => setSimRunning(false)}>▮▮ {t("Stop")}</button>
+                <button className="sim-score" onClick={triggerSimScoring} disabled={simScoringPending}>
+                  {simScoringPending ? t("Injecting + scoring...") : t("Inject faults + score")}
+                </button>
                 <div className="sim-status"><div className={`sim-dot ${simState.running ? "running" : ""}`} /><span>{simState.running ? t("Running") : t("Stopped")}</span></div>
+                {!!simScoringRunId && <span className="sim-run-badge">{t("Scoring run")} #{simScoringRunId}</span>}
                 <span className="sim-reading-count">{(simState.reading_count || 0).toLocaleString()} {t("readings emitted")}</span>
+                {(simPipeline.active || simPipeline.completedAt) && (
+                  <div className="sim-pipeline-visual">
+                    <div className="sim-pipeline-head">
+                      <strong>{t("Fault -> Bronze -> Silver -> Gold -> Scoring")}</strong>
+                      <span>{simPipeline.phase || "Ready"}</span>
+                    </div>
+                    <div className="sim-pipeline-steps">
+                      <span className={`sim-step ${simPipeline.rowsEmitted > 0 ? "done" : simPipeline.active ? "live" : ""}`}>Inject {simPipeline.rowsEmitted || 0} rows</span>
+                      <span className={`sim-step ${simFlowDelta.bronze > 0 ? "done" : ""}`}>Bronze +{Math.max(0, simFlowDelta.bronze)}</span>
+                      <span className={`sim-step ${simFlowDelta.silver > 0 ? "done" : ""}`}>Silver +{Math.max(0, simFlowDelta.silver)}</span>
+                      <span className={`sim-step ${simFlowDelta.gold > 0 ? "done" : ""}`}>Gold +{Math.max(0, simFlowDelta.gold)}</span>
+                      <span className={`sim-step ${simPipeline.runStatus === "TERMINATED" && simPipeline.runResult === "SUCCESS" ? "done" : simPipeline.runStatus === "RUNNING" ? "live" : ""}`}>
+                        Score {simPipeline.runStatus || "pending"}{simPipeline.runResult ? `/${simPipeline.runResult}` : ""}
+                      </span>
+                    </div>
+                    {!!simPipeline.error && <div className="sim-pipeline-err">{simPipeline.error}</div>}
+                  </div>
+                )}
               </div>
               <div className="p6-main">
                 <div className="asset-config-panel">
