@@ -83,6 +83,56 @@ simulator:
       unit: crushing
       fault_severity: 0.0
       fault_start_offset_hours: 0
+    - id: HT-018
+      type: haul_truck
+      model: Cat 793F
+      site: gudai_darri
+      area: pit_c
+      unit: haul_fleet
+      inject_fault: tyre_blowout
+      fault_severity: 0.54
+      fault_start_offset_hours: -5
+    - id: HT-021
+      type: haul_truck
+      model: Cat 793F
+      site: gudai_darri
+      area: pit_b
+      unit: haul_fleet
+      fault_severity: 0.0
+      fault_start_offset_hours: 0
+    - id: HT-025
+      type: haul_truck
+      model: Cat 793F
+      site: gudai_darri
+      area: pit_a
+      unit: haul_fleet
+      fault_severity: 0.0
+      fault_start_offset_hours: 0
+    - id: HT-029
+      type: haul_truck
+      model: Cat 793F
+      site: gudai_darri
+      area: pit_c
+      unit: haul_fleet
+      inject_fault: engine_overheat
+      fault_severity: 0.49
+      fault_start_offset_hours: -3
+    - id: CV-006
+      type: conveyor
+      model: Overland Conveyor
+      site: gudai_darri
+      area: process
+      unit: crushing
+      fault_severity: 0.0
+      fault_start_offset_hours: 0
+    - id: CV-010
+      type: conveyor
+      model: Overland Conveyor
+      site: gudai_darri
+      area: process
+      unit: secondary_crushing
+      fault_severity: 0.0
+      fault_start_offset_hours: 0
 
 sensors:
   haul_truck:

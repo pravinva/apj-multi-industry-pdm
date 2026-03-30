@@ -6,7 +6,7 @@ const EMPTY_EXECUTIVE = {
   audience: "finance_executive",
   window: "last_30_days",
   currency: "USD",
-  value_statement: "Impact on EBIT saved through prescriptive maintenance: USD 0",
+  value_statement: "Prescriptive maintenance unlocked EBIT upside of USD 0.",
   ebit_saved: 0,
   ebit_saved_fmt: "USD 0",
   net_benefit: 0,
@@ -544,7 +544,7 @@ export default function App() {
       if (!cancelled && template) {
         setCfg(template);
         const tc = template.connector || {};
-        const targetFqn = [tc.target_catalog || template.catalog || `pdm_${industry}`, tc.target_schema || "bronze", tc.target_table || "_zerobus_staging"].join(".");
+        const targetFqn = [tc.target_catalog || template.catalog || `pdm_${industry}`, tc.target_schema || "bronze", tc.target_table || "pravin_zerobus"].join(".");
         setConn((prev) => ({
           ...prev,
           protocol: tc.protocol || prev.protocol,
@@ -623,7 +623,7 @@ export default function App() {
         workspace_host: conn.workspace_url,
         target_catalog: parsedTarget.catalog || cfg.catalog || `pdm_${industry}`,
         target_schema: parsedTarget.schema || "bronze",
-        target_table: parsedTarget.table || "_zerobus_staging",
+        target_table: parsedTarget.table || "pravin_zerobus",
         target_fqn: conn.target_fqn || ""
       }
     }));
@@ -1077,7 +1077,7 @@ export default function App() {
     const target = parseTargetFqn(conn.target_fqn) || {
       catalog: cfg.catalog || `pdm_${industry}`,
       schema: "bronze",
-      table: "_zerobus_staging"
+      table: "pravin_zerobus"
     };
     return {
       workspace_host: conn.workspace_url,
@@ -1126,7 +1126,7 @@ export default function App() {
     const result = await postJson("/api/zerobus/config/load", { protocol: conn.protocol }, { success: false, message: "No saved config" });
     if (result?.config) {
       const c = result.config;
-      const fqn = [c?.target?.catalog || cfg.catalog || `pdm_${industry}`, c?.target?.schema || "bronze", c?.target?.table || "_zerobus_staging"].join(".");
+      const fqn = [c?.target?.catalog || cfg.catalog || `pdm_${industry}`, c?.target?.schema || "bronze", c?.target?.table || "pravin_zerobus"].join(".");
       setConn((prev) => ({
         ...prev,
         workspace_url: c.workspace_host || prev.workspace_url,
@@ -1228,7 +1228,7 @@ export default function App() {
           <span className="logo-text">Databricks</span>
         </div>
         <div className="topbar-div" />
-        <span className="app-name">{isJapanese ? "予知保全 オペレーション＆ビジネス価値ハブ" : "Predictive Maintenance Hub"}</span>
+        <span className="app-name">{isJapanese ? "予知保全 オペレーション＆ビジネス価値ハブ" : "Predictive & Prescriptive Maintenance Hub"}</span>
         <div className="ind-tabs">
           {INDUSTRIES.map((ind) => (
             <button key={ind} className={`itab ${industry === ind ? "active" : ""}`} onClick={() => setIndustry(ind)}>
@@ -1660,7 +1660,7 @@ export default function App() {
                 <div className="stat-card"><div className="sc-label">Health score</div><div className="sc-val" style={{ color: statusColor(assetDetail.status) }}>{assetDetail.health_score_pct}%</div><div className="sc-sub">{assetDetail.status}</div></div>
                 <div className="stat-card"><div className="sc-label">RUL remaining</div><div className="sc-val">{assetDetail.rul_hours}h</div><div className="sc-sub">Estimated hours to failure</div></div>
                 <div className="stat-card"><div className="sc-label">Anomaly score</div><div className="sc-val">{assetDetail.anomaly_score}</div><div className="sc-sub">Isolation forest</div></div>
-                <div className="stat-card"><div className="sc-label">Protocol</div><div className="sc-val" style={{ fontSize: 18 }}>{model?.model_meta?.protocol || "OPC-UA"}</div><div className="sc-sub">Zerobus ingestion</div></div>
+                <div className="stat-card"><div className="sc-label">Protocol</div><div className="sc-val" style={{ fontSize: 18 }}>{model?.model_meta?.protocol || "OPC-UA"}</div><div className="sc-sub">Source: {model?.model_meta?.data_source || "UNKNOWN"}</div></div>
               </div>
 
               <div>
@@ -1796,17 +1796,23 @@ export default function App() {
                   <div className="mm-item"><div className="mm-label">{t("RUL accuracy (R²)")}</div><div className="mm-val">{model.model_meta.r2}</div></div>
                   <div className="mm-item"><div className="mm-label">{t("RMSE")}</div><div className="mm-val">{model.model_meta.rmse}</div></div>
                 </div>
+                {!model?.model_meta?.is_model_driven && (
+                  <div className="notice warning" style={{ marginBottom: 12 }}>
+                    {model?.model_meta?.status_message || "No scored prediction found yet. Train and score this asset first."}
+                  </div>
+                )}
                 <div className="p5-grid">
                   <div className="chart-card full">
                     <div className="cc-title">{t("RUL degradation curve")}</div>
                     <div className="rul-stats">
-                      <div className="rul-stat"><span className="rul-stat-l">{t("Current RUL")}</span><span className="rul-stat-v">{model.rul_hours}h</span></div>
+                      <div className="rul-stat"><span className="rul-stat-l">{t("Current RUL")}</span><span className="rul-stat-v">{model.rul_hours == null ? "n/a" : `${model.rul_hours}h`}</span></div>
                     </div>
                     <TrendLine values={model.rul_curve.values || []} color="#1B2431" height={180} showXLabels />
                   </div>
                   <div className="chart-card">
                     <div className="cc-title">{t("Feature importance — anomaly model")}</div>
                     <div className="anomaly-decomp">
+                      {!model.feature_importance?.length && <div className="cc-sub">No model-driven feature attribution available yet.</div>}
                       {model.feature_importance.map((f) => (
                         <div key={f.name} className="ad-row">
                           <div className="ad-name">{f.name}</div>
@@ -1819,6 +1825,7 @@ export default function App() {
                   <div className="chart-card">
                     <div className="cc-title">{t("Anomaly score decomposition")}</div>
                     <div className="anomaly-decomp">
+                      {!model.anomaly_decomposition?.length && <div className="cc-sub">No model-driven decomposition available yet.</div>}
                       {model.anomaly_decomposition.map((f) => (
                         <div key={`d-${f.name}`} className="ad-row">
                           <div className="ad-name">{f.name}</div>
@@ -1849,11 +1856,15 @@ export default function App() {
                       <div className="exec-trend-card">
                         <div className="exec-card-title">Prescriptive optimizer</div>
                         <div className="exec-fin-sub">Window: {(advancedPdm.prescriptive_optimizer || {}).recommended_window || "n/a"}</div>
+                        <div className="exec-fin-sub">Mode: {(advancedPdm.prescriptive_optimizer || {}).event_type || "n/a"} · Source: {(advancedPdm.prescriptive_optimizer || {}).data_source || "UNKNOWN"}</div>
                         <div className="exec-fin-val" style={{ fontSize: 24 }}>
                           {(advancedPdm.prescriptive_optimizer || {}).expected_avoided_loss_fmt || "—"}
                         </div>
                         <div className="exec-fin-sub">
                           Planned intervention: {(advancedPdm.prescriptive_optimizer || {}).planned_intervention_cost_fmt || "—"}
+                        </div>
+                        <div className="exec-fin-sub">
+                          Expected failure cost: {(advancedPdm.prescriptive_optimizer || {}).expected_failure_cost_fmt || "—"}
                         </div>
                         <div className="exec-chip-row">
                           {((advancedPdm.prescriptive_optimizer || {}).actions || []).map((a, i) => (

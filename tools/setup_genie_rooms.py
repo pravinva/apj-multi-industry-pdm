@@ -45,7 +45,8 @@ def _space_payload(industry: str) -> dict[str, Any]:
             f"{catalog}.bronze.sensor_readings",
             f"{catalog}.lakebase.parts_inventory",
             f"{catalog}.lakebase.maintenance_schedule",
-            f"{catalog}.gold.feature_vectors",
+            f"{catalog}.bronze.feature_vectors",
+            f"{catalog}.gold.financial_impact_events",
         ]
     )
     def _hid(label: str) -> str:
@@ -81,6 +82,7 @@ def _space_payload(industry: str) -> dict[str, Any]:
                 f"- {catalog}.bronze.sensor_readings (stream-level context)\n",
                 f"- {catalog}.lakebase.parts_inventory (parts stock/readiness)\n",
                 f"- {catalog}.lakebase.maintenance_schedule (maintenance windows)\n",
+                f"- {catalog}.gold.financial_impact_events (event-level OT+finance impact)\n",
             ]
         }
     ]

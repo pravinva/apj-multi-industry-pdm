@@ -45,17 +45,27 @@ catalog = config["catalog"]
 mlflow.set_registry_uri("databricks-uc")
 mlflow.set_experiment(f"/Shared/ot-pdm-intelligence/{INDUSTRY}")
 
+MIN_ANOMALY_SAMPLES = 5
+MIN_RUL_SAMPLES = 12
+
 
 def train_asset_models(equipment_id: str, spark):
     x, _ = get_feature_matrix(spark, catalog, equipment_id, n_hours=720)
-    if x.empty or len(x) < 50:
-        return {"equipment_id": equipment_id, "status": "skipped", "reason": "insufficient_data"}
+    if x.empty or len(x) < MIN_ANOMALY_SAMPLES:
+        return {
+            "equipment_id": equipment_id,
+            "status": "skipped",
+            "reason": f"insufficient_data(n={len(x)})",
+        }
 
     asset_conf = next((a for a in config["simulator"]["assets"] if a["id"] == equipment_id), {})
     fault_offset = abs(asset_conf.get("fault_start_offset_hours", 0))
-    n_healthy = max(20, len(x) - int(fault_offset / 0.25))
+    # Keep healthy window bounded to available rows so smaller but real datasets can train.
+    n_healthy = max(3, len(x) - int(fault_offset / 0.25))
+    n_healthy = min(n_healthy, len(x))
     x_healthy = x.iloc[:n_healthy]
 
+    anomaly_metrics = {}
     with mlflow.start_run(run_name=f"{equipment_id}_anomaly"):
         anomaly_model = OTPdMAnomalyModel(equipment_id)
         anomaly_model.fit(x_healthy)
@@ -68,15 +78,30 @@ def train_asset_models(equipment_id: str, spark):
             },
             catalog,
         )
+        anomaly_metrics = {
+            "mean_score_healthy": float(scores[:n_healthy].mean()),
+            "mean_score_fault": float(scores[n_healthy:].mean()) if len(scores) > n_healthy else 0.0,
+        }
 
-    with mlflow.start_run(run_name=f"{equipment_id}_rul"):
-        y = generate_rul_labels(x, asset_conf)
-        rul_model = OTPdMRULModel(equipment_id)
-        rul_model.fit(x, y)
-        metrics = rul_model.evaluate(x, y)
-        rul_model.log_to_mlflow(metrics, catalog)
+    rul_status = "skipped"
+    metrics = {"rmse": None, "r2": None, "mae": None}
+    if len(x) >= MIN_RUL_SAMPLES:
+        with mlflow.start_run(run_name=f"{equipment_id}_rul"):
+            y = generate_rul_labels(x, asset_conf)
+            rul_model = OTPdMRULModel(equipment_id)
+            rul_model.fit(x, y)
+            metrics = rul_model.evaluate(x, y)
+            rul_model.log_to_mlflow(metrics, catalog)
+        rul_status = "trained"
 
-    return {"equipment_id": equipment_id, "status": "trained", **metrics}
+    return {
+        "equipment_id": equipment_id,
+        "status": "trained",
+        "rul_status": rul_status,
+        "n_rows": len(x),
+        **anomaly_metrics,
+        **metrics,
+    }
 
 
 def train_all_assets(spark):

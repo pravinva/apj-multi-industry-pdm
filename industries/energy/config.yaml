@@ -41,6 +41,12 @@ simulator:
     - { id: BESS-01, type: bess, model: "Tesla Megapack", site: northhub, area: storage, unit: battery, inject_fault: thermal_runaway, fault_severity: 0.71, fault_start_offset_hours: -6 }
     - { id: TX-07, type: transformer, model: "ABB 220kV", site: northhub, area: substation, unit: transmission, fault_severity: 0.0, fault_start_offset_hours: 0 }
     - { id: WT-011, type: wind_turbine, model: "Vestas V150", site: northhub, area: wind, unit: gen, fault_severity: 0.0, fault_start_offset_hours: 0 }
+    - { id: WT-015, type: wind_turbine, model: "Vestas V150", site: northhub, area: wind, unit: gen, fault_severity: 0.0, fault_start_offset_hours: 0 }
+    - { id: WT-018, type: wind_turbine, model: "Vestas V150", site: northhub, area: wind, unit: gen, inject_fault: gearbox_degradation, fault_severity: 0.48, fault_start_offset_hours: -4 }
+    - { id: BESS-03, type: bess, model: "Tesla Megapack", site: northhub, area: storage, unit: battery, fault_severity: 0.0, fault_start_offset_hours: 0 }
+    - { id: BESS-04, type: bess, model: "Tesla Megapack", site: northhub, area: storage, unit: battery, fault_severity: 0.0, fault_start_offset_hours: 0 }
+    - { id: TX-11, type: transformer, model: "ABB 220kV", site: northhub, area: substation, unit: transmission, fault_severity: 0.0, fault_start_offset_hours: 0 }
+    - { id: TX-15, type: transformer, model: "ABB 220kV", site: northhub, area: substation, unit: transmission, inject_fault: transformer_thermal_failure, fault_severity: 0.52, fault_start_offset_hours: -2 }
 
 sensors:
   wind_turbine:

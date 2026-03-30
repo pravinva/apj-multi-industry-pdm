@@ -39,6 +39,12 @@ simulator:
     - { id: WR-14, type: robotic_welder, model: "FANUC ARC Mate", site: nagoya, area: body, unit: line_a, inject_fault: servo_degradation, fault_severity: 0.65, fault_start_offset_hours: -10 }
     - { id: CNC-22, type: cnc_machine, model: "Mazak Integrex", site: nagoya, area: machining, unit: line_b, fault_severity: 0.0, fault_start_offset_hours: 0 }
     - { id: CV-A3, type: assembly_conveyor, model: "Conveyor A3", site: nagoya, area: assembly, unit: line_c, fault_severity: 0.0, fault_start_offset_hours: 0 }
+    - { id: TP-11, type: stamping_press, model: "AIDA 1200T", site: nagoya, area: press, unit: line_b, fault_severity: 0.0, fault_start_offset_hours: 0 }
+    - { id: TP-16, type: stamping_press, model: "AIDA 1200T", site: nagoya, area: press, unit: line_c, inject_fault: die_wear, fault_severity: 0.44, fault_start_offset_hours: -2 }
+    - { id: WR-22, type: robotic_welder, model: "FANUC ARC Mate", site: nagoya, area: body, unit: line_b, fault_severity: 0.0, fault_start_offset_hours: 0 }
+    - { id: WR-28, type: robotic_welder, model: "FANUC ARC Mate", site: nagoya, area: body, unit: line_c, fault_severity: 0.0, fault_start_offset_hours: 0 }
+    - { id: CNC-31, type: cnc_machine, model: "Mazak Integrex", site: nagoya, area: machining, unit: line_c, fault_severity: 0.0, fault_start_offset_hours: 0 }
+    - { id: CV-A8, type: assembly_conveyor, model: "Conveyor A8", site: nagoya, area: assembly, unit: line_d, fault_severity: 0.0, fault_start_offset_hours: 0 }
 
 sensors:
   stamping_press:

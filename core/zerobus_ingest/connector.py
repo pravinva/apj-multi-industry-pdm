@@ -179,8 +179,8 @@ def build_connector_config(
     token = os.getenv("DATABRICKS_TOKEN", "")
     workspace_host = os.getenv("DATABRICKS_HOST", "")
 
-    # The connector supports writing to Databricks directly; we keep Bronze staging
-    # explicit so DLT can own schema/quality processing from a single source table.
+    # The connector writes to the canonical per-industry Bronze landing table so
+    # simulator and connector ingest share the same DLT source.
     return {
         "web_port": int(os.getenv("ZEROBUS_WEB_PORT", str(defaults.get("web_port", 8080)))),
         "metrics_port": int(
@@ -193,7 +193,7 @@ def build_connector_config(
             "token": token,
             "catalog": catalog,
             "schema": "bronze",
-            "target_table": "_zerobus_staging",
+            "target_table": "pravin_zerobus",
             "quality_codes": True,
             "isa95_levels": [l["key"] for l in cfg.get("isa95_hierarchy", {}).get("levels", [])],
             "industry": industry,
@@ -211,7 +211,7 @@ def _write_temp_config(config: dict[str, Any]) -> Path:
 def ensure_staging_table(spark, catalog: str) -> None:
     spark.sql(
         f"""
-        CREATE TABLE IF NOT EXISTS {catalog}.bronze._zerobus_staging (
+        CREATE TABLE IF NOT EXISTS {catalog}.bronze.pravin_zerobus (
           site_id STRING,
           area_id STRING,
           unit_id STRING,

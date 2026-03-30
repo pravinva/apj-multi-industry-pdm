@@ -1,126 +1,230 @@
 # OT PdM Intelligence
 
-Config-driven predictive maintenance accelerator for heavy-asset industries.
-Five industry skins. One Databricks Asset Bundle. Deploy in under 15 minutes.
+Config-driven industrial maintenance application that combines predictive and prescriptive intelligence across multiple industry skins.
 
-## Industries
+## What This App Is
+
+This app is intentionally both:
+
+- **Predictive maintenance**: estimates anomaly risk and remaining useful life (RUL) from telemetry.
+- **Prescriptive maintenance**: recommends actions using risk predictions plus operational and financial context.
+
+## Why Predictive and Prescriptive Both
+
+Predictive outputs answer "what is likely to happen."
+Prescriptive outputs answer "what should we do now."
+
+Using only predictive signals often leaves an execution gap. Operations and finance still need:
+
+- intervention timing,
+- cost and savings view,
+- expected downside if no action is taken,
+- and actionability under constraints (crew, windows, parts, work orders).
+
+The app closes this gap by computing recommendations and business impact on top of model outputs.
+
+## Supported Industries
 
 | Industry | Anchor account | Pipeline context |
 |---|---|---|
 | `mining` | Rio Tinto | Haul fleet and conveyor reliability |
-| `energy` | Alinta | Wind + BESS + transformer availability |
+| `energy` | Alinta | Wind, BESS, transformer availability |
 | `water` | Sydney Water | Pumping and leak-risk operations |
-| `automotive` | Toyota | Press/weld line stop-risk reduction |
-| `semiconductor` | Renesas | Etch/litho fab yield protection |
+| `automotive` | Toyota | Press and weld line stop-risk reduction |
+| `semiconductor` | Renesas | Etch and lithography yield protection |
 
-## Architecture
+## End-to-End Flow
 
 ```text
 OT source (simulator or Zerobus)
-  -> Bronze DLT (quality-aware sensor stream)
-  -> Silver DLT (feature engineering)
-  -> Gold DLT (feature vectors + predictions)
-  -> MLflow models (anomaly + RUL per asset)
-  -> Agent tools (UC functions on Lakebase + Gold)
-  -> Databricks App (FastAPI + React)
+  -> Bronze landing tables
+  -> Bronze DLT (sensor_readings, pi_tag_readings)
+  -> Silver DLT (sensor_features, ot_pi_aligned)
+  -> Gold DLT (feature_vectors, pdm_predictions, maintenance_alerts, financial_impact_events)
+  -> ML training/scoring jobs (anomaly + RUL via MLflow)
+  -> FastAPI service layer
+  -> React UI (fleet, drilldown, model, finance, simulator)
 ```
 
-- **Ingest**: OT simulator or Zerobus connector writes Bronze-compatible schema.
-- **Transform**: DLT Bronze -> Silver -> Gold with config-driven features.
-- **ML**: per-asset anomaly + RUL models registered in Unity Catalog.
-- **Lakebase**: parts inventory, maintenance schedule, and work orders.
-- **GenAI**: agent tools as UC functions and serving endpoint integration.
-- **UI**: React + FastAPI app (`app/`) with API fallback behavior.
+## Architecture and Modules
 
-## App Design
+### Core data and ML modules
 
-- **Page 1 - Fleet**: starts with an executive value view (EBIT impact), then drills into fleet risk and operational actions.
-- **Page 2 - Drilldown**: per-asset telemetry, anomaly and RUL context.
-- **Page 3 - ISA-95**: hierarchy browsing and roll-up health.
-- **Page 4 - Stream**: near-real-time row stream with quality/protocol flags.
-- **Page 5 - Model**: model status and explainability views.
-- **Page 6 - Simulator**: fault controls, configuration and connector setup.
-- **Advanced PdM Command Layer** (on Model page): failure-mode ranking, prescriptive optimizer, spare-parts risk, MLOps health, and manual-aware guidance.
-- **Manual Upload + Index**: upload PDF/MD/TXT manuals from UI, parse text, and persist chunked references in UC Delta (`bronze.manual_reference_chunks`) for retrieval/citations.
+- `core/dlt/bronze.py`
+  - Normalizes landing streams and creates Bronze DLT tables.
+- `core/dlt/silver.py`
+  - Feature engineering and OT/PI alignment (`ot_pi_aligned`).
+- `core/dlt/gold.py`
+  - Prediction-ready vectors and business-facing outputs including `financial_impact_events`.
+- `core/ml/train.py`
+  - Per-industry model training workflow.
+- `core/ml/batch_score.py`
+  - Batch scoring pipeline using registered MLflow models.
+- `core/ml/features.py`
+  - Canonical feature read path and feature preparation logic.
 
-## Manual RAG Pattern (Demo)
+### Ingestion and simulation modules
 
-Manual retrieval is wired as a lightweight RAG pattern:
+- `core/zerobus_ingest/connector.py`
+  - First-mile OT connectivity integration.
+- `core/simulator/engine.py`
+  - Deterministic and fault-injected telemetry generation for demos.
+- `core/simulator/sdt.py`
+  - Swinging Door Trending compression logic at simulator stage.
 
-- Ingestion: manuals from `industries/<skin>/manuals` and UI uploads
-- Parsing: text extraction for `.md`, `.txt`, and `.pdf` (`pypdf`)
-- Index: chunked rows persisted in UC Delta table `pdm_<industry>.bronze.manual_reference_chunks`
-- Retrieval: token-overlap ranking against user prompt and asset context
-- Grounding: top snippets injected into Genie prompt with source-aware instructions
-- Citations: source list shown in chat bubbles (maintenance and finance panels)
+### Application and user interface modules
 
-For production-scale semantic retrieval, add vector embeddings + Databricks Vector Search on top of this Delta index.
+- `app/server.py`
+  - FastAPI backend, SQL orchestration, model and finance payload shaping, action APIs.
+- `app/src/App.jsx`
+  - React UI for fleet, model, simulator, and executive finance views.
+- `app/src/globals.css`
+  - Shared typography and layout styles.
 
-## Executive Value Layer (Finance + ERP Simulation)
+### Deployment and bootstrap modules
 
-The executive view now includes a finance-first narrative for EBC use:
+- `databricks.yml`
+  - Bundle resources (jobs, DLT, app deployment, variables).
+- `RUNME_BOOTSTRAP_ALL.py`
+  - One-run workspace bootstrap for all industries.
+- `tools/bootstrap_all_industries.py`
+  - Scripted bootstrap path.
+- `industries/deployment_matrix.yaml`
+  - Resource consistency matrix across industry skins.
+- `tools/reconcile_industry_matrix.py`
+  - Audit and reconcile resources against the matrix.
 
-- Value statement: **Impact on EBIT saved through prescriptive maintenance**
-- KPI cards: EBIT saved, ROI, payback days, EBIT margin lift (bps)
-- Value bridge: avoided downtime + quality + energy, minus intervention and platform cost
-- ERP context: plant code, fiscal period, planner group, cost centers
-- Work-order simulation: recommended WOs with expected failure cost, intervention cost, and net EBIT impact
+## Detailed Code Flow
 
-### Multi-skin sector-specific ERP and financial assumptions
+1. **Telemetry landing**
+   - Simulator and Zerobus connector both land into canonical Bronze schema.
+2. **Bronze to Silver**
+   - DLT validates and standardizes raw rows.
+   - Silver computes features and creates alignment tables.
+3. **PI plus OT alignment**
+   - Silver table `ot_pi_aligned` links OT and PI streams using time proximity.
+   - `data_source` provenance is carried to UI and downstream logic.
+4. **Silver to Gold**
+   - Gold materializes feature vectors, predictions, and maintenance alerts.
+5. **Scoring and model lifecycle**
+   - Training jobs register models in MLflow.
+   - Scoring jobs read champion/current model aliases and write outputs.
+6. **OT plus Finance integration**
+   - Gold `financial_impact_events` combines prediction severity with planning and cost assumptions.
+   - Backend exposes computed impacts for executive and prescriptive panels.
+7. **App rendering**
+   - FastAPI returns operational and executive payloads.
+   - React renders model, maintenance, and finance decision views.
 
-Each skin has distinct ERP and finance assumptions (not shared defaults):
+## Predictive and Prescriptive Features in UI
 
-- `mining`: plant/cost centers, mining downtime economics, AUD
-- `energy`: grid and storage work centers, outage economics, AUD
-- `water`: distribution + quality operations economics, AUD
-- `automotive`: line-stop and quality economics, JPY
-- `semiconductor`: fab yield and tool downtime economics, USD
+### Predictive
 
-These are simulated in backend payload generation and surfaced in the executive UI for each industry skin.
+- Asset anomaly score and severity.
+- RUL degradation views.
+- Health rollups and alerting.
+- Failure mode contextualization.
 
-## Quick Start (clean workspace)
+### Prescriptive
 
-1. Clone repository.
-2. Validate bundle:
+- Recommended intervention windows.
+- Expected failure cost vs planned intervention cost.
+- Expected avoided loss and action options.
+- Work-order and financial decision framing.
+
+## Currency and Localization
+
+The app supports both currency adaptation and localization-aware presentation.
+
+### Currency handling
+
+- Supported display currencies include `USD`, `AUD`, and `JPY` (plus automatic mode).
+- Backend computes native values and converts to selected display currency.
+- Financial cards and executive statements are rendered in selected currency format.
+- Industry assumptions are sector-specific (for example, automotive defaults to JPY, water and mining commonly to AUD, semiconductor often to USD).
+
+### Localization behavior
+
+- UI includes localized labels and presentation logic (including Japanese title path in header rendering).
+- Backend keeps numeric and unit payloads normalized while frontend handles language-facing rendering.
+- Currency, date window, and narrative statements are designed for executive readability across regional audiences.
+
+## PI plus OT Integration
+
+PI simulation is integrated alongside OT ingestion, not as a separate disconnected demo path.
+
+- PI rows land to `bronze.pi_simulated_tags`.
+- OT rows land to canonical OT Bronze source.
+- Silver `ot_pi_aligned` performs time-aligned join and records provenance (`BOTH`, `OT_ONLY`, `UNKNOWN`).
+- This provenance is used in downstream prescriptive context and model metadata displayed in the UI.
+
+## OT plus Finance Integration
+
+Prescriptive value is grounded in finance-aware outputs.
+
+- Gold table `gold.financial_impact_events` merges prediction context with operational planning inputs.
+- Output fields include:
+  - `event_type`,
+  - `maintenance_cost`,
+  - `expected_failure_cost`,
+  - `avoided_cost`,
+  - `total_event_cost`,
+  - and source/provenance metadata.
+- Finance page and advanced maintenance sections consume these fields to provide recommendation economics, not just risk scores.
+
+## App Pages
+
+- **Fleet page**: executive value, portfolio risk, decision cards.
+- **Drilldown page**: asset-level telemetry and risk context.
+- **ISA-95 page**: hierarchy navigation and rolled health.
+- **Stream page**: recent ingest rows with quality and protocol context.
+- **Model page**: model outputs and advanced maintenance panels.
+- **Simulator page**: fault controls and ingestion configuration.
+
+## Manual Retrieval Pattern
+
+Manual retrieval is implemented as a lightweight grounded pattern:
+
+- Ingestion from `industries/<skin>/manuals` and UI uploads.
+- Text extraction for markdown, text, and PDF files.
+- Chunk storage in `pdm_<industry>.bronze.manual_reference_chunks`.
+- Prompt-time ranking by token overlap and context.
+- Source snippets included in agent responses for traceability.
+
+## Quick Start
+
+1. Validate bundle:
    - `databricks bundle validate --target dev -p DEFAULT`
-3. Deploy:
+2. Deploy bundle:
    - `databricks bundle deploy --target dev -p DEFAULT`
-4. Open `RUNME_BOOTSTRAP_ALL.py` in Databricks and run top-to-bottom.
-5. Confirm data appears in Bronze/Silver/Gold/Finance tables.
-6. Open app endpoint.
+3. Run bootstrap notebook:
+   - `RUNME_BOOTSTRAP_ALL.py` in Databricks.
+4. Verify data in Bronze, Silver, Gold, and finance tables.
+5. Open app endpoint from Databricks Apps.
 
-## Portable Workspace Bootstrap (single notebook)
+## Bootstrap Notes
 
-Use `RUNME_BOOTSTRAP_ALL.py` as the one notebook for a fresh workspace deployment.
+`RUNME_BOOTSTRAP_ALL.py` provisions all configured industries in one run:
 
-What it does in one run:
-- Creates catalogs/schemas for all configured industry skins.
-- Applies core DDL (`core/catalog/schema.sql`) and finance table setup.
-- Seeds Lakebase and operational demo data from each `industries/*/seed` directory.
-- Backfills 2 years of daily finance data into `finance.pm_financial_daily`.
-- Grants read/use permissions for demo users.
-- Optionally triggers initial runs of training/scoring/finance jobs.
+- catalog and schema creation,
+- core DDL application (`core/catalog/schema.sql`),
+- seed and planning data,
+- finance history backfill,
+- grants,
+- optional trigger of training/scoring jobs.
 
-Notebook widgets:
-- `industries_csv` (default: all 5 skins)
-- `history_days` (default: 730)
-- `grant_principal` (default: `account users`)
-- `trigger_jobs` (`true` / `false`)
-- `reset_existing` (`true` / `false`) - truncate and reseed demo tables
-- `seed_demo_planning_case` (`true` / `false`) - seed deterministic planning case rows (includes mining `HT-001`, `HT-012`, `HT-007`)
+Key widgets:
 
-For portability across workspaces, scheduled jobs now use job-cluster definitions (no hardcoded cluster IDs).
+- `industries_csv`
+- `history_days`
+- `grant_principal`
+- `trigger_jobs`
+- `reset_existing`
+- `seed_demo_planning_case`
 
-### Bootstrap as a Databricks Job
+## Industry Deploy and Reconcile
 
-Bundle now includes `ot_pdm_workspace_bootstrap_job` which runs `RUNME_BOOTSTRAP_ALL.py` as a single task.
-
-Run it after deploy:
-- `databricks bundle run --target dev -p DEFAULT ot_pdm_workspace_bootstrap_job`
-
-This provisions all tables/data/finance history and triggers initial training/scoring/backfill runs.
-
-## Switching Industries
+Deploy a specific industry:
 
 - `databricks bundle deploy --target dev -p DEFAULT --var industry=mining`
 - `databricks bundle deploy --target dev -p DEFAULT --var industry=energy`
@@ -128,92 +232,29 @@ This provisions all tables/data/finance history and triggers initial training/sc
 - `databricks bundle deploy --target dev -p DEFAULT --var industry=automotive`
 - `databricks bundle deploy --target dev -p DEFAULT --var industry=semiconductor`
 
-### Repeatable industry matrix reconcile
+Resource consistency checks:
 
-Use `industries/deployment_matrix.yaml` as the single source of truth for which
-industries must have matching OT-PDM resources.
+- Dry run:
+  - `python tools/reconcile_industry_matrix.py --owner <your-user>`
+- Apply reconcile:
+  - `python tools/reconcile_industry_matrix.py --owner <your-user> --apply`
 
-- Dry-run audit:
-  - `python tools/reconcile_industry_matrix.py --owner pravin.varma@databricks.com`
-- Reconcile from config (create missing jobs from the existing pattern, then verify):
-  - `python tools/reconcile_industry_matrix.py --owner pravin.varma@databricks.com --apply`
+## Local Development and Validation
 
-## Connector Architecture
+- Backend:
+  - `cd app && uvicorn server:app --reload --port 8000`
+- Frontend:
+  - `cd app && npm install && npm run dev`
+- Build verification:
+  - `cd app && npm run build`
+- Tests:
+  - `python3 -m pytest tests/`
 
-`core/zerobus_ingest/connector.py` wraps `unified-ot-zerobus-connector` for production OT networks.
-For FE/demo workflows use `USE_SIMULATOR=true` to produce identical Bronze schema with synthetic but physics-shaped data.
-Reference: [unified-ot-zerobus-connector](https://github.com/pravinva/unified-ot-zerobus-connector).
+## Summary
 
-### Real Zerobus Ingest (all protocols)
+This project is a single multi-industry codebase for reliability intelligence that:
 
-The repo now supports a real first-mile connector flow with defaults for:
-
-- OPC-UA
-- MQTT JSON
-- MQTT Sparkplug B
-- Modbus TCP
-- CANBUS
-
-Defaults live in `core/zerobus_ingest/defaults.yaml` and can be overridden with `ZEROBUS_*` env vars.
-
-#### Databricks (real ingestion path)
-
-1. Set `USE_SIMULATOR=false` when deploying/running Bronze.
-2. Run job `ot_pdm_zerobus_connector_job` (added in `databricks.yml`).
-3. Connector writes into `{catalog}.bronze._zerobus_staging`.
-4. Bronze DLT reads `_zerobus_staging` and materializes `{catalog}.bronze.sensor_readings`.
-
-#### Local devloop (easy defaults)
-
-- Start simulator + connector:
-  - `python tools/zerobus_easy_start.py`
-- Skip simulator and only run connector:
-  - `python tools/zerobus_easy_start.py --no-simulator`
-
-The default simulator endpoint/ports align with `ot_simulator` from
-[unified-ot-zerobus-connector](https://github.com/pravinva/unified-ot-zerobus-connector/tree/main/ot_simulator).
-
-#### Swinging Door Trending (SDT) in simulator
-
-SDT compression is implemented in `core/simulator/sdt.py` and applied in
-`core/simulator/engine.py` before writing to
-`{catalog}.bronze._simulator_staging`. This is intentional so compression
-happens at the edge/simulator side, not in the Zerobus ingest connector.
-
-Per-industry controls are under `simulator.sdt` in `industries/*/config.yaml`:
-
-- `enabled`: turn SDT on/off
-- `epsilon_abs`: absolute SDT door width
-- `epsilon_pct`: percentage-based SDT door width
-- `heartbeat_ms`: force periodic keepalive points
-- `tag_overrides`: per-tag SDT tuning map
-
-Full runbook: `docs/zerobus-real-ingest.md`.
-
-## Ten Differentiators
-
-1. First-mile OT connectivity path (Zerobus)
-2. Physics-oriented simulator with fault modes
-3. OPC-UA quality codes as first-class fields
-4. ISA-95 hierarchy mapped into Unity Catalog
-5. Config-driven multi-industry deployment
-6. Dual per-asset ML (anomaly + RUL)
-7. Industry-grounded agent responses
-8. Genie + agent dual interaction model
-9. Lakebase operational data pattern
-10. Cross-industry reuse with one codebase
-
-## Local UI Validation
-
-Run local validation before remote app deployment:
-
-- Backend: `cd app && uvicorn server:app --reload --port 8000`
-- Frontend: `cd app && npm install && npm run dev`
-- Build check: `cd app && npm run build`
-
-If npm install is blocked by corporate SSL chain issues, use the local network-approved npm registry configuration and rerun build verification.
-
-## Integration Testing
-
-- Unit/regression tests: `python3 -m pytest tests/`
-- Integration scaffold: `tests/integration/test_full_stack.py`
+- predicts failures and degradation,
+- prescribes maintenance decisions with business context,
+- aligns PI and OT data streams,
+- and translates model signals into finance-aware operational action.

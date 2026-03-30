@@ -16,4 +16,4 @@ def test_connector_writes_to_bronze_staging():
     db = cfg["databricks"]
     assert db["catalog"] == "pdm_energy"
     assert db["schema"] == "bronze"
-    assert db["target_table"] == "_zerobus_staging"
+    assert db["target_table"] == "pravin_zerobus"

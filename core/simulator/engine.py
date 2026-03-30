@@ -23,6 +23,10 @@ class OTSimulator:
         self.config = config
         self.spark = spark
         self.catalog = catalog
+        self.landing_table = (
+            config.get("simulator", {}).get("landing_table")
+            or "pravin_zerobus"
+        )
         self.tick_interval_s = config["simulator"]["tick_interval_ms"] / 1000
         self.noise = config["simulator"]["noise_factor"]
         self._injectors: dict[str, FaultInjector] = {}
@@ -107,7 +111,7 @@ class OTSimulator:
             if rows:
                 df = self.spark.createDataFrame([Row(**r) for r in rows], schema=schema)
                 df.write.format("delta").mode("append").saveAsTable(
-                    f"{self.catalog}.bronze._simulator_staging"
+                    f"{self.catalog}.bronze.{self.landing_table}"
                 )
             time.sleep(self.tick_interval_s)
             tick += 1

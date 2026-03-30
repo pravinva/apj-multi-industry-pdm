@@ -134,3 +134,83 @@ def asset_health_scores():
         .withColumn("window_end", F.col("window.end"))
         .drop("window")
     )
+
+
+@dlt.table(
+    name="ot_pi_aligned",
+    comment="Silver: nearest OT/PI tag alignment with match quality metrics",
+    table_properties={"quality": "silver"},
+)
+def ot_pi_aligned():
+    ot = dlt.read("sensor_readings").select(
+        "site_id",
+        "area_id",
+        "unit_id",
+        "equipment_id",
+        "tag_name",
+        F.col("value").alias("ot_value"),
+        F.col("unit").alias("ot_unit"),
+        F.col("quality").alias("ot_quality"),
+        F.col("timestamp").alias("ot_timestamp"),
+    )
+    pi = dlt.read("pi_tag_readings").select(
+        "equipment_id",
+        "tag_name",
+        F.col("value").alias("pi_value"),
+        F.col("unit").alias("pi_unit"),
+        F.col("quality").alias("pi_quality"),
+        F.col("timestamp").alias("pi_timestamp"),
+    )
+
+    # Align PI rows to nearest OT row per (equipment, tag) within 30 seconds.
+    joined = (
+        ot.alias("ot")
+        .join(
+            pi.alias("pi"),
+            (
+                (F.col("ot.equipment_id") == F.col("pi.equipment_id"))
+                & (F.col("ot.tag_name") == F.col("pi.tag_name"))
+                & (
+                    F.abs(
+                        F.unix_timestamp(F.col("ot.ot_timestamp")) - F.unix_timestamp(F.col("pi.pi_timestamp"))
+                    )
+                    <= F.lit(30)
+                )
+            ),
+            "left",
+        )
+        .withColumn(
+            "time_delta_seconds",
+            F.abs(F.unix_timestamp(F.col("ot.ot_timestamp")) - F.unix_timestamp(F.col("pi.pi_timestamp"))),
+        )
+    )
+
+    best = joined.withColumn(
+        "rn",
+        F.row_number().over(
+            Window.partitionBy(
+                F.col("ot.equipment_id"),
+                F.col("ot.tag_name"),
+                F.col("ot.ot_timestamp"),
+            ).orderBy(F.col("time_delta_seconds").asc_nulls_last(), F.col("pi.pi_timestamp").desc_nulls_last())
+        ),
+    ).filter(F.col("rn") == 1)
+
+    return best.select(
+        F.col("ot.site_id").alias("site_id"),
+        F.col("ot.area_id").alias("area_id"),
+        F.col("ot.unit_id").alias("unit_id"),
+        F.col("ot.equipment_id").alias("equipment_id"),
+        F.col("ot.tag_name").alias("tag_name"),
+        F.col("ot.ot_timestamp").alias("ot_timestamp"),
+        F.col("ot.ot_value").alias("ot_value"),
+        F.col("ot.ot_unit").alias("ot_unit"),
+        F.col("ot.ot_quality").alias("ot_quality"),
+        F.col("pi.pi_timestamp").alias("pi_timestamp"),
+        F.col("pi.pi_value").alias("pi_value"),
+        F.col("pi.pi_unit").alias("pi_unit"),
+        F.col("pi.pi_quality").alias("pi_quality"),
+        F.col("time_delta_seconds"),
+        F.when(F.col("pi.pi_timestamp").isNotNull(), F.lit("BOTH")).otherwise(F.lit("OT_ONLY")).alias("data_source"),
+        F.current_timestamp().alias("_processed_at"),
+    )

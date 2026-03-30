@@ -213,10 +213,13 @@ def _grant_access(catalog: str) -> None:
         _run_sql(f"GRANT USE SCHEMA ON SCHEMA {catalog}.{sch} TO `{p}`")
 
     for tbl in [
+        "bronze.pravin_zerobus",
+        "bronze.pi_simulated_tags",
         "bronze.sensor_readings",
         "silver.sensor_features",
-        "gold.feature_vectors",
+        "silver.ot_pi_aligned",
         "gold.pdm_predictions",
+        "gold.financial_impact_events",
         "gold.maintenance_alerts",
         "lakebase.parts_inventory",
         "lakebase.maintenance_schedule",
@@ -234,10 +237,13 @@ def _grant_access(catalog: str) -> None:
 
 def _truncate_seed_targets(catalog: str) -> None:
     for tbl in [
+        "bronze.pravin_zerobus",
+        "bronze.pi_simulated_tags",
         "bronze.sensor_readings",
         "silver.sensor_features",
-        "gold.feature_vectors",
+        "silver.ot_pi_aligned",
         "gold.pdm_predictions",
+        "gold.financial_impact_events",
         "lakebase.parts_inventory",
         "lakebase.maintenance_schedule",
         "bronze.asset_metadata",
@@ -286,59 +292,9 @@ def _seed_asset_metadata(industry: str, cfg: dict[str, Any]) -> None:
 
 
 def _seed_feature_vectors(cfg: dict[str, Any]) -> None:
-    catalog = cfg["catalog"]
-    now = datetime.now(timezone.utc).replace(second=0, microsecond=0)
-    fv_rows = []
-
-    assets = cfg.get("simulator", {}).get("assets", [])
-    sensors_cfg = cfg.get("sensors", {})
-    for asset in assets:
-        eid = asset["id"]
-        site = asset.get("site", "")
-        area = asset.get("area", "")
-        unit_id = asset.get("unit", "")
-        a_type = asset.get("type", "")
-        sev = float(asset.get("fault_severity", 0.0))
-        rng = random.Random(f"{catalog}:{eid}:bootstrap")
-        sensors = sensors_cfg.get(a_type, [])
-
-        for s in sensors:
-            tag = s.get("name", "unknown")
-            unit = s.get("unit", "")
-            lo, hi = s.get("normal_range", [0.0, 1.0])
-            base = (float(lo) + float(hi)) / 2.0
-            spread = max(0.001, (float(hi) - float(lo)) * 0.08)
-            direction = float(s.get("dir", 1))
-            # Feature vectors for model/scoring UX
-            f1 = round(max(0.01, 0.7 + sev + rng.uniform(-0.05, 0.05)), 6)
-            f2 = round(max(0.01, 0.4 + sev * 0.8 + rng.uniform(-0.05, 0.05)), 6)
-            f3 = round(max(0.01, 0.2 + sev * 1.1 + rng.uniform(-0.05, 0.05)), 6)
-            f4 = round(max(0.01, 0.1 + sev * 1.4 + rng.uniform(-0.05, 0.05)), 6)
-            fv_rows.append(
-                "("
-                + ", ".join(
-                    [
-                        _lit(eid),
-                        _lit((now - timedelta(minutes=15)).strftime("%Y-%m-%d %H:%M:%S")),
-                        _lit(now.strftime("%Y-%m-%d %H:%M:%S")),
-                        _lit(f1),
-                        _lit(f2),
-                        _lit(f3),
-                        _lit(f4),
-                        "current_timestamp()",
-                    ]
-                )
-                + ")"
-            )
-
-    if fv_rows:
-        _run_sql(
-            f"""
-            INSERT INTO {catalog}.gold.feature_vectors
-            (equipment_id, window_start, window_end, feature_1, feature_2, feature_3, feature_4, _processed_at)
-            VALUES {", ".join(fv_rows)}
-            """
-        )
+    # Feature vectors are standardized as DLT-managed materialized views in
+    # bronze schema and should not be directly seeded.
+    return
 
 
 FINANCE_PROFILES = {

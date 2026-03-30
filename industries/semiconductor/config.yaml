@@ -39,6 +39,12 @@ simulator:
     - { id: LT-11, type: stepper, model: "ASML PAS 5500", site: naka_fab, area: bay_5, unit: lithography, inject_fault: overlay_drift, fault_severity: 0.68, fault_start_offset_hours: -8 }
     - { id: CMP-07, type: cmp_tool, model: "Ebara Frex", site: naka_fab, area: bay_2, unit: polish, fault_severity: 0.0, fault_start_offset_hours: 0 }
     - { id: IN-02, type: inspection_tool, model: "KLA 39xx", site: naka_fab, area: bay_6, unit: metrology, fault_severity: 0.0, fault_start_offset_hours: 0 }
+    - { id: ET-09, type: etch_tool, model: "Lam Exelanx", site: naka_fab, area: bay_4, unit: etch, fault_severity: 0.0, fault_start_offset_hours: 0 }
+    - { id: ET-13, type: etch_tool, model: "Lam Exelanx", site: naka_fab, area: bay_1, unit: etch, inject_fault: recipe_drift, fault_severity: 0.45, fault_start_offset_hours: -3 }
+    - { id: LT-18, type: stepper, model: "ASML PAS 5500", site: naka_fab, area: bay_7, unit: lithography, fault_severity: 0.0, fault_start_offset_hours: 0 }
+    - { id: LT-21, type: stepper, model: "ASML PAS 5500", site: naka_fab, area: bay_8, unit: lithography, fault_severity: 0.0, fault_start_offset_hours: 0 }
+    - { id: CMP-14, type: cmp_tool, model: "Ebara Frex", site: naka_fab, area: bay_2, unit: polish, fault_severity: 0.0, fault_start_offset_hours: 0 }
+    - { id: IN-10, type: inspection_tool, model: "KLA 39xx", site: naka_fab, area: bay_9, unit: metrology, fault_severity: 0.0, fault_start_offset_hours: 0 }
 
 sensors:
   etch_tool:

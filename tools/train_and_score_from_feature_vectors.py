@@ -122,8 +122,8 @@ def run_industry(client: WorkspaceClient, industry: str) -> None:
     rows = _run_query(
         client,
         f"""
-        SELECT equipment_id, window_start, window_end, feature_1, feature_2, feature_3, feature_4, _processed_at
-        FROM {catalog}.gold.feature_vectors
+        SELECT *
+        FROM {catalog}.bronze.feature_vectors
         ORDER BY equipment_id, window_start
         """.strip(),
     )

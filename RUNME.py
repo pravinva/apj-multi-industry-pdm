@@ -11,7 +11,7 @@ from core.config.loader import load_config
 
 
 INDUSTRY = os.environ.get("INDUSTRY", "mining")
-USE_SIMULATOR = os.environ.get("USE_SIMULATOR", "true")
+INGEST_SOURCE_TABLE = os.environ.get("OT_PDM_INGEST_SOURCE_TABLE", "pravin_zerobus")
 
 print(f"Deploying OT PdM Intelligence - industry: {INDUSTRY}")
 config = load_config(INDUSTRY)
@@ -84,4 +84,4 @@ print("Step 6: Trigger training job -> run ot_pdm_training_job after ~5 mins of 
 print("\nDeployment baseline complete.")
 print(f"Catalog:  {catalog}")
 print(f"Industry: {config['display_name']}")
-print(f"Use simulator: {USE_SIMULATOR}")
+print(f"Ingest source table: {catalog}.bronze.{INGEST_SOURCE_TABLE}")

@@ -92,6 +92,25 @@ def _exec_schema(client: WorkspaceClient, catalog: str) -> None:
     _run_sql(
         client,
         f"""
+        CREATE OR REPLACE TABLE {catalog}.bronze.pi_simulated_tags (
+          site_id STRING,
+          area_id STRING,
+          unit_id STRING,
+          equipment_id STRING,
+          component_id STRING,
+          tag_name STRING,
+          value DOUBLE,
+          unit STRING,
+          quality STRING,
+          quality_code STRING,
+          source_protocol STRING,
+          timestamp TIMESTAMP
+        ) USING DELTA
+        """.strip(),
+    )
+    _run_sql(
+        client,
+        f"""
         CREATE OR REPLACE TABLE {catalog}.silver.sensor_features (
           equipment_id STRING,
           tag_name STRING,
@@ -111,6 +130,29 @@ def _exec_schema(client: WorkspaceClient, catalog: str) -> None:
     _run_sql(
         client,
         f"""
+        CREATE OR REPLACE TABLE {catalog}.silver.ot_pi_aligned (
+          site_id STRING,
+          area_id STRING,
+          unit_id STRING,
+          equipment_id STRING,
+          tag_name STRING,
+          ot_timestamp TIMESTAMP,
+          ot_value DOUBLE,
+          ot_unit STRING,
+          ot_quality STRING,
+          pi_timestamp TIMESTAMP,
+          pi_value DOUBLE,
+          pi_unit STRING,
+          pi_quality STRING,
+          time_delta_seconds BIGINT,
+          data_source STRING,
+          _processed_at TIMESTAMP
+        ) USING DELTA
+        """.strip(),
+    )
+    _run_sql(
+        client,
+        f"""
         CREATE OR REPLACE TABLE {catalog}.gold.pdm_predictions (
           equipment_id STRING,
           prediction_timestamp TIMESTAMP,
@@ -123,6 +165,33 @@ def _exec_schema(client: WorkspaceClient, catalog: str) -> None:
           model_version_anomaly STRING,
           model_version_rul STRING,
           _scored_at TIMESTAMP
+        ) USING DELTA
+        """.strip(),
+    )
+    _run_sql(
+        client,
+        f"""
+        CREATE OR REPLACE TABLE {catalog}.gold.financial_impact_events (
+          equipment_id STRING,
+          prediction_timestamp TIMESTAMP,
+          severity STRING,
+          anomaly_score DOUBLE,
+          rul_hours DOUBLE,
+          event_type STRING,
+          shift_label STRING,
+          maintenance_window_start TIMESTAMP,
+          maintenance_window_end TIMESTAMP,
+          has_maintenance_window BOOLEAN,
+          crew_available BOOLEAN,
+          downtime_hours DOUBLE,
+          maintenance_cost DOUBLE,
+          production_loss DOUBLE,
+          expected_failure_cost DOUBLE,
+          avoided_cost DOUBLE,
+          total_event_cost DOUBLE,
+          data_source STRING,
+          source_table STRING,
+          _computed_at TIMESTAMP
         ) USING DELTA
         """.strip(),
     )
@@ -177,42 +246,30 @@ def _exec_schema(client: WorkspaceClient, catalog: str) -> None:
     )
 
     for tbl in [
+        "bronze.pi_simulated_tags",
         "bronze.sensor_readings",
         "silver.sensor_features",
+        "silver.ot_pi_aligned",
         "gold.pdm_predictions",
+        "gold.financial_impact_events",
         "lakebase.parts_inventory",
         "lakebase.maintenance_schedule",
         "bronze.asset_metadata",
     ]:
         _run_sql(client, f"GRANT SELECT ON TABLE {catalog}.{tbl} TO `account users`")
 
-    _run_sql(
-        client,
-        f"""
-        CREATE OR REPLACE TABLE {catalog}.gold.feature_vectors (
-          equipment_id STRING NOT NULL,
-          window_start TIMESTAMP NOT NULL,
-          window_end   TIMESTAMP NOT NULL,
-          feature_1    DOUBLE,
-          feature_2    DOUBLE,
-          feature_3    DOUBLE,
-          feature_4    DOUBLE,
-          _processed_at TIMESTAMP
-        ) USING DELTA
-        """.strip(),
-    )
-    _run_sql(client, f"GRANT SELECT ON TABLE {catalog}.gold.feature_vectors TO `account users`")
-
 
 def _truncate_for_refresh(client: WorkspaceClient, catalog: str) -> None:
     for tbl in [
+        "bronze.pi_simulated_tags",
         "bronze.sensor_readings",
         "silver.sensor_features",
+        "silver.ot_pi_aligned",
         "gold.pdm_predictions",
+        "gold.financial_impact_events",
         "lakebase.parts_inventory",
         "lakebase.maintenance_schedule",
         "bronze.asset_metadata",
-        "gold.feature_vectors",
     ]:
         _run_sql(client, f"DELETE FROM {catalog}.{tbl} WHERE TRUE")
 
@@ -253,56 +310,16 @@ def _seed_asset_metadata(client: WorkspaceClient, industry: str, config: dict[st
 
 
 def _seed_feature_vectors(client: WorkspaceClient, config: dict[str, Any]) -> None:
-    catalog = config["catalog"]
-    now = datetime.now(timezone.utc).replace(second=0, microsecond=0)
-    start = now - timedelta(hours=30)
-    points = 120
-    assets = config.get("simulator", {}).get("assets", [])
-
-    rows_sql = []
-    for asset in assets:
-        eid = asset["id"]
-        sev = float(asset.get("fault_severity", 0.0))
-        rng = random.Random(f"{catalog}:{eid}")
-        for i in range(points):
-            ws = start + timedelta(minutes=15 * i)
-            we = ws + timedelta(minutes=15)
-            drift = (i / points) * max(0.1, sev)
-            f1 = round(0.7 + drift + rng.uniform(-0.05, 0.05), 6)
-            f2 = round(0.4 + drift * 0.8 + rng.uniform(-0.05, 0.05), 6)
-            f3 = round(0.2 + drift * 1.1 + rng.uniform(-0.05, 0.05), 6)
-            f4 = round(0.1 + drift * 1.4 + rng.uniform(-0.05, 0.05), 6)
-            rows_sql.append(
-                "("
-                + ", ".join(
-                    [
-                        _sql_literal(eid),
-                        _sql_literal(ws.strftime("%Y-%m-%d %H:%M:%S")),
-                        _sql_literal(we.strftime("%Y-%m-%d %H:%M:%S")),
-                        _sql_literal(f1),
-                        _sql_literal(f2),
-                        _sql_literal(f3),
-                        _sql_literal(f4),
-                        "current_timestamp()",
-                    ]
-                )
-                + ")"
-            )
-    if rows_sql:
-        _run_sql(
-            client,
-            f"""
-            INSERT INTO {catalog}.gold.feature_vectors
-            (equipment_id, window_start, window_end, feature_1, feature_2, feature_3, feature_4, _processed_at)
-            VALUES {", ".join(rows_sql)}
-            """.strip(),
-        )
+    # Feature vectors are DLT-managed in bronze schema and should not be
+    # written directly during bootstrap.
+    return
 
 
 def _seed_sensor_data(client: WorkspaceClient, config: dict[str, Any]) -> None:
     catalog = config["catalog"]
     now = datetime.now(timezone.utc).replace(second=0, microsecond=0)
     bronze_rows = []
+    pi_rows = []
     silver_rows = []
     assets = config.get("simulator", {}).get("assets", [])
     sensors_cfg = config.get("sensors", {})
@@ -351,6 +368,26 @@ def _seed_sensor_data(client: WorkspaceClient, config: dict[str, Any]) -> None:
                     )
                     + ")"
                 )
+                pi_rows.append(
+                    "("
+                    + ", ".join(
+                        [
+                            _sql_literal(site),
+                            _sql_literal(area),
+                            _sql_literal(unit_id),
+                            _sql_literal(eid),
+                            _sql_literal(None),
+                            _sql_literal(tag),
+                            _sql_literal(round(v * (1.0 + rng.uniform(-0.01, 0.01)), 6)),
+                            _sql_literal(unit),
+                            _sql_literal("good"),
+                            _sql_literal("0x00"),
+                            _sql_literal("PI-SIM"),
+                            _sql_literal((ts - timedelta(seconds=12)).strftime("%Y-%m-%d %H:%M:%S")),
+                        ]
+                    )
+                    + ")"
+                )
 
             mean_v = sum(values) / len(values)
             var = sum((x - mean_v) ** 2 for x in values) / max(1, len(values) - 1)
@@ -386,6 +423,15 @@ def _seed_sensor_data(client: WorkspaceClient, config: dict[str, Any]) -> None:
             INSERT INTO {catalog}.bronze.sensor_readings
             (site_id, area_id, unit_id, equipment_id, component_id, tag_name, value, unit, quality, quality_code, source_protocol, timestamp, _ingested_at)
             VALUES {", ".join(bronze_rows)}
+            """.strip(),
+        )
+    if pi_rows:
+        _run_sql(
+            client,
+            f"""
+            INSERT INTO {catalog}.bronze.pi_simulated_tags
+            (site_id, area_id, unit_id, equipment_id, component_id, tag_name, value, unit, quality, quality_code, source_protocol, timestamp)
+            VALUES {", ".join(pi_rows)}
             """.strip(),
         )
     if silver_rows:

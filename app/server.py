@@ -464,7 +464,26 @@ def _asset_defs(industry: str) -> list[dict[str, Any]]:
 
 
 def _sensor_defs(industry: str, asset_type: str) -> list[dict[str, Any]]:
-    return _industry_cfg(industry).get("sensors", {}).get(asset_type, [])
+    sensors_map = _industry_cfg(industry).get("sensors", {}) or {}
+    if not sensors_map:
+        return []
+    # Try direct key first.
+    direct = sensors_map.get(asset_type)
+    if isinstance(direct, list) and direct:
+        return direct
+
+    # Fall back to case/format-insensitive matching because UI display paths
+    # may normalize asset_type (e.g. "smart_meter" -> "smart meter").
+    def _norm_type(t: Any) -> str:
+        return re.sub(r"[^a-z0-9]+", "", str(t or "").lower())
+
+    target = _norm_type(asset_type)
+    if not target:
+        return []
+    for k, v in sensors_map.items():
+        if _norm_type(k) == target and isinstance(v, list):
+            return v
+    return []
 
 
 def _rows_from_external_links(resp: Any, columns: list[str]) -> list[dict[str, Any]]:
@@ -811,11 +830,21 @@ def _sql_escape(v: str) -> str:
     return v.replace("'", "''")
 
 
-def _simulator_landing_target(industry: str) -> str:
-    # Write to the same landing table configured for the active DLT ingest source.
-    # This keeps injected events on the real bronze -> silver -> gold path.
+def _simulator_landing_targets(industry: str) -> list[str]:
+    # Single canonical per-industry landing table for both simulator and
+    # connector ingest paths.
     target_fqn, _ = _zerobus_action_target(industry)
-    return target_fqn
+    return [target_fqn]
+
+
+def _simulator_landing_target(industry: str) -> str:
+    # Backward-compatible single target used by UI helpers.
+    return _simulator_landing_targets(industry)[0]
+
+
+def _pi_simulated_landing_target(industry: str) -> str:
+    catalog = _industry_cfg(industry).get("catalog", f"pdm_{industry}")
+    return f"{catalog}.bronze.pi_simulated_tags"
 
 
 def _persist_simulator_rows(industry: str, rows: list[dict[str, Any]]) -> None:
@@ -823,7 +852,7 @@ def _persist_simulator_rows(industry: str, rows: list[dict[str, Any]]) -> None:
         return
     if WorkspaceClient is None or sql_service is None:
         return
-    target_fqn = _simulator_landing_target(industry)
+    target_fqns = _simulator_landing_targets(industry)
     client = WorkspaceClient()
 
     def _exec_checked(statement: str) -> None:
@@ -840,32 +869,19 @@ def _persist_simulator_rows(industry: str, rows: list[dict[str, Any]]) -> None:
             msg = getattr(err, "message", None) if err is not None else None
             raise RuntimeError(f"SQL statement failed state={state} message={msg or 'unknown error'}")
 
-    if not _SIM_STAGING_READY.get(industry):
-        ddl = f"""
-        CREATE TABLE IF NOT EXISTS {target_fqn} (
-          site_id STRING,
-          area_id STRING,
-          unit_id STRING,
-          equipment_id STRING,
-          component_id STRING,
-          tag_name STRING,
-          value DOUBLE,
-          unit STRING,
-          quality STRING,
-          quality_code STRING,
-          source_protocol STRING,
-          timestamp TIMESTAMP
-        ) USING DELTA
-        """
-        try:
-            _exec_checked(ddl)
-        finally:
-            _SIM_STAGING_READY[industry] = True
-
     values_sql: list[str] = []
+    values_sql_pi: list[str] = []
     for r in rows:
         ts_raw = str(r.get("timestamp", "") or "")
         ts = ts_raw[:19] if len(ts_raw) >= 19 else datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        try:
+            ts_dt = datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
+            pi_ts = (ts_dt - timedelta(seconds=12)).strftime("%Y-%m-%d %H:%M:%S")
+        except Exception:
+            pi_ts = ts
+        base_value = float(r.get("value", 0.0))
+        # PI-sim stream: slightly smoothed/lagged variant of OT value.
+        pi_value = round(base_value * (1.0 + random.uniform(-0.01, 0.01)), 6)
         values_sql.append(
             "("
             + ", ".join(
@@ -886,13 +902,87 @@ def _persist_simulator_rows(industry: str, rows: list[dict[str, Any]]) -> None:
             )
             + ")"
         )
+        values_sql_pi.append(
+            "("
+            + ", ".join(
+                [
+                    f"'{_sql_escape(str(r.get('site_id', '')))}'",
+                    f"'{_sql_escape(str(r.get('area_id', '')))}'",
+                    f"'{_sql_escape(str(r.get('unit_id', '')))}'",
+                    f"'{_sql_escape(str(r.get('equipment_id', '')))}'",
+                    "NULL",
+                    f"'{_sql_escape(str(r.get('tag_name', '')))}'",
+                    str(pi_value),
+                    f"'{_sql_escape(str(r.get('unit', '')))}'",
+                    f"'{_sql_escape(str(r.get('quality', 'good')))}'",
+                    "'0x00'",
+                    "'PI-SIM'",
+                    f"TIMESTAMP '{_sql_escape(pi_ts)}'",
+                ]
+            )
+            + ")"
+        )
 
+    for target_fqn in target_fqns:
+        if not _SIM_STAGING_READY.get(target_fqn):
+            ddl = f"""
+            CREATE TABLE IF NOT EXISTS {target_fqn} (
+              site_id STRING,
+              area_id STRING,
+              unit_id STRING,
+              equipment_id STRING,
+              component_id STRING,
+              tag_name STRING,
+              value DOUBLE,
+              unit STRING,
+              quality STRING,
+              quality_code STRING,
+              source_protocol STRING,
+              timestamp TIMESTAMP
+            ) USING DELTA
+            """
+            try:
+                _exec_checked(ddl)
+            finally:
+                _SIM_STAGING_READY[target_fqn] = True
+
+        chunk = 200
+        for i in range(0, len(values_sql), chunk):
+            stmt = (
+                f"INSERT INTO {target_fqn} "
+                "(site_id, area_id, unit_id, equipment_id, component_id, tag_name, value, unit, quality, quality_code, source_protocol, timestamp) VALUES "
+                + ", ".join(values_sql[i : i + chunk])
+            )
+            _exec_checked(stmt)
+
+    pi_target_fqn = _pi_simulated_landing_target(industry)
+    if not _SIM_STAGING_READY.get(pi_target_fqn):
+        ddl = f"""
+        CREATE TABLE IF NOT EXISTS {pi_target_fqn} (
+          site_id STRING,
+          area_id STRING,
+          unit_id STRING,
+          equipment_id STRING,
+          component_id STRING,
+          tag_name STRING,
+          value DOUBLE,
+          unit STRING,
+          quality STRING,
+          quality_code STRING,
+          source_protocol STRING,
+          timestamp TIMESTAMP
+        ) USING DELTA
+        """
+        try:
+            _exec_checked(ddl)
+        finally:
+            _SIM_STAGING_READY[pi_target_fqn] = True
     chunk = 200
-    for i in range(0, len(values_sql), chunk):
+    for i in range(0, len(values_sql_pi), chunk):
         stmt = (
-            f"INSERT INTO {target_fqn} "
+            f"INSERT INTO {pi_target_fqn} "
             "(site_id, area_id, unit_id, equipment_id, component_id, tag_name, value, unit, quality, quality_code, source_protocol, timestamp) VALUES "
-            + ", ".join(values_sql[i : i + chunk])
+            + ", ".join(values_sql_pi[i : i + chunk])
         )
         _exec_checked(stmt)
 
@@ -918,6 +1008,27 @@ def _sensor_features_map(industry: str) -> dict[tuple[str, str], dict[str, Any]]
         if eid and tag:
             out[(eid, tag)] = r
     return out
+
+
+def _asset_data_source(industry: str, asset_id: str) -> str:
+    catalog = _industry_cfg(industry).get("catalog", f"pdm_{industry}")
+    stmt = f"""
+    SELECT data_source
+    FROM {catalog}.silver.ot_pi_aligned
+    WHERE equipment_id = '{_sql_escape(asset_id)}'
+    ORDER BY ot_timestamp DESC
+    LIMIT 1
+    """
+    try:
+        rows = _run_sql(stmt, cache_key=f"{catalog}:ot_pi_aligned:{asset_id}")
+    except Exception:
+        return "UNKNOWN"
+    if not rows:
+        return "UNKNOWN"
+    src = str(rows[0].get("data_source") or "").strip().upper()
+    if src in {"BOTH", "OT_ONLY"}:
+        return src
+    return "UNKNOWN"
 
 
 def _parts_rows(industry: str) -> list[dict[str, Any]]:
@@ -1195,7 +1306,7 @@ def _zerobus_action_target(industry: str) -> tuple[str, dict[str, Any]]:
     # a different catalog (for example mining while viewing automotive).
     target_catalog = str(catalog).strip()
     target_schema = str(target.get("schema") or "bronze").strip()
-    target_table = str(target.get("table") or "_zerobus_staging").strip()
+    target_table = str(target.get("table") or _DEFAULT_ZEROBUS_TARGET_TABLE).strip()
     return f"{target_catalog}.{target_schema}.{target_table}", zcfg
 
 
@@ -1615,25 +1726,64 @@ def _advanced_pdm_payload(industry: str, asset_id: str, display_currency: str | 
 
     currency = _effective_demo_currency(display_currency, _industry_cfg(industry).get("agent", {}).get("terminology", {}).get("cost_currency", "USD"))
     profile = _executive_profile(industry, _industry_cfg(industry))
+    impact_source_table, impact_row = _financial_impact_latest(industry, asset_id)
     labor_rate = _to_float(profile.get("labor_cost_per_hour"), 0.0)
     dispatch = _to_float(profile.get("dispatch_cost"), 0.0)
     planned_h = max(2.0, min(10.0, rul_h * 0.25))
     planned_cost_native = planned_h * labor_rate + dispatch
     expected_unplanned_native = anomaly * _to_float(profile.get("downtime_cost_per_hour"), 0.0) * max(2.0, min(12.0, rul_h * 0.4))
-    planned_cost = _fx_convert(planned_cost_native, str(profile.get("currency", currency)), currency)
-    expected_unplanned = _fx_convert(expected_unplanned_native, str(profile.get("currency", currency)), currency)
+    native_currency = str(profile.get("currency", currency))
+    planned_cost = _fx_convert(planned_cost_native, native_currency, currency)
+    expected_unplanned = _fx_convert(expected_unplanned_native, native_currency, currency)
+
     recommended_window = "within_8h" if anomaly >= 0.8 else "within_24h" if anomaly >= 0.55 else "within_72h"
+    fi_event_type = "model_estimate"
+    if impact_row:
+        fi_event_type = str(impact_row.get("event_type") or "unplanned_failure")
+        planned_cost = _fx_convert(_to_float(impact_row.get("maintenance_cost"), planned_cost_native), native_currency, currency)
+        expected_unplanned = _fx_convert(_to_float(impact_row.get("expected_failure_cost"), expected_unplanned_native), native_currency, currency)
+        if impact_row.get("maintenance_window_start"):
+            recommended_window = "scheduled_window"
+        elif fi_event_type == "caught_early":
+            recommended_window = "within_24h"
+        else:
+            recommended_window = "expedite_next_shift"
+        avoided_native = _to_float(impact_row.get("avoided_cost"), expected_unplanned_native - planned_cost_native)
+    else:
+        avoided_native = max(0.0, expected_unplanned_native - planned_cost_native)
+    avoided_display = _fx_convert(avoided_native, native_currency, currency)
+
+    actions = [
+        "Create planned work order aligned to next production window.",
+        "Reserve technician and lock spare parts before dispatch.",
+        "Run confirmation inspection and close-loop outcome for retraining.",
+    ]
+    if impact_row:
+        if impact_row.get("has_maintenance_window") and impact_row.get("crew_available"):
+            actions = [
+                "Execute intervention in the scheduled maintenance window.",
+                "Pre-stage required parts and assign crew to the selected shift.",
+                "Capture post-maintenance result to improve cost-impact calibration.",
+            ]
+        else:
+            actions = [
+                "Escalate planner to secure an earlier maintenance window.",
+                "Assign available crew and expedite critical spare parts.",
+                "Trigger temporary operating limits until intervention is complete.",
+            ]
+
     prescriptive = {
         "recommended_window": recommended_window,
-        "expected_avoided_loss": round(max(0.0, expected_unplanned - planned_cost), 2),
-        "expected_avoided_loss_fmt": _fmt_money(max(0.0, expected_unplanned - planned_cost), currency),
+        "expected_avoided_loss": round(max(0.0, avoided_display), 2),
+        "expected_avoided_loss_fmt": _fmt_money(max(0.0, avoided_display), currency),
         "planned_intervention_cost": round(planned_cost, 2),
         "planned_intervention_cost_fmt": _fmt_money(planned_cost, currency),
-        "actions": [
-            "Create planned work order aligned to next production window.",
-            "Reserve technician and lock spare parts before dispatch.",
-            "Run confirmation inspection and close-loop outcome for retraining.",
-        ],
+        "expected_failure_cost": round(expected_unplanned, 2),
+        "expected_failure_cost_fmt": _fmt_money(expected_unplanned, currency),
+        "event_type": fi_event_type,
+        "data_source": str((impact_row or {}).get("data_source") or "UNKNOWN"),
+        "source_table": impact_source_table,
+        "actions": actions,
     }
 
     parts_rows = _parts_rows(industry)
@@ -1924,6 +2074,43 @@ def _financial_daily_rows(industry: str, days: int = 760) -> tuple[str, list[dic
     return table_fqn, rows
 
 
+def _financial_impact_latest(industry: str, asset_id: str) -> tuple[str, dict[str, Any] | None]:
+    cfg = _industry_cfg(industry)
+    catalog = cfg.get("catalog", f"pdm_{industry}")
+    table_fqn = f"{catalog}.gold.financial_impact_events"
+    stmt = f"""
+    SELECT
+      equipment_id,
+      prediction_timestamp,
+      severity,
+      anomaly_score,
+      rul_hours,
+      event_type,
+      shift_label,
+      maintenance_window_start,
+      maintenance_window_end,
+      has_maintenance_window,
+      crew_available,
+      downtime_hours,
+      maintenance_cost,
+      production_loss,
+      expected_failure_cost,
+      avoided_cost,
+      total_event_cost,
+      data_source,
+      source_table
+    FROM {table_fqn}
+    WHERE equipment_id = '{_sql_escape(asset_id)}'
+    ORDER BY prediction_timestamp DESC
+    LIMIT 1
+    """
+    try:
+        rows = _run_sql(stmt, cache_key=f"{table_fqn}:{asset_id}:{int(time.time() // 30)}")
+    except Exception:
+        return table_fqn, None
+    return table_fqn, (rows[0] if rows else None)
+
+
 def _month_key(ds: str) -> str:
     s = str(ds or "")
     return s[:7] if len(s) >= 7 else ""
@@ -2190,7 +2377,7 @@ def _executive_value(industry: str, assets: list[dict[str, Any]], display_curren
         "audience": "finance_executive",
         "window": "last_30_days",
         "currency": currency,
-        "value_statement": f"Impact on EBIT saved through prescriptive maintenance: {_fmt_money(ebit_saved, currency)}",
+        "value_statement": f"Prescriptive maintenance unlocked EBIT upside of {_fmt_money(ebit_saved, currency)}.",
         "ebit_saved": round(ebit_saved, 2),
         "ebit_saved_fmt": _fmt_money(ebit_saved, currency),
         "net_benefit": round(net_benefit, 2),
@@ -2882,7 +3069,7 @@ def _yaml_from_payload(payload: dict[str, Any]) -> str:
     else:
         target_catalog = connector.get("target_catalog") or payload.get("catalog", "")
         target_schema = connector.get("target_schema", "bronze")
-        target_table = connector.get("target_table", "_zerobus_staging")
+        target_table = connector.get("target_table", _DEFAULT_ZEROBUS_TARGET_TABLE)
     cfg = {
         "industry": payload.get("industry_key", ""),
         "display_name": payload.get("display_name", ""),
@@ -3151,6 +3338,29 @@ def ui_model(asset_id: str, industry: str = "mining", currency: str = "") -> dic
     if industry not in INDUSTRIES:
         raise HTTPException(status_code=400, detail="Invalid industry")
     detail = _asset_detail(industry, asset_id, display_currency=currency)
+    data_source = _asset_data_source(industry, asset_id)
+    model_driven = bool(detail.get("prediction_timestamp"))
+    if not model_driven:
+        return {
+            "asset_id": asset_id,
+            "health_score_pct": None,
+            "rul_hours": None,
+            "model_meta": {
+                "trained": None,
+                "r2": None,
+                "rmse": None,
+                "protocol": _industry_cfg(industry).get("simulator", {}).get("protocol", "OPC-UA"),
+                "data_source": data_source,
+                "model_version_anomaly": None,
+                "model_version_rul": None,
+                "is_model_driven": False,
+                "status": "unavailable",
+                "status_message": "No scored prediction found yet. Train and run scoring to populate model output.",
+            },
+            "rul_curve": {"labels": [], "values": []},
+            "feature_importance": [],
+            "anomaly_decomposition": [],
+        }
     sensor_features = _sensor_features_map(industry)
     feat = []
     for sensor in detail.get("sensors", []):
@@ -3161,19 +3371,21 @@ def ui_model(asset_id: str, industry: str = "mining", currency: str = "") -> dic
         if score <= 0:
             score = abs(float(row.get("slope_1h") or 0.0))
         feat.append({"name": sensor.get("name", "feature"), "score": round(min(0.99, max(0.05, score / 10.0)), 2)})
-    if not feat:
-        feat = [{"name": s.get("name", "feature"), "score": round(0.4 + (i * 0.1), 2)} for i, s in enumerate(detail.get("sensors", [])[:4])]
     return {
         "asset_id": asset_id,
         "health_score_pct": detail["health_score_pct"],
         "rul_hours": detail["rul_hours"],
         "model_meta": {
             "trained": str(detail.get("prediction_timestamp") or "n/a"),
-            "r2": "from_mlflow_tracking",
-            "rmse": "from_mlflow_tracking",
+            "r2": None,
+            "rmse": None,
             "protocol": _industry_cfg(industry).get("simulator", {}).get("protocol", "OPC-UA"),
+            "data_source": data_source,
             "model_version_anomaly": detail.get("model_version_anomaly"),
             "model_version_rul": detail.get("model_version_rul"),
+            "is_model_driven": True,
+            "status": "ready",
+            "status_message": "Model output is driven by the latest scored prediction.",
         },
         "rul_curve": {
             "labels": ["T-7d", "T-3d", "T-1d", "Now"],
@@ -4095,7 +4307,17 @@ def agent_chat(payload: dict) -> dict:
                 status = str(polled.get("status") or status)
 
         if status != "COMPLETED":
-            raise RuntimeError(f"Genie message status={status}")
+            # Return a non-throwing response so product-specific callers can
+            # gracefully fall back to deterministic logic.
+            failure_text = _genie_extract_text(final_message)
+            if not failure_text:
+                failure_text = f"Genie message status={status}"
+            return {
+                "conversation_id": conversation_id,
+                "genie_status": status,
+                "genie_failed": True,
+                "choices": [{"message": {"content": f"Genie request failed: {failure_text}"}}],
+            }
 
         text = _genie_extract_text(final_message) or "Genie completed your request."
         return {
@@ -4106,6 +4328,8 @@ def agent_chat(payload: dict) -> dict:
     except Exception as e:
         return {
             "conversation_id": conversation_id,
+            "genie_status": "FAILED",
+            "genie_failed": True,
             "choices": [{"message": {"content": f"Genie request failed: {e}"}}],
         }
 
@@ -4228,9 +4452,17 @@ def agent_finance_chat(payload: dict) -> dict:
     try:
         if isinstance(reply, dict):
             text = str((((reply.get("choices") or [{}])[0] or {}).get("message") or {}).get("content") or "")
+            if bool(reply.get("genie_failed")):
+                return _finance_fallback_response(
+                    reason="Genie request failed, so I used the app finance model directly."
+                )
             if _schema_rejection_answer(text):
                 return _finance_fallback_response(
                     reason="Genie returned a schema-scoped response, so I used the app finance model directly."
+                )
+            if text.lower().startswith("genie request failed:") or "genie message status=failed" in text.lower():
+                return _finance_fallback_response(
+                    reason="Genie request failed, so I used the app finance model directly."
                 )
             reply.setdefault("finance_context", {
                 "industry": industry,

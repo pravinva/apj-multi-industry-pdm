@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS ${catalog_name}.bronze.sensor_readings (
 USING DELTA
 TBLPROPERTIES ('delta.enableChangeDataFeed' = 'true');
 
-CREATE TABLE IF NOT EXISTS ${catalog_name}.bronze._simulator_staging (
+CREATE TABLE IF NOT EXISTS ${catalog_name}.bronze.pravin_zerobus (
   site_id         STRING NOT NULL,
   area_id         STRING NOT NULL,
   unit_id         STRING NOT NULL,
@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS ${catalog_name}.bronze._simulator_staging (
 )
 USING DELTA;
 
-CREATE TABLE IF NOT EXISTS ${catalog_name}.bronze._zerobus_staging (
+CREATE TABLE IF NOT EXISTS ${catalog_name}.bronze.pi_simulated_tags (
   site_id         STRING NOT NULL,
   area_id         STRING NOT NULL,
   unit_id         STRING NOT NULL,
@@ -64,6 +64,26 @@ CREATE TABLE IF NOT EXISTS ${catalog_name}.silver.sensor_features (
 )
 USING DELTA;
 
+CREATE TABLE IF NOT EXISTS ${catalog_name}.silver.ot_pi_aligned (
+  site_id            STRING NOT NULL,
+  area_id            STRING NOT NULL,
+  unit_id            STRING NOT NULL,
+  equipment_id       STRING NOT NULL,
+  tag_name           STRING NOT NULL,
+  ot_timestamp       TIMESTAMP NOT NULL,
+  ot_value           DOUBLE,
+  ot_unit            STRING,
+  ot_quality         STRING,
+  pi_timestamp       TIMESTAMP,
+  pi_value           DOUBLE,
+  pi_unit            STRING,
+  pi_quality         STRING,
+  time_delta_seconds BIGINT,
+  data_source        STRING,
+  _processed_at      TIMESTAMP DEFAULT current_timestamp()
+)
+USING DELTA;
+
 CREATE TABLE IF NOT EXISTS ${catalog_name}.gold.pdm_predictions (
   equipment_id              STRING NOT NULL,
   prediction_timestamp      TIMESTAMP NOT NULL,
@@ -76,6 +96,30 @@ CREATE TABLE IF NOT EXISTS ${catalog_name}.gold.pdm_predictions (
   model_version_anomaly     STRING,
   model_version_rul         STRING,
   _scored_at                TIMESTAMP DEFAULT current_timestamp()
+)
+USING DELTA;
+
+CREATE TABLE IF NOT EXISTS ${catalog_name}.gold.financial_impact_events (
+  equipment_id              STRING NOT NULL,
+  prediction_timestamp      TIMESTAMP NOT NULL,
+  severity                  STRING,
+  anomaly_score             DOUBLE,
+  rul_hours                 DOUBLE,
+  event_type                STRING,
+  shift_label               STRING,
+  maintenance_window_start  TIMESTAMP,
+  maintenance_window_end    TIMESTAMP,
+  has_maintenance_window    BOOLEAN,
+  crew_available            BOOLEAN,
+  downtime_hours            DOUBLE,
+  maintenance_cost          DOUBLE,
+  production_loss           DOUBLE,
+  expected_failure_cost     DOUBLE,
+  avoided_cost              DOUBLE,
+  total_event_cost          DOUBLE,
+  data_source               STRING,
+  source_table              STRING,
+  _computed_at              TIMESTAMP DEFAULT current_timestamp()
 )
 USING DELTA;
 

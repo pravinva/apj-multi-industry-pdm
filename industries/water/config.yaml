@@ -39,6 +39,12 @@ simulator:
     - { id: MT-03, type: smart_meter, model: "AMI Meter v4", site: cbd, area: zone_3, unit: metering, inject_fault: pipe_leak, fault_severity: 0.71, fault_start_offset_hours: -8 }
     - { id: TP-01, type: chlorination_unit, model: "Chlorinator C1", site: prospect, area: treatment, unit: dosing, fault_severity: 0.0, fault_start_offset_hours: 0 }
     - { id: VS-11, type: vent_shaft, model: "Vent Shaft 11", site: north, area: tunnel, unit: ventilation, fault_severity: 0.0, fault_start_offset_hours: 0 }
+    - { id: PS-09, type: pump, model: "Centrifugal Pump", site: prospect, area: station_9, unit: distribution, fault_severity: 0.0, fault_start_offset_hours: 0 }
+    - { id: PS-12, type: pump, model: "Centrifugal Pump", site: south, area: station_12, unit: distribution, inject_fault: cavitation, fault_severity: 0.46, fault_start_offset_hours: -3 }
+    - { id: MT-08, type: smart_meter, model: "AMI Meter v4", site: west, area: zone_8, unit: metering, fault_severity: 0.0, fault_start_offset_hours: 0 }
+    - { id: MT-14, type: smart_meter, model: "AMI Meter v4", site: east, area: zone_14, unit: metering, fault_severity: 0.0, fault_start_offset_hours: 0 }
+    - { id: TP-03, type: chlorination_unit, model: "Chlorinator C1", site: prospect, area: treatment, unit: dosing, fault_severity: 0.0, fault_start_offset_hours: 0 }
+    - { id: VS-15, type: vent_shaft, model: "Vent Shaft 15", site: north, area: tunnel, unit: ventilation, fault_severity: 0.0, fault_start_offset_hours: 0 }
 
 sensors:
   pump:

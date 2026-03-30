@@ -43,6 +43,7 @@ class OTPdMRULModel:
 
     def log_to_mlflow(self, metrics: dict, catalog: str):
         import mlflow
+        from mlflow import MlflowClient
         from mlflow.models import infer_signature
         import mlflow.sklearn
 
@@ -51,13 +52,23 @@ class OTPdMRULModel:
         x_sample = pd.DataFrame([[0.0 for _ in feature_names]], columns=feature_names)
         y_sample = self.pipeline.predict(x_sample)
         signature = infer_signature(x_sample, y_sample)
-        mlflow.sklearn.log_model(
+        model_name = f"{catalog}.models.ot_pdm_rul_{self.equipment_id.lower()}"
+        model_info = mlflow.sklearn.log_model(
             self.pipeline,
             artifact_path="rul_model",
-            registered_model_name=f"{catalog}.models.ot_pdm_rul_{self.equipment_id.lower()}",
+            registered_model_name=model_name,
             signature=signature,
             input_example=x_sample,
         )
+        # Keep the newest logged version as the active champion alias.
+        try:
+            if getattr(model_info, "registered_model_version", None):
+                MlflowClient().set_registered_model_alias(
+                    model_name, "champion", str(model_info.registered_model_version)
+                )
+        except Exception:
+            # Alias setting is best-effort and should not fail model logging.
+            pass
         mlflow.log_params(
             {
                 "equipment_id": self.equipment_id,

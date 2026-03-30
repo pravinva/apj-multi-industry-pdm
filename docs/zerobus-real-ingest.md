@@ -4,7 +4,7 @@ This path uses:
 
 1. `ot_simulator` from unified-ot-zerobus-connector
 2. real `opcua2uc` connector ingestion
-3. Bronze DLT reading `_zerobus_staging`
+3. Bronze DLT reading `pravin_zerobus` (single canonical landing table)
 
 ## 1) Start OT simulator (all protocol outputs)
 
@@ -48,9 +48,9 @@ Repeat with `industry=energy|water|automotive|semiconductor`.
 databricks bundle run -t dev -p DEFAULT --var "industry=mining" ot_pdm_dlt_pipeline --refresh-all
 ```
 
-Ensure pipeline config has:
+Ensure pipeline config uses the canonical ingest source:
 
-- `use_simulator = false`
+- `zerobus_source_table = pravin_zerobus`
 
 ## 5) Verify Bronze
 

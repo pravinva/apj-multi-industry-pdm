@@ -4,6 +4,10 @@ bundle:
 sync:
   exclude:
     - "app/node_modules/**"
+    - "app/.venv/**"
+    - "app/dist/**"
+    - "app/.zerobus-configs/**"
+    - "app/.zerobus-key"
     - "app/.npmrc"
     - "app/package-lock.json"
 
@@ -12,11 +16,14 @@ variables:
     description: "Industry skin to deploy"
     default: mining
   use_simulator:
-    description: "Use OT simulator instead of live Zerobus connector"
+    description: "Deprecated: ingest source is unified; simulator and connector both land in zerobus_source_table"
     default: "false"
   zerobus_source_table:
     description: "Bronze source table for Zerobus ingest in bronze schema"
     default: "pravin_zerobus"
+  pi_source_table:
+    description: "Bronze source table for PI-sim ingest in bronze schema"
+    default: "pi_simulated_tags"
   catalog_name:
     description: "Unity Catalog catalog name"
     default: "pdm_${var.industry}"
@@ -52,8 +59,8 @@ resources:
             path: core/dlt/gold.py
       configuration:
         industry: ${var.industry}
-        use_simulator: ${var.use_simulator}
         zerobus_source_table: ${var.zerobus_source_table}
+        pi_source_table: ${var.pi_source_table}
         catalog_name: ${var.catalog_name}
       catalog: ${var.catalog_name}
       target: bronze
@@ -65,38 +72,36 @@ resources:
   jobs:
     ot_pdm_zerobus_connector_job:
       name: ot-pdm-zerobus-connector-${var.industry}
+      environments:
+        - environment_key: default
+          spec:
+            client: "1"
+            dependencies:
+              - unified-ot-zerobus-connector
       tasks:
         - task_key: ingest_real_zerobus
-          new_cluster:
-            spark_version: 15.4.x-scala2.12
-            node_type_id: m5.xlarge
-            num_workers: 1
-            aws_attributes:
-              ebs_volume_count: 1
-              ebs_volume_size: 100
+          environment_key: default
           spark_python_task:
             python_file: core/zerobus_ingest/run_connector.py
             parameters:
               - "--industry"
               - "${var.industry}"
-          libraries:
-            - pypi:
-                package: unified-ot-zerobus-connector
 
     ot_pdm_scoring_job:
       name: ot-pdm-scoring-${var.industry}
-      job_clusters:
-        - job_cluster_key: default_job_cluster
-          new_cluster:
-            spark_version: 15.4.x-scala2.12
-            node_type_id: ${var.job_node_type_id}
-            num_workers: 1
-            aws_attributes:
-              ebs_volume_count: 1
-              ebs_volume_size: 100
+      environments:
+        - environment_key: default
+          spec:
+            client: "1"
+            dependencies:
+              - mlflow
+              - pandas
+              - numpy
+              - scikit-learn
+              - pyyaml
       tasks:
         - task_key: batch_score
-          job_cluster_key: default_job_cluster
+          environment_key: default
           spark_python_task:
             python_file: core/ml/batch_score.py
             parameters:
@@ -109,18 +114,19 @@ resources:
 
     ot_pdm_training_job:
       name: ot-pdm-training-${var.industry}
-      job_clusters:
-        - job_cluster_key: default_job_cluster
-          new_cluster:
-            spark_version: 15.4.x-scala2.12
-            node_type_id: ${var.job_node_type_id}
-            num_workers: 1
-            aws_attributes:
-              ebs_volume_count: 1
-              ebs_volume_size: 100
+      environments:
+        - environment_key: default
+          spec:
+            client: "1"
+            dependencies:
+              - mlflow
+              - pandas
+              - numpy
+              - scikit-learn
+              - pyyaml
       tasks:
         - task_key: train_models
-          job_cluster_key: default_job_cluster
+          environment_key: default
           spark_python_task:
             python_file: core/ml/train.py
             parameters:
@@ -133,18 +139,13 @@ resources:
 
     ot_pdm_financial_backfill_job:
       name: ot-pdm-financial-backfill-${var.industry}
-      job_clusters:
-        - job_cluster_key: default_job_cluster
-          new_cluster:
-            spark_version: 15.4.x-scala2.12
-            node_type_id: ${var.job_node_type_id}
-            num_workers: 1
-            aws_attributes:
-              ebs_volume_count: 1
-              ebs_volume_size: 100
+      environments:
+        - environment_key: default
+          spec:
+            client: "1"
       tasks:
         - task_key: generate_financial_daily
-          job_cluster_key: default_job_cluster
+          environment_key: default
           spark_python_task:
             python_file: core/finance/generate_financials.py
             parameters:
@@ -159,18 +160,13 @@ resources:
 
     ot_pdm_workspace_bootstrap_job:
       name: ot-pdm-workspace-bootstrap
-      job_clusters:
-        - job_cluster_key: bootstrap_cluster
-          new_cluster:
-            spark_version: 15.4.x-scala2.12
-            node_type_id: ${var.job_node_type_id}
-            num_workers: 1
-            aws_attributes:
-              ebs_volume_count: 1
-              ebs_volume_size: 100
+      environments:
+        - environment_key: default
+          spec:
+            client: "1"
       tasks:
         - task_key: bootstrap_all_data_and_setup
-          job_cluster_key: bootstrap_cluster
+          environment_key: default
           notebook_task:
             notebook_path: ${workspace.file_path}/RUNME_BOOTSTRAP_ALL
             source: WORKSPACE
