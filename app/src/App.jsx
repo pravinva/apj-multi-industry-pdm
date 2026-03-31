@@ -79,6 +79,19 @@ const JA_UI = {
   Warning: "警告",
   "Maintenance Supervisor AI": "保全スーパーバイザーAI",
   "Operational diagnosis and actions": "運用診断と推奨アクション",
+  "Force critical": "重大を強制",
+  "Forcing...": "強制中...",
+  "Open Genie room": "Genieルームを開く",
+  "Genie room unavailable": "Genieルーム未設定",
+  "Genie rooms configured": "設定済みGenieルーム",
+  "Approve": "承認",
+  "Reject": "却下",
+  "Defer": "延期",
+  "Actioned": "対応済み",
+  "Factory map": "工場マップ",
+  "Hierarchy tree": "階層ツリー",
+  "Physical layout map": "物理レイアウトマップ",
+  "Investigate in Genie": "Genieで調査",
   "Processing your request...": "リクエストを処理中...",
   "Ask about risk, RUL, and next action...": "リスク、RUL、次アクションを質問...",
   "Processing...": "処理中...",
@@ -201,8 +214,16 @@ async function postJson(url, body, fallback) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body)
     });
-    if (!res.ok) throw new Error("bad response");
-    return await res.json();
+    const contentType = String(res.headers.get("content-type") || "");
+    const isJson = contentType.includes("application/json");
+    const payload = isJson ? await res.json() : await res.text();
+    if (!res.ok) {
+      const detail =
+        (payload && typeof payload === "object" && (payload.detail || payload.message || payload.error)) ||
+        (typeof payload === "string" ? payload : `HTTP ${res.status}`);
+      return { ...(fallback || {}), ok: false, status: res.status, detail: String(detail || "Request failed") };
+    }
+    return payload;
   } catch {
     return fallback;
   }
@@ -232,6 +253,68 @@ function healthRing(health) {
   return {
     background: `conic-gradient(${color} ${health * 3.6}deg, #E2E8F0 0deg)`
   };
+}
+
+function assetPinPosition(industry, assetId, index, total) {
+  const id = String(assetId || "");
+  const bucket = Math.max(1, total || 1);
+  const ring = Math.floor(index / 8);
+  const lane = index % 8;
+  const baseX = 14 + (lane * 10.5);
+  const baseY = 18 + (ring * 14);
+  // Industry-specific nudges keep visual grouping realistic by domain.
+  if (industry === "water") {
+    if (id.startsWith("MT-")) return { x: 18 + lane * 9, y: 20 + ring * 10 };
+    if (id.startsWith("PS-")) return { x: 52 + lane * 6, y: 44 + ring * 9 };
+    if (id.startsWith("TP-")) return { x: 28 + lane * 7, y: 68 + ring * 8 };
+    if (id.startsWith("VS-")) return { x: 72 + lane * 5, y: 22 + ring * 10 };
+  }
+  if (industry === "mining") {
+    if (id.startsWith("HV-")) return { x: 20 + lane * 8, y: 72 + ring * 7 };
+    if (id.startsWith("CV-")) return { x: 16 + lane * 9, y: 44 + ring * 8 };
+    if (id.startsWith("CR-")) return { x: 62 + lane * 6, y: 28 + ring * 9 };
+  }
+  if (industry === "automotive") {
+    return { x: 12 + lane * 10.8, y: 20 + (index % bucket < bucket / 2 ? 18 : 48) + ring * 6 };
+  }
+  if (industry === "semiconductor") {
+    return { x: 14 + lane * 10.2, y: 24 + (index % 2 === 0 ? 16 : 42) + ring * 7 };
+  }
+  if (industry === "energy") {
+    return { x: 16 + lane * 10, y: 24 + (index % 3) * 17 + ring * 6 };
+  }
+  return { x: baseX, y: baseY };
+}
+
+function toEpochMs(ts) {
+  if (!ts) return 0;
+  const ms = Date.parse(String(ts));
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+function prioritizeFlowRows(rows, injectedAssets, startedAt) {
+  const input = Array.isArray(rows) ? rows : [];
+  if (!input.length) return [];
+  const startedAtMs = toEpochMs(startedAt);
+  const injectedSet = new Set((injectedAssets || []).map((x) => String(x || "")));
+  const ranked = input.map((r, idx) => {
+    const equipmentId = String(r?.equipment_id || "");
+    const isInjectedAsset = injectedSet.has(equipmentId);
+    const tsMs = toEpochMs(r?.timestamp);
+    const isFresh = startedAtMs > 0 ? tsMs >= (startedAtMs - 120000) : false;
+    return {
+      ...r,
+      _isInjectedTop: isInjectedAsset && (isFresh || startedAtMs <= 0),
+      _tsMs: tsMs,
+      _idx: idx
+    };
+  });
+  ranked.sort((a, b) => {
+    if (a._isInjectedTop !== b._isInjectedTop) return a._isInjectedTop ? -1 : 1;
+    if (a._tsMs !== b._tsMs) return b._tsMs - a._tsMs;
+    return a._idx - b._idx;
+  });
+  return ranked;
 }
 
 function TreeNode({ node, onSelect }) {
@@ -381,6 +464,7 @@ export default function App() {
   const [assetDetail, setAssetDetail] = useState(null);
   const [hierarchy, setHierarchy] = useState(null);
   const [hierSelection, setHierSelection] = useState(null);
+  const [hierViewMode, setHierViewMode] = useState("map");
   const [model, setModel] = useState(null);
   const [advancedPdm, setAdvancedPdm] = useState(null);
   const [manualInput, setManualInput] = useState("");
@@ -389,6 +473,7 @@ export default function App() {
   const [manualFile, setManualFile] = useState(null);
   const [manualUploadPending, setManualUploadPending] = useState(false);
   const [simScoringPending, setSimScoringPending] = useState(false);
+  const [forceCriticalPendingByAsset, setForceCriticalPendingByAsset] = useState({});
   const [simScoringRunId, setSimScoringRunId] = useState("");
   const [simPipeline, setSimPipeline] = useState({
     active: false,
@@ -412,6 +497,7 @@ export default function App() {
   const [agentInput, setAgentInput] = useState("");
   const [agentMsgs, setAgentMsgs] = useState([]);
   const [genieConversationByIndustry, setGenieConversationByIndustry] = useState({});
+  const [genieRooms, setGenieRooms] = useState({ industry: "", workspace_url: "", configured_count: 0, total_count: 5, missing: [], rooms: {} });
   const [agentPending, setAgentPending] = useState(false);
   const [financeInput, setFinanceInput] = useState("");
   const [financeMsgs, setFinanceMsgs] = useState([]);
@@ -541,6 +627,7 @@ export default function App() {
       const defaultAsset = ov.assets?.[0]?.id || "";
       setSelectedAssetId(defaultAsset);
       const template = await getJson(`/api/ui/config/template?industry=${industry}`, null);
+      const roomCfg = await getJson(`/api/ui/genie/rooms?industry=${industry}`, null);
       if (!cancelled && template) {
         setCfg(template);
         const tc = template.connector || {};
@@ -556,6 +643,7 @@ export default function App() {
           target_fqn: targetFqn
         }));
       }
+      if (!cancelled && roomCfg) setGenieRooms(roomCfg);
     })();
     return () => {
       cancelled = true;
@@ -722,6 +810,20 @@ export default function App() {
     if (assetSeverityFilter === "warning") return assets.filter((a) => a.status === "warning");
     return assets;
   }, [overview.assets, assetSeverityFilter]);
+  const mapPins = useMemo(
+    () =>
+      (overview.assets || []).map((a, idx, arr) => ({
+        id: a.id,
+        status: a.status,
+        health: a.health_score_pct,
+        anomaly: a.anomaly_score,
+        type: a.type,
+        ...assetPinPosition(industry, a.id, idx, arr.length)
+      })),
+    [overview.assets, industry]
+  );
+  const activeGenieRoom = genieRooms?.rooms?.[industry] || {};
+  const activeGenieUrl = String(activeGenieRoom?.url || "");
 
   const simFlowDelta = useMemo(() => {
     const b = simPipeline.baseline;
@@ -861,7 +963,7 @@ export default function App() {
     try {
       const res = await postJson(
         "/api/ui/simulator/inject_and_score",
-        { industry, ticks: 12, wait_seconds: 6, keep_running: true },
+        { industry, ticks: 12, wait_seconds: 0, keep_running: true, non_blocking: true },
         { ok: false }
       );
       const rid = String(res?.run_id || res?.score?.run_id || "");
@@ -869,9 +971,18 @@ export default function App() {
         setSimScoringRunId(rid);
         setSimPipeline((prev) => ({
           ...prev,
-          phase: "Scoring run submitted. Waiting for completion...",
+          phase: "Scoring run submitted (non-blocking). Updates will stream in.",
           runId: rid,
           runStatus: "RUNNING",
+          rowsEmitted: Number(res?.rows_emitted || 0),
+          enabledAssets: Array.isArray(res?.enabled_fault_assets) ? res.enabled_fault_assets : []
+        }));
+      } else if (res?.ok && Number(res?.rows_emitted || 0) > 0) {
+        setSimPipeline((prev) => ({
+          ...prev,
+          active: false,
+          phase: "Rows emitted. Processing continues asynchronously (non-blocking).",
+          runStatus: "ACCEPTED",
           rowsEmitted: Number(res?.rows_emitted || 0),
           enabledAssets: Array.isArray(res?.enabled_fault_assets) ? res.enabled_fault_assets : []
         }));
@@ -1007,6 +1118,59 @@ export default function App() {
   async function updateFault(assetId, patch) {
     const result = await postJson("/api/ui/simulator/fault", { industry, asset_id: assetId, ...patch }, { faults: simState.faults || {} });
     setSimState((prev) => ({ ...prev, faults: result.faults || prev.faults }));
+  }
+
+  async function forceCritical(assetId) {
+    if (!assetId || forceCriticalPendingByAsset[assetId]) return;
+    setForceCriticalPendingByAsset((prev) => ({ ...prev, [assetId]: true }));
+    try {
+      const res = await postJson(
+        "/api/ui/simulator/force_critical",
+        { industry, asset_id: assetId, anomaly_score: 0.95, rul_hours: 6 },
+        { ok: false }
+      );
+      if (!res?.ok) {
+        const detail = String(res?.detail || "Unable to force critical prediction.");
+        setSimPipeline((prev) => ({
+          ...prev,
+          active: false,
+          runStatus: "FAILED",
+          error: detail,
+          completedAt: new Date().toISOString()
+        }));
+        return;
+      }
+
+      if (res?.faults) {
+        setSimState((prev) => ({ ...prev, faults: res.faults || prev.faults }));
+      }
+      setSelectedAssetId(assetId);
+      const [ov, flow, detail, modelData, advData] = await Promise.all([
+        getJson(`/api/ui/overview?industry=${industry}${currencyParam}`, EMPTY_OVERVIEW),
+        getJson(`/api/ui/simulator/flow?industry=${industry}&limit=24`, simFlow),
+        getJson(`/api/ui/asset/${encodeURIComponent(assetId)}?industry=${industry}${currencyParam}`, assetDetail),
+        getJson(`/api/ui/model/${encodeURIComponent(assetId)}?industry=${industry}${currencyParam}`, model),
+        getJson(`/api/ui/advanced_pdm?asset_id=${encodeURIComponent(assetId)}&industry=${industry}${currencyParam}`, advancedPdm)
+      ]);
+      setOverview(ov || EMPTY_OVERVIEW);
+      setSimFlow(flow || simFlow);
+      if (detail) setAssetDetail(detail);
+      if (modelData) setModel(modelData);
+      if (advData) setAdvancedPdm(advData);
+      setSimPipeline((prev) => ({
+        ...prev,
+        active: false,
+        phase: `Forced critical alert for ${assetId}.`,
+        runStatus: "FORCED",
+        runResult: "SUCCESS",
+        rowsEmitted: Math.max(1, Number(prev?.rowsEmitted || 0)),
+        enabledAssets: Array.from(new Set([...(prev?.enabledAssets || []), assetId])),
+        error: "",
+        completedAt: new Date().toISOString()
+      }));
+    } finally {
+      setForceCriticalPendingByAsset((prev) => ({ ...prev, [assetId]: false }));
+    }
   }
 
   function updateCfgField(field, value) {
@@ -1328,7 +1492,19 @@ export default function App() {
                   <div className="adot" />
                   <div>
                     <div className="atitle">{t("Maintenance Supervisor AI")}</div>
-                    <div className="asubt">{t("Operational diagnosis and actions")}</div>
+                    <div className="asubt-row">
+                      <div className="asubt">{t("Operational diagnosis and actions")}</div>
+                      {activeGenieUrl ? (
+                        <a className="agenie-link" href={activeGenieUrl} target="_blank" rel="noreferrer">
+                          {t("Open Genie room")}
+                        </a>
+                      ) : (
+                        <span className="agenie-link disabled">{t("Genie room unavailable")}</span>
+                      )}
+                    </div>
+                    <div className="asubt-meta">
+                      {t("Genie rooms configured")}: {Number(genieRooms?.configured_count || 0)}/{Number(genieRooms?.total_count || 5)}
+                    </div>
                   </div>
                 </div>
                 <div className="msgs">
@@ -1390,6 +1566,35 @@ export default function App() {
                       </span>
                     </span>
                     <span className="atime">{t(a.time)}</span>
+                    <div className="alert-actions">
+                      {overview.actioned_assets?.includes(a.equipment_id) ? (
+                        <span className="alert-actioned">{t("Actioned")}</span>
+                      ) : (
+                        <>
+                          <button
+                            className="alert-act-btn approve"
+                            disabled={!a.equipment_id || !!recActionPending[`${a.equipment_id}:approve`]}
+                            onClick={() => actOnRecommendation(a.equipment_id, "approve")}
+                          >
+                            {t("Approve")}
+                          </button>
+                          <button
+                            className="alert-act-btn reject"
+                            disabled={!a.equipment_id || !!recActionPending[`${a.equipment_id}:reject`]}
+                            onClick={() => actOnRecommendation(a.equipment_id, "reject")}
+                          >
+                            {t("Reject")}
+                          </button>
+                          <button
+                            className="alert-act-btn defer"
+                            disabled={!a.equipment_id || !!recActionPending[`${a.equipment_id}:defer`]}
+                            onClick={() => actOnRecommendation(a.equipment_id, "defer")}
+                          >
+                            {t("Defer")}
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1687,8 +1892,48 @@ export default function App() {
         <div className={`page ${page === "p3" ? "active" : ""}`} id="p3">
           <div className="p3-wrap">
             <div className="tree-panel">
-              <div className="tree-hdr">Asset hierarchy</div>
-              {hierarchy && <TreeNode node={hierarchy} onSelect={setHierSelection} />}
+              <div className="tree-hdr-row">
+                <div className="tree-hdr">Asset hierarchy</div>
+                <div className="tree-mode-toggle">
+                  <button className={`tree-mode-btn ${hierViewMode === "map" ? "active" : ""}`} onClick={() => setHierViewMode("map")}>{t("Factory map")}</button>
+                  <button className={`tree-mode-btn ${hierViewMode === "tree" ? "active" : ""}`} onClick={() => setHierViewMode("tree")}>{t("Hierarchy tree")}</button>
+                </div>
+              </div>
+              {hierViewMode === "tree" ? (
+                hierarchy && <TreeNode node={hierarchy} onSelect={setHierSelection} />
+              ) : (
+                <div className={`factory-map industry-${industry}`}>
+                  <div className="factory-map-overlay" />
+                  <div className="factory-map-title">{t("Physical layout map")} · {industryLabel(industry)}</div>
+                  <div className="factory-map-zones">
+                    <span>Zone A</span><span>Zone B</span><span>Zone C</span><span>Zone D</span>
+                  </div>
+                  {mapPins.map((p) => (
+                    <button
+                      key={`pin-${p.id}`}
+                      className={`asset-pin ${p.status}`}
+                      style={{ left: `${p.x}%`, top: `${p.y}%` }}
+                      title={`${p.id} · ${p.type} · anomaly ${p.anomaly}`}
+                      onClick={() => {
+                        setSelectedAssetId(p.id);
+                        const targetNode = (hierarchy?.children || [])
+                          .flatMap((s) => (s.children || []).flatMap((a) => (a.children || [])))
+                          .flatMap((u) => u.children || [])
+                          .find((e) => e.asset_id === p.id);
+                        if (targetNode) setHierSelection(targetNode);
+                      }}
+                    >
+                      <span className="asset-pin-dot" />
+                      <span className="asset-pin-label">{p.id}</span>
+                    </button>
+                  ))}
+                  <div className="factory-map-legend">
+                    <span className="lg healthy">Healthy</span>
+                    <span className="lg warning">Warning</span>
+                    <span className="lg critical">Critical</span>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="detail-panel">
               {hierSelection ? (
@@ -1731,9 +1976,20 @@ export default function App() {
                     </div>
                   )}
                   {!!hierSelection.asset_id && (
-                    <button className="back-btn" style={{ marginTop: 4 }} onClick={() => { setSelectedAssetId(hierSelection.asset_id); setPage("p2"); }}>
-                      View asset drilldown →
-                    </button>
+                    <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                      <button className="back-btn" onClick={() => { setSelectedAssetId(hierSelection.asset_id); setPage("p2"); }}>
+                        View asset drilldown →
+                      </button>
+                      <a
+                        className="back-btn"
+                        href={(genieRooms?.rooms?.[industry]?.url || "")}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ textDecoration: "none" }}
+                      >
+                        {t("Investigate in Genie")}
+                      </a>
+                    </div>
                   )}
                 </>
               ) : (
@@ -1986,9 +2242,9 @@ export default function App() {
                     </div>
                     <div className="sim-pipeline-steps">
                       <span className={`sim-step ${simPipeline.rowsEmitted > 0 ? "done" : simPipeline.active ? "live" : ""}`}>Inject {simPipeline.rowsEmitted || 0} rows</span>
-                      <span className={`sim-step ${simFlowDelta.bronze > 0 ? "done" : ""}`}>Bronze +{Math.max(0, simFlowDelta.bronze)}</span>
-                      <span className={`sim-step ${simFlowDelta.silver > 0 ? "done" : ""}`}>Silver +{Math.max(0, simFlowDelta.silver)}</span>
-                      <span className={`sim-step ${simFlowDelta.gold > 0 ? "done" : ""}`}>Gold +{Math.max(0, simFlowDelta.gold)}</span>
+                      <span className={`sim-step ${simFlowDelta.bronze > 0 ? "done" : simPipeline.rowsEmitted > 0 && simPipeline.runStatus !== "TERMINATED" ? "live" : ""}`}>Bronze +{Math.max(0, simFlowDelta.bronze)}{simFlowDelta.bronze <= 0 && simPipeline.rowsEmitted > 0 ? " (pending)" : ""}</span>
+                      <span className={`sim-step ${simFlowDelta.silver > 0 ? "done" : simPipeline.rowsEmitted > 0 && simPipeline.runStatus !== "TERMINATED" ? "live" : ""}`}>Silver +{Math.max(0, simFlowDelta.silver)}{simFlowDelta.silver <= 0 && simPipeline.rowsEmitted > 0 ? " (pending)" : ""}</span>
+                      <span className={`sim-step ${simFlowDelta.gold > 0 ? "done" : simPipeline.rowsEmitted > 0 && simPipeline.runStatus !== "TERMINATED" ? "live" : ""}`}>Gold +{Math.max(0, simFlowDelta.gold)}{simFlowDelta.gold <= 0 && simPipeline.rowsEmitted > 0 ? " (pending)" : ""}</span>
                       <span className={`sim-step ${simPipeline.runStatus === "TERMINATED" && simPipeline.runResult === "SUCCESS" ? "done" : simPipeline.runStatus === "RUNNING" ? "live" : ""}`}>
                         Score {simPipeline.runStatus || "pending"}{simPipeline.runResult ? `/${simPipeline.runResult}` : ""}
                       </span>
@@ -2025,6 +2281,12 @@ export default function App() {
                           <span className="fc-label">Severity</span>
                           <input className="fc-severity" type="range" min="1" max="100" value={simState.faults?.[a.id]?.severity || 1} onChange={(e) => updateFault(a.id, { severity: Number(e.target.value) })} />
                           <span className="fc-sev-val">{simState.faults?.[a.id]?.severity || 1}%</span>
+                        </div>
+                        <div className="fc-row">
+                          <span className="fc-label">Alert</span>
+                          <button className="fc-force-critical" onClick={() => forceCritical(a.id)} disabled={!!forceCriticalPendingByAsset[a.id]}>
+                            {forceCriticalPendingByAsset[a.id] ? t("Forcing...") : t("Force critical")}
+                          </button>
                         </div>
                       </div>
                       <div className="affected-sensors">
@@ -2081,10 +2343,10 @@ export default function App() {
                               <table className="bronze-table flow-table">
                                 <thead><tr><th>Timestamp</th><th>Equipment</th><th>Tag</th><th>Value</th><th>Q</th><th>Protocol</th></tr></thead>
                                 <tbody>
-                                  {(data.rows || []).slice(0, 5).map((r, i) => (
-                                    <tr key={`${data.stage}-row-${i}`} className={r.quality !== "good" ? r.quality : ""}>
+                                  {prioritizeFlowRows(data.rows || [], simPipeline.enabledAssets || [], simPipeline.startedAt).slice(0, 5).map((r, i) => (
+                                    <tr key={`${data.stage}-row-${i}`} className={`${r.quality !== "good" ? r.quality : ""} ${r._isInjectedTop ? "injected-row" : ""}`.trim()}>
                                       <td className="mono">{r.timestamp}</td>
-                                      <td className="mono">{r.equipment_id}</td>
+                                      <td className="mono">{r.equipment_id} {r._isInjectedTop ? <span className="injected-pill">INJECTED</span> : null}</td>
                                       <td className="mono">{r.tag_name}</td>
                                       <td className="mono">{r.value}</td>
                                       <td><span className={`q-badge ${r.quality}`}>{r.quality}</span></td>

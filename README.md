@@ -177,9 +177,34 @@ Prescriptive value is grounded in finance-aware outputs.
 - **Fleet page**: executive value, portfolio risk, decision cards.
 - **Drilldown page**: asset-level telemetry and risk context.
 - **ISA-95 page**: hierarchy navigation and rolled health.
+- **Factory map mode** (in ISA-95 page): textured physical-layout map with live status pins by industry, click-to-select asset context, and direct "Investigate in Genie" handoff.
 - **Stream page**: recent ingest rows with quality and protocol context.
 - **Model page**: model outputs and advanced maintenance panels.
-- **Simulator page**: fault controls and ingestion configuration.
+- **Simulator page**: fault controls, non-blocking inject/score pipeline, "Force critical" demo action, and ingestion configuration.
+
+## Alert Action Workflow and Lakebase Role
+
+Alert rows in the Fleet view now include in-row actions:
+
+- `Approve`
+- `Reject`
+- `Defer`
+
+When an operator selects one of these actions:
+
+1. The UI calls `POST /api/ui/recommendation/action`.
+2. The backend writes a decision event to the configured Zerobus target for operational traceability.
+3. The backend persists the durable decision record in Lakebase OLTP (`otpdm.operator_recommendation_actions` by default).
+4. The overview refreshes and the row is marked as `Actioned`.
+
+This is the role of Lakebase in the incident loop: it is the operational system-of-record for operator decisions, while Delta Gold predictions remain the analytical source for risk and alert generation.
+
+## Genie Room Integration
+
+- The app resolves per-industry Genie room IDs from `app/genie_rooms.json`.
+- The "Maintenance Supervisor AI" header includes an "Open Genie room" deep link for the active industry.
+- The UI also shows mapping coverage across industries ("Genie rooms configured: X/5").
+- Hierarchy map/detail flows include "Investigate in Genie" for location-aware incident triage.
 
 ## Manual Retrieval Pattern
 

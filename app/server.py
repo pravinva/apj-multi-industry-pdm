@@ -460,13 +460,19 @@ def _asset_defs(industry: str) -> list[dict[str, Any]]:
             aid = _asset_token_norm(str(row.get("id", "")))
             merged.append({**cfg_by_id.get(aid, {}), **row})
         return merged
-    return cfg_assets
+    if cfg_assets:
+        return cfg_assets
+    # Guardrail: if user-authored config is partial, fall back to built-in
+    # industry defaults so simulator ticks still emit rows.
+    return _default_industry_cfg(industry).get("simulator", {}).get("assets", []) or []
 
 
 def _sensor_defs(industry: str, asset_type: str) -> list[dict[str, Any]]:
     sensors_map = _industry_cfg(industry).get("sensors", {}) or {}
     if not sensors_map:
-        return []
+        sensors_map = _default_industry_cfg(industry).get("sensors", {}) or {}
+        if not sensors_map:
+            return []
     # Try direct key first.
     direct = sensors_map.get(asset_type)
     if isinstance(direct, list) and direct:
@@ -869,6 +875,39 @@ def _persist_simulator_rows(industry: str, rows: list[dict[str, Any]]) -> None:
             msg = getattr(err, "message", None) if err is not None else None
             raise RuntimeError(f"SQL statement failed state={state} message={msg or 'unknown error'}")
 
+    def _ensure_schema_for_fqn(target_fqn: str) -> None:
+        parts = [p.strip() for p in str(target_fqn).split(".") if p.strip()]
+        if len(parts) != 3:
+            return
+        catalog, schema, _ = parts
+        try:
+            _exec_checked(f"CREATE CATALOG IF NOT EXISTS {catalog}")
+            _exec_checked(f"CREATE SCHEMA IF NOT EXISTS {catalog}.{schema}")
+        except Exception as e:
+            # If caller can already write to existing table but lacks CREATE on
+            # catalog/schema, continue and let downstream INSERT decide.
+            if "PERMISSION_DENIED" in str(e):
+                return
+            raise
+
+    def _landing_table_ddl(target_fqn: str) -> str:
+        return f"""
+        CREATE TABLE IF NOT EXISTS {target_fqn} (
+          site_id STRING,
+          area_id STRING,
+          unit_id STRING,
+          equipment_id STRING,
+          component_id STRING,
+          tag_name STRING,
+          value DOUBLE,
+          unit STRING,
+          quality STRING,
+          quality_code STRING,
+          source_protocol STRING,
+          timestamp TIMESTAMP
+        ) USING DELTA
+        """
+
     values_sql: list[str] = []
     values_sql_pi: list[str] = []
     for r in rows:
@@ -924,27 +963,17 @@ def _persist_simulator_rows(industry: str, rows: list[dict[str, Any]]) -> None:
         )
 
     for target_fqn in target_fqns:
+        _ensure_schema_for_fqn(target_fqn)
         if not _SIM_STAGING_READY.get(target_fqn):
-            ddl = f"""
-            CREATE TABLE IF NOT EXISTS {target_fqn} (
-              site_id STRING,
-              area_id STRING,
-              unit_id STRING,
-              equipment_id STRING,
-              component_id STRING,
-              tag_name STRING,
-              value DOUBLE,
-              unit STRING,
-              quality STRING,
-              quality_code STRING,
-              source_protocol STRING,
-              timestamp TIMESTAMP
-            ) USING DELTA
-            """
+            ddl = _landing_table_ddl(target_fqn)
             try:
                 _exec_checked(ddl)
-            finally:
                 _SIM_STAGING_READY[target_fqn] = True
+            except Exception as e:
+                # Continue if CREATE TABLE is not allowed; INSERT may still work
+                # when table already exists.
+                if "PERMISSION_DENIED" not in str(e):
+                    raise
 
         chunk = 200
         for i in range(0, len(values_sql), chunk):
@@ -953,38 +982,62 @@ def _persist_simulator_rows(industry: str, rows: list[dict[str, Any]]) -> None:
                 "(site_id, area_id, unit_id, equipment_id, component_id, tag_name, value, unit, quality, quality_code, source_protocol, timestamp) VALUES "
                 + ", ".join(values_sql[i : i + chunk])
             )
-            _exec_checked(stmt)
+            try:
+                _exec_checked(stmt)
+            except Exception as e:
+                # Table may be dropped/reset while process cache still marks it ready.
+                # Self-heal once by recreating and retrying the same INSERT.
+                if "TABLE_OR_VIEW_NOT_FOUND" not in str(e):
+                    raise
+                _SIM_STAGING_READY[target_fqn] = False
+                try:
+                    _exec_checked(_landing_table_ddl(target_fqn))
+                except Exception as ce:
+                    if "PERMISSION_DENIED" in str(ce):
+                        raise RuntimeError(
+                            f"Missing CREATE TABLE permission for {target_fqn}; "
+                            "pre-create the table or grant CREATE TABLE on schema."
+                        ) from ce
+                    raise
+                _SIM_STAGING_READY[target_fqn] = True
+                _exec_checked(stmt)
 
     pi_target_fqn = _pi_simulated_landing_target(industry)
-    if not _SIM_STAGING_READY.get(pi_target_fqn):
-        ddl = f"""
-        CREATE TABLE IF NOT EXISTS {pi_target_fqn} (
-          site_id STRING,
-          area_id STRING,
-          unit_id STRING,
-          equipment_id STRING,
-          component_id STRING,
-          tag_name STRING,
-          value DOUBLE,
-          unit STRING,
-          quality STRING,
-          quality_code STRING,
-          source_protocol STRING,
-          timestamp TIMESTAMP
-        ) USING DELTA
-        """
-        try:
-            _exec_checked(ddl)
-        finally:
-            _SIM_STAGING_READY[pi_target_fqn] = True
-    chunk = 200
-    for i in range(0, len(values_sql_pi), chunk):
-        stmt = (
-            f"INSERT INTO {pi_target_fqn} "
-            "(site_id, area_id, unit_id, equipment_id, component_id, tag_name, value, unit, quality, quality_code, source_protocol, timestamp) VALUES "
-            + ", ".join(values_sql_pi[i : i + chunk])
-        )
-        _exec_checked(stmt)
+    try:
+        _ensure_schema_for_fqn(pi_target_fqn)
+        if not _SIM_STAGING_READY.get(pi_target_fqn):
+            ddl = _landing_table_ddl(pi_target_fqn)
+            try:
+                _exec_checked(ddl)
+                _SIM_STAGING_READY[pi_target_fqn] = True
+            except Exception as e:
+                # PI stream is additive; do not fail simulator tick if PI table
+                # cannot be created due to grants.
+                if "PERMISSION_DENIED" in str(e):
+                    print(f"[simulator] PI create skipped for {pi_target_fqn}: {e}")
+                    return
+                raise
+        chunk = 200
+        for i in range(0, len(values_sql_pi), chunk):
+            stmt = (
+                f"INSERT INTO {pi_target_fqn} "
+                "(site_id, area_id, unit_id, equipment_id, component_id, tag_name, value, unit, quality, quality_code, source_protocol, timestamp) VALUES "
+                + ", ".join(values_sql_pi[i : i + chunk])
+            )
+            try:
+                _exec_checked(stmt)
+            except Exception as e:
+                # Keep OT path healthy even if PI insert fails.
+                if "TABLE_OR_VIEW_NOT_FOUND" in str(e) or "PERMISSION_DENIED" in str(e):
+                    print(f"[simulator] PI insert skipped for {pi_target_fqn}: {e}")
+                    return
+                raise
+    except Exception as e:
+        # PI is supplemental context only; never block OT simulator tick on PI.
+        if "PERMISSION_DENIED" in str(e) or "TABLE_OR_VIEW_NOT_FOUND" in str(e):
+            print(f"[simulator] PI path non-fatal for {pi_target_fqn}: {e}")
+            return
+        raise
 
 
 def _sensor_features_map(industry: str) -> dict[tuple[str, str], dict[str, Any]]:
@@ -1305,8 +1358,14 @@ def _zerobus_action_target(industry: str) -> tuple[str, dict[str, Any]]:
     # This prevents cross-industry leakage when a saved connector config points to
     # a different catalog (for example mining while viewing automotive).
     target_catalog = str(catalog).strip()
-    target_schema = str(target.get("schema") or "bronze").strip()
-    target_table = str(target.get("table") or _DEFAULT_ZEROBUS_TARGET_TABLE).strip()
+    # Keep writes pinned to canonical Bronze schema to avoid config drift and
+    # invalid saved target schema values causing simulator write failures.
+    target_schema = "bronze"
+    raw_table = str(target.get("table") or _DEFAULT_ZEROBUS_TARGET_TABLE).strip().strip("`")
+    # Accept either plain table name or accidentally saved FQN/table path.
+    if "." in raw_table:
+        raw_table = raw_table.split(".")[-1]
+    target_table = re.sub(r"[^a-zA-Z0-9_]", "", raw_table) or _DEFAULT_ZEROBUS_TARGET_TABLE
     return f"{target_catalog}.{target_schema}.{target_table}", zcfg
 
 
@@ -2555,6 +2614,7 @@ def _overview(industry: str, display_currency: str | None = None) -> dict[str, A
         },
         "alerts": [
             {
+                "equipment_id": a["id"],
                 "severity": "critical",
                 "text": f"{a['id']} requires immediate intervention ({a['fault_mode']})",
                 "time": "now",
@@ -2565,6 +2625,7 @@ def _overview(industry: str, display_currency: str | None = None) -> dict[str, A
         ]
         + [
             {
+                "equipment_id": a["id"],
                 "severity": "warning",
                 "text": f"{a['id']} should be scheduled this week ({a['fault_mode']})",
                 "time": "recent",
@@ -2722,7 +2783,7 @@ def _asset_detail(industry: str, asset_id: str, display_currency: str | None = N
 def _sim_state(industry: str) -> dict[str, Any]:
     if industry not in SIM_STATE:
         cfg = _industry_cfg(industry)
-        assets = cfg.get("simulator", {}).get("assets", [])
+        assets = cfg.get("simulator", {}).get("assets", []) or _default_industry_cfg(industry).get("simulator", {}).get("assets", [])
         SIM_STATE[industry] = {
             "running": False,
             "reading_count": 0,
@@ -3510,11 +3571,51 @@ def ui_simulator_state(industry: str = "mining") -> dict:
         "reading_count": st["reading_count"],
         "tick_interval_ms": st["tick_interval_ms"],
         "noise_factor": st["noise_factor"],
+        "last_error": st.get("last_error", ""),
         "faults": st["faults"],
         "rows": st["recent_rows"],
         "assets": _asset_defs(industry),
         "asset_sensors": asset_sensors,
         "catalog": _industry_cfg(industry).get("catalog", f"pdm_{industry}"),
+    }
+
+
+@app.get("/api/ui/genie/rooms")
+def ui_genie_rooms(industry: str = "mining") -> dict:
+    if industry not in INDUSTRIES:
+        raise HTTPException(status_code=400, detail="Invalid industry")
+    room_map = _load_genie_room_map()
+    workspace_url = (
+        str(
+            os.getenv("DATABRICKS_HOST")
+            or os.getenv("OT_PDM_DEFAULT_WORKSPACE_URL")
+            or _DEFAULT_ZEROBUS_WORKSPACE_URL
+            or ""
+        )
+        .strip()
+        .rstrip("/")
+    )
+    if workspace_url and not workspace_url.startswith("http"):
+        workspace_url = f"https://{workspace_url}"
+
+    rooms: dict[str, dict[str, str]] = {}
+    missing: list[str] = []
+    for ind in INDUSTRIES:
+        space_id = str(room_map.get(ind, "") or "").strip()
+        if not space_id:
+            missing.append(ind)
+        rooms[ind] = {
+            "space_id": space_id,
+            "url": f"{workspace_url}/genie/rooms/{space_id}" if workspace_url and space_id else "",
+        }
+
+    return {
+        "industry": industry,
+        "workspace_url": workspace_url,
+        "configured_count": len(INDUSTRIES) - len(missing),
+        "total_count": len(INDUSTRIES),
+        "missing": missing,
+        "rooms": rooms,
     }
 
 
@@ -3634,7 +3735,8 @@ def ui_simulator_inject_and_score(payload: dict) -> dict:
     if industry not in INDUSTRIES:
         raise HTTPException(status_code=400, detail="Invalid industry")
     ticks = max(1, min(120, int(payload.get("ticks", 12) or 12)))
-    wait_seconds = max(0.0, min(30.0, float(payload.get("wait_seconds", 6.0) or 0.0)))
+    wait_seconds = max(0.0, min(30.0, float(payload.get("wait_seconds", 0.0) or 0.0)))
+    non_blocking = bool(payload.get("non_blocking", True))
 
     st = _sim_state(industry)
     enabled_assets = [aid for aid, cfg in (st.get("faults") or {}).items() if bool((cfg or {}).get("enabled"))]
@@ -3655,13 +3757,14 @@ def ui_simulator_inject_and_score(payload: dict) -> dict:
         st["running"] = True if keep_running else was_running
 
     dlt_resp: dict[str, Any] = {"ok": False, "error": "DLT update not triggered."}
+    score_resp: dict[str, Any] = {"ok": False, "error": "Scoring run not triggered."}
     try:
         client = WorkspaceClient()
         dlt_resp = _trigger_dlt_update(client, industry)
     except Exception as e:
         dlt_resp = {"ok": False, "error": f"Unable to trigger DLT update: {e}"}
 
-    if wait_seconds > 0:
+    if wait_seconds > 0 and not non_blocking:
         time.sleep(wait_seconds)
     try:
         score_resp = ui_scoring_run({"industry": industry})
@@ -3669,6 +3772,22 @@ def ui_simulator_inject_and_score(payload: dict) -> dict:
         score_resp = {"ok": False, "error": str(getattr(e, "detail", "") or "Unable to trigger scoring run.")}
     except Exception as e:
         score_resp = {"ok": False, "error": f"Unable to trigger scoring run: {e}"}
+
+    # Non-blocking mode never fails the request if rows were emitted; it returns
+    # immediately with best-effort trigger details for downstream polling.
+    if non_blocking and emitted > 0:
+        return {
+            "ok": True,
+            "accepted": True,
+            "industry": industry,
+            "ticks": ticks,
+            "keep_running": keep_running,
+            "rows_emitted": emitted,
+            "enabled_fault_assets": enabled_assets,
+            "dlt": dlt_resp,
+            "score": score_resp,
+            "run_id": score_resp.get("run_id") if isinstance(score_resp, dict) else None,
+        }
     return {
         "ok": True,
         "industry": industry,
@@ -3695,7 +3814,13 @@ def ui_simulator_tick(payload: dict) -> dict:
     assets = _asset_defs(industry)
     cfg_assets = _industry_cfg(industry).get("simulator", {}).get("assets", [])
     cfg_by_id = {_asset_token_norm(str(a.get("id") or "")): a for a in cfg_assets if a.get("id")}
-    all_sensor_sets = list((_industry_cfg(industry).get("sensors", {}) or {}).values())
+    # Keep default sensor fallback available even when user config is partial.
+    sensor_map = (
+        _industry_cfg(industry).get("sensors", {})
+        or _default_industry_cfg(industry).get("sensors", {})
+        or {}
+    )
+    all_sensor_sets = list(sensor_map.values())
     default_sensor_set = next((s for s in all_sensor_sets if isinstance(s, list) and s), [])
 
     for asset in assets:
@@ -3745,7 +3870,10 @@ def ui_simulator_tick(payload: dict) -> dict:
     try:
         _persist_simulator_rows(industry, rows)
     except Exception as e:
+        st["last_error"] = str(e)
+        print(f"[simulator] tick persist failed industry={industry} error={e}")
         raise HTTPException(status_code=500, detail=f"Simulator ingest failed for {industry}: {e}")
+    st["last_error"] = ""
     return {"rows": st["recent_rows"], "reading_count": st["reading_count"], "running": True}
 
 
@@ -3766,6 +3894,124 @@ def ui_simulator_fault(payload: dict) -> dict:
         current["mode"] = str(payload["mode"])
     st["faults"][asset_id] = current
     return {"asset_id": asset_id, "fault": current, "faults": st["faults"]}
+
+
+@app.post("/api/ui/simulator/force_critical")
+def ui_simulator_force_critical(payload: dict) -> dict:
+    industry = str(payload.get("industry", "mining") or "mining")
+    if industry not in INDUSTRIES:
+        raise HTTPException(status_code=400, detail="Invalid industry")
+    asset_id = str(payload.get("asset_id", "") or "").strip()
+    if not asset_id:
+        raise HTTPException(status_code=400, detail="Missing asset_id")
+    if WorkspaceClient is None or sql_service is None:
+        raise HTTPException(status_code=500, detail="Databricks WorkspaceClient unavailable in app runtime.")
+
+    assets = _asset_defs(industry)
+    if asset_id not in {str(a.get("id", "")) for a in assets}:
+        raise HTTPException(status_code=400, detail=f"Unknown asset_id '{asset_id}' for industry '{industry}'.")
+
+    anomaly_score = float(payload.get("anomaly_score", 0.95) or 0.95)
+    anomaly_score = max(0.80, min(0.999, anomaly_score))
+    rul_hours = float(payload.get("rul_hours", 6.0) or 6.0)
+    rul_hours = max(1.0, min(240.0, rul_hours))
+
+    cfg = _industry_cfg(industry)
+    catalog = cfg.get("catalog", f"pdm_{industry}")
+    table_fqn = f"{catalog}.gold.pdm_predictions"
+    prediction_ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    failure_ts = (datetime.now(timezone.utc) + timedelta(hours=rul_hours)).strftime("%Y-%m-%d %H:%M:%S")
+
+    client = WorkspaceClient()
+
+    def _exec_checked(statement: str) -> None:
+        resp = client.statement_execution.execute_statement(
+            statement=statement,
+            warehouse_id=_WAREHOUSE_ID,
+            wait_timeout="50s",
+            disposition=sql_service.Disposition.INLINE,
+        )
+        status = getattr(resp, "status", None)
+        if status is None or status.state != sql_service.StatementState.SUCCEEDED:
+            state = getattr(status, "state", None) if status is not None else None
+            err = getattr(status, "error", None) if status is not None else None
+            msg = getattr(err, "message", None) if err is not None else None
+            raise RuntimeError(f"SQL statement failed state={state} message={msg or 'unknown error'}")
+
+    try:
+        _exec_checked(f"CREATE CATALOG IF NOT EXISTS {catalog}")
+        _exec_checked(f"CREATE SCHEMA IF NOT EXISTS {catalog}.gold")
+    except Exception:
+        # Continue when caller has write access but no create grants.
+        pass
+
+    ddl = f"""
+    CREATE TABLE IF NOT EXISTS {table_fqn} (
+      equipment_id              STRING NOT NULL,
+      prediction_timestamp      TIMESTAMP NOT NULL,
+      anomaly_score             DOUBLE NOT NULL,
+      anomaly_label             STRING NOT NULL,
+      rul_hours                 DOUBLE,
+      predicted_failure_date    TIMESTAMP,
+      top_contributing_sensor   STRING,
+      top_contributing_score    DOUBLE,
+      model_version_anomaly     STRING,
+      model_version_rul         STRING,
+      _scored_at                TIMESTAMP DEFAULT current_timestamp()
+    ) USING DELTA
+    """
+    try:
+        _exec_checked(ddl)
+    except Exception:
+        # If table already exists and CREATE is blocked, insertion may still succeed.
+        pass
+
+    insert_stmt = f"""
+    INSERT INTO {table_fqn} (
+      equipment_id,
+      prediction_timestamp,
+      anomaly_score,
+      anomaly_label,
+      rul_hours,
+      predicted_failure_date,
+      top_contributing_sensor,
+      top_contributing_score,
+      model_version_anomaly,
+      model_version_rul
+    ) VALUES (
+      '{_sql_escape(asset_id)}',
+      TIMESTAMP '{_sql_escape(prediction_ts)}',
+      {anomaly_score},
+      'anomaly',
+      {rul_hours},
+      TIMESTAMP '{_sql_escape(failure_ts)}',
+      'forced_demo',
+      {round(anomaly_score, 3)},
+      'forced_demo',
+      'forced_demo'
+    )
+    """
+    try:
+        _exec_checked(insert_stmt)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unable to force critical prediction: {e}")
+
+    st = _sim_state(industry)
+    current = st["faults"].get(asset_id, {"enabled": True, "severity": 100, "mode": "degradation"})
+    current["enabled"] = True
+    current["severity"] = 100
+    st["faults"][asset_id] = current
+
+    return {
+        "ok": True,
+        "industry": industry,
+        "asset_id": asset_id,
+        "table": table_fqn,
+        "anomaly_score": round(anomaly_score, 3),
+        "rul_hours": round(rul_hours, 1),
+        "prediction_timestamp": prediction_ts,
+        "faults": st["faults"],
+    }
 
 
 @app.get("/api/ui/config/template")
