@@ -37,6 +37,7 @@ ROOT = Path(__file__).resolve().parent
 DIST = ROOT / "dist"
 SDT_REPORT_DIR = (ROOT / "sdt-compression") if (ROOT / "sdt-compression").exists() else (ROOT.parent / "docs" / "sdt-compression")
 GENIE_ROOM_MAP_PATH = ROOT / "genie_rooms.json"
+FINANCE_GENIE_ROOM_MAP_PATH = ROOT / "genie_rooms_finance.json"
 INDUSTRIES = ["mining", "energy", "water", "automotive", "semiconductor"]
 SUPPORTED_CURRENCIES = {"USD", "AUD", "JPY"}
 ISA_EMOJI = {
@@ -1442,8 +1443,12 @@ def _decrypt_secret(value: str) -> str:
         return ""
 
 
-def _load_genie_room_map() -> dict[str, str]:
-    env_map = os.getenv("OT_PDM_GENIE_ROOM_MAP", "").strip()
+def _load_genie_room_map(room_type: str = "ops") -> dict[str, str]:
+    normalized = str(room_type or "ops").strip().lower()
+    is_finance = normalized == "finance"
+    env_var = "OT_PDM_FINANCE_GENIE_ROOM_MAP" if is_finance else "OT_PDM_GENIE_ROOM_MAP"
+    map_path = FINANCE_GENIE_ROOM_MAP_PATH if is_finance else GENIE_ROOM_MAP_PATH
+    env_map = os.getenv(env_var, "").strip()
     if env_map:
         try:
             parsed = json.loads(env_map)
@@ -1451,9 +1456,9 @@ def _load_genie_room_map() -> dict[str, str]:
                 return {str(k): str(v) for k, v in parsed.items() if v}
         except Exception:
             pass
-    if GENIE_ROOM_MAP_PATH.exists():
+    if map_path.exists():
         try:
-            parsed = json.loads(GENIE_ROOM_MAP_PATH.read_text(encoding="utf-8"))
+            parsed = json.loads(map_path.read_text(encoding="utf-8"))
             if isinstance(parsed, dict):
                 return {str(k): str(v) for k, v in parsed.items() if v}
         except Exception:
@@ -3584,7 +3589,7 @@ def ui_simulator_state(industry: str = "mining") -> dict:
 def ui_genie_rooms(industry: str = "mining") -> dict:
     if industry not in INDUSTRIES:
         raise HTTPException(status_code=400, detail="Invalid industry")
-    room_map = _load_genie_room_map()
+    room_map = _load_genie_room_map(str(payload.get("room_type", "ops") or "ops"))
     workspace_url = (
         str(
             os.getenv("DATABRICKS_HOST")
@@ -4492,24 +4497,21 @@ def agent_chat(payload: dict) -> dict:
             f"{ref_lines}"
         )
 
-    room_map = _load_genie_room_map()
+    room_map = _load_genie_room_map(str(payload.get("room_type", "ops") or "ops"))
     space_id = room_map.get(industry) or room_map.get("default", "")
     if not space_id or WorkspaceClient is None:
-        answer = (
-            f"Diagnosis: potential developing fault for the selected asset. "
-            f"Action: schedule inspection in the next shift, verify parts, and prepare a maintenance window. "
-            f"User message: {effective_user_text}"
+        missing_reason = (
+            "Genie room is not configured for this industry/room type."
+            if not space_id
+            else "Databricks WorkspaceClient is unavailable in this runtime."
         )
-        if respond_japanese:
-            answer = (
-                "診断: 選択された設備で故障の兆候が見られます。"
-                "対応: 次シフトで点検を計画し、部品在庫を確認し、保全ウィンドウを確保してください。 "
-                f"ユーザーメッセージ: {effective_user_text}"
-            )
-        if manual_refs:
-            refs = "\n".join([f"- [{r.get('source')}]" for r in manual_refs])
-            answer = f"{answer}\n\nReferences:\n{refs}"
-        return {"choices": [{"message": {"content": answer}}], "references": manual_refs}
+        return {
+            "conversation_id": conversation_id,
+            "genie_status": "FAILED",
+            "genie_failed": True,
+            "choices": [{"message": {"content": f"Genie request failed: {missing_reason}"}}],
+            "references": manual_refs,
+        }
 
     try:
         w = WorkspaceClient()
@@ -4595,129 +4597,41 @@ def agent_finance_chat(payload: dict) -> dict:
 
     ov = _overview(industry, display_currency=currency)
     ex = ov.get("executive", {}) if isinstance(ov, dict) else {}
-    user_text_l = user_text.lower()
-
-    def _schema_rejection_answer(text: str) -> bool:
-        t = str(text or "").lower()
-        signals = [
-            "unrelated to the database schema",
-            "not present in any of the available tables",
-            "cannot calculate ebit",
-            "cannot calculate",
-            "no available table",
-            "not present in the schema",
-        ]
-        return any(s in t for s in signals)
-
-    def _extract_weeks(text: str) -> int | None:
-        m = re.search(r"(\d+)\s*(week|weeks|wk|wks)", text, flags=re.I)
-        if m:
-            try:
-                return int(m.group(1))
-            except Exception:
-                return None
-        return None
-
-    def _finance_fallback_response(reason: str = "") -> dict:
-        decisions = list(ex.get("decision_cockpit", []) or [])
-        base_risk = sum(_to_float(d.get("value_uplift"), 0.0) for d in decisions[:3])
-        if base_risk <= 0:
-            base_risk = sum(_to_float(w.get("net_ebit_impact"), 0.0) for w in list(ex.get("work_orders", []) or [])[:3])
-        weeks = _extract_weeks(user_text) or 0
-        deferred_impact = base_risk * (1.0 + (0.12 * max(0, weeks)))
-        cur = str(ex.get("currency") or currency or "USD")
-        deferred_impact_fmt = _fmt_money(deferred_impact, cur)
-        ebit_saved_fmt = str(ex.get("ebit_saved_fmt") or _fmt_money(_to_float(ex.get("ebit_saved"), 0.0), cur))
-        with_actions_30 = str(
-            (((ex.get("forward_outlook") or {}).get("horizon_30_days") or {}).get("protected_with_actions_fmt"))
-            or ebit_saved_fmt
-        )
-        without_actions_30 = str(
-            (((ex.get("forward_outlook") or {}).get("horizon_30_days") or {}).get("protected_without_actions_fmt"))
-            or _fmt_money(max(0.0, _to_float(ex.get("ebit_saved"), 0.0) - deferred_impact), cur)
-        )
-        source_table = str(ex.get("source_table") or f"pdm_{industry}.finance.pm_financial_daily")
-        intro = f"{reason}\n\n" if reason else ""
-        msg = (
-            f"{intro}For **{industry}**, deferring top recommended maintenance by **{weeks} weeks** is estimated to put about "
-            f"**{deferred_impact_fmt}** of EBIT at risk over the near-term window.\n\n"
-            f"- 30d protected EBIT (with actions): **{with_actions_30}**\n"
-            f"- 30d protected EBIT (if deferred): **{without_actions_30}**\n"
-            f"- Current EBIT saved baseline: **{ebit_saved_fmt}**\n\n"
-            f"Source: `{source_table}` (finance daily) plus ranked work-order impacts in executive payload."
-        )
-        return {
-            "choices": [{"message": {"content": msg}}],
-            "finance_context": {
-                "industry": industry,
-                "currency": cur,
-                "ebit_saved_fmt": ex.get("ebit_saved_fmt", ""),
-                "roi_pct": ex.get("roi_pct", 0),
-            },
-        }
-
-    # Deterministic finance answer for defer-impact scenarios.
-    if ("defer" in user_text_l or "delay" in user_text_l) and ("ebit" in user_text_l or "impact" in user_text_l):
-        return _finance_fallback_response()
-
-    # Clarify data-source expectations when user asks about Genie-room finance visibility.
-    if "finance data" in user_text_l and "genie room" in user_text_l:
-        src = str(ex.get("source_table") or f"pdm_{industry}.finance.pm_financial_daily")
-        msg = (
-            f"The current Genie room appears to be scoped mainly to operational schema, which is why it may reject EBIT questions.\n\n"
-            f"In this app, finance metrics are available from **`{src}`** and merged into the executive/finance APIs. "
-            f"I can answer finance scenarios from that dataset directly."
-        )
-        return {
-            "choices": [{"message": {"content": msg}}],
-            "finance_context": {
-                "industry": industry,
-                "currency": ex.get("currency", ""),
-                "ebit_saved_fmt": ex.get("ebit_saved_fmt", ""),
-                "roi_pct": ex.get("roi_pct", 0),
-            },
-        }
-
+    catalog = _industry_cfg(industry).get("catalog", f"pdm_{industry}")
+    finance_daily = f"{catalog}.finance.pm_financial_daily"
+    maintenance_schedule = f"{catalog}.lakebase.maintenance_schedule"
+    parts_inventory = f"{catalog}.lakebase.parts_inventory"
+    predictions = f"{catalog}.gold.pdm_predictions"
+    features = f"{catalog}.silver.sensor_features"
+    ot_raw = f"{catalog}.bronze.sensor_readings"
     context = (
-        f"Finance context ({industry}): "
-        f"EBIT saved={ex.get('ebit_saved_fmt', 'n/a')}, "
-        f"ROI={ex.get('roi_pct', 'n/a')}%, "
-        f"Payback={ex.get('payback_days', 'n/a')} days, "
-        f"EBIT margin lift={ex.get('ebit_margin_bps', 'n/a')} bps, "
-        f"Baseline monthly EBIT={ex.get('baseline_monthly_ebit_fmt', 'n/a')}. "
-        f"Use this context when answering predictive-maintenance financial scenarios."
+        f"Finance room contract ({industry}): answer using SQL-grounded reasoning on real tables only.\n"
+        f"- EBIT source table: {finance_daily}\n"
+        f"- Work-order/operations tables: {maintenance_schedule}, {parts_inventory}\n"
+        f"- OT signal chain: {ot_raw} -> {features} -> {predictions}\n"
+        "Do not claim missing finance/work-order tables unless you explicitly verified they are absent in schema. "
+        "If data is incomplete, state what is missing and provide exact SQL checks."
     )
     merged = f"{user_text}\n\n{context}"
     base_payload = {
         "industry": industry,
         "currency": currency or ex.get("currency", ""),
         "conversation_id": payload.get("conversation_id", ""),
+        "room_type": "finance",
         "messages": [{"role": "user", "content": merged}],
     }
     reply = agent_chat(base_payload)
-    try:
-        if isinstance(reply, dict):
-            text = str((((reply.get("choices") or [{}])[0] or {}).get("message") or {}).get("content") or "")
-            if bool(reply.get("genie_failed")):
-                return _finance_fallback_response(
-                    reason="Genie request failed, so I used the app finance model directly."
-                )
-            if _schema_rejection_answer(text):
-                return _finance_fallback_response(
-                    reason="Genie returned a schema-scoped response, so I used the app finance model directly."
-                )
-            if text.lower().startswith("genie request failed:") or "genie message status=failed" in text.lower():
-                return _finance_fallback_response(
-                    reason="Genie request failed, so I used the app finance model directly."
-                )
-            reply.setdefault("finance_context", {
+    if isinstance(reply, dict):
+        reply.setdefault(
+            "finance_context",
+            {
                 "industry": industry,
                 "currency": ex.get("currency", ""),
+                "source_table": ex.get("source_table", finance_daily),
                 "ebit_saved_fmt": ex.get("ebit_saved_fmt", ""),
                 "roi_pct": ex.get("roi_pct", 0),
-            })
-    except Exception:
-        pass
+            },
+        )
     return reply
 
 

@@ -17,72 +17,120 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Create/update OT PdM Genie rooms per industry.")
     p.add_argument("--profile", default="DEFAULT")
     p.add_argument("--warehouse-id", default=DEFAULT_WAREHOUSE_ID)
+    p.add_argument("--room-type", choices=["ops", "finance"], default="ops")
     p.add_argument(
         "--output",
-        default=str(Path(__file__).resolve().parents[1] / "app" / "genie_rooms.json"),
+        default="",
         help="Path to write industry -> space_id mapping JSON",
     )
     return p.parse_args()
 
 
-def _title(industry: str) -> str:
-    return f"OT PdM Intelligence - {industry.title()} Genie"
+def _default_output(room_type: str) -> str:
+    root = Path(__file__).resolve().parents[1] / "app"
+    return str(root / ("genie_rooms_finance.json" if room_type == "finance" else "genie_rooms.json"))
 
 
-def _description(industry: str) -> str:
+def _title(industry: str, room_type: str) -> str:
+    suffix = "Finance Genie" if room_type == "finance" else "Genie"
+    return f"OT PdM Intelligence - {industry.title()} {suffix}"
+
+
+def _description(industry: str, room_type: str) -> str:
+    if room_type == "finance":
+        return (
+            f"AI/BI Genie room for OT+Finance PdM {industry} skin. "
+            "Focused on EBIT what-if analysis, work-order prioritization, and downside/risk quantification."
+        )
     return (
         f"AI/BI Genie room for OT PdM {industry} skin. "
         "Includes fleet health, anomaly, RUL, parts, and maintenance analysis."
     )
 
 
-def _space_payload(industry: str) -> dict[str, Any]:
+def _space_payload(industry: str, room_type: str) -> dict[str, Any]:
     catalog = f"pdm_{industry}"
-    table_ids = sorted(
-        [
-            f"{catalog}.gold.pdm_predictions",
-            f"{catalog}.silver.sensor_features",
-            f"{catalog}.bronze.sensor_readings",
-            f"{catalog}.lakebase.parts_inventory",
-            f"{catalog}.lakebase.maintenance_schedule",
-            f"{catalog}.bronze.feature_vectors",
-            f"{catalog}.gold.financial_impact_events",
-        ]
-    )
+    table_ids = [
+        f"{catalog}.gold.pdm_predictions",
+        f"{catalog}.silver.sensor_features",
+        f"{catalog}.bronze.sensor_readings",
+        f"{catalog}.lakebase.parts_inventory",
+        f"{catalog}.lakebase.maintenance_schedule",
+        f"{catalog}.finance.pm_financial_daily",
+    ]
+    if room_type == "ops":
+        table_ids.append(f"{catalog}.bronze.feature_vectors")
+    table_ids = sorted(table_ids)
     def _hid(label: str) -> str:
-        return hashlib.md5(f"{industry}:{label}".encode("utf-8")).hexdigest()
+        return hashlib.md5(f"{industry}:{room_type}:{label}".encode("utf-8")).hexdigest()
 
     sample_questions = [
         {
             "id": _hid("sq1"),
-            "question": [f"Which {industry} assets are currently critical by anomaly score and lowest RUL?"],
+            "question": [f"Which {industry} assets are currently critical by anomaly score and lowest RUL?"]
+            if room_type == "ops"
+            else ["What EBIT is at risk over 30 days if top recommended work orders are not executed?"],
         },
-        {"id": _hid("sq2"), "question": ["Show fleet health trend and explain top contributing sensors for the worst assets."]},
-        {"id": _hid("sq3"), "question": ["Which parts are low stock for assets with high near-term failure risk?"]},
-        {"id": _hid("sq4"), "question": ["What maintenance windows are available for high-risk assets in the next shifts?"]},
-        {"id": _hid("sq5"), "question": ["Summarize protocol quality mix and latest sensor anomalies by site/area/unit."]},
+        {
+            "id": _hid("sq2"),
+            "question": ["Show fleet health trend and explain top contributing sensors for the worst assets."]
+            if room_type == "ops"
+            else ["Which assets/work orders have the highest net EBIT impact and should be approved first?"],
+        },
+        {
+            "id": _hid("sq3"),
+            "question": ["Which parts are low stock for assets with high near-term failure risk?"]
+            if room_type == "ops"
+            else ["Show impact of deferring maintenance by 1-2 weeks on protected EBIT."],
+        },
+        {
+            "id": _hid("sq4"),
+            "question": ["What maintenance windows are available for high-risk assets in the next shifts?"]
+            if room_type == "ops"
+            else ["Which maintenance windows and parts constraints limit financial upside realization?"],
+        },
+        {
+            "id": _hid("sq5"),
+            "question": ["Summarize protocol quality mix and latest sensor anomalies by site/area/unit."]
+            if room_type == "ops"
+            else [f"For {industry}, summarize current EBIT saved, ROI, and payback drivers."],
+        },
     ]
     text_instructions = [
         {
             "id": _hid("instr"),
             "content": [
-                f"You are the OT PdM copilot for the {industry.title()} industry skin.\n\n",
+                (
+                    f"You are the OT PdM copilot for the {industry.title()} industry skin.\n\n"
+                    if room_type == "ops"
+                    else f"You are the OT+Finance PdM analyst for the {industry.title()} industry skin.\n\n"
+                ),
                 "Primary goals:\n",
-                "- Prioritize assets by operational risk using anomaly score, RUL, and quality trends.\n",
-                "- Tie risk to operational action: maintenance timing and parts readiness.\n",
-                "- Keep responses concise, decision-oriented, and explicit about confidence.\n\n",
+                "- Prioritize assets by operational risk using anomaly score, RUL, and quality trends.\n"
+                if room_type == "ops"
+                else "- Quantify EBIT-at-risk and EBIT-protected scenarios from maintenance action vs inaction.\n",
+                "- Tie risk to operational action: maintenance timing and parts readiness.\n"
+                if room_type == "ops"
+                else "- Rank work orders by financial impact while preserving operational constraints.\n",
+                "- Keep responses concise, decision-oriented, and explicit about confidence.\n\n"
+                if room_type == "ops"
+                else "- Keep responses concise, calculation-first, and explicit about assumptions.\n\n",
                 "Data usage rules:\n",
-                "- Use latest rows when ranking current risk.\n",
+                "- Use latest rows when ranking current risk.\n"
+                if room_type == "ops"
+                else "- Use real tables only; do not invent metrics.\n",
                 "- Use weighted/aggregated KPIs for fleet views; avoid naive averaging of percentages.\n",
                 "- Prefer Unity Catalog table fields over inferred values.\n",
-                "- If data is missing for a question, state assumptions and suggest the exact SQL check.\n\n",
+                "- If data is missing for a question, state assumptions and suggest the exact SQL check.\n\n"
+                if room_type == "ops"
+                else "- If a required table/column is missing, state exactly what is missing and provide SQL checks.\n\n",
                 "Relevant tables:\n",
                 f"- {catalog}.gold.pdm_predictions (latest anomaly/RUL)\n",
                 f"- {catalog}.silver.sensor_features (sensor behavior features)\n",
                 f"- {catalog}.bronze.sensor_readings (stream-level context)\n",
                 f"- {catalog}.lakebase.parts_inventory (parts stock/readiness)\n",
                 f"- {catalog}.lakebase.maintenance_schedule (maintenance windows)\n",
-                f"- {catalog}.gold.financial_impact_events (event-level OT+finance impact)\n",
+                f"- {catalog}.finance.pm_financial_daily (daily EBIT/cost outcomes)\n",
             ]
         }
     ]
@@ -175,14 +223,14 @@ def _find_space_id_by_title(w: WorkspaceClient, title: str) -> str:
             return ""
 
 
-def _create_space(w: WorkspaceClient, industry: str, warehouse_id: str) -> str:
-    payload = _space_payload(industry)
+def _create_space(w: WorkspaceClient, industry: str, warehouse_id: str, room_type: str) -> str:
+    payload = _space_payload(industry, room_type)
     created = w.api_client.do(
         "POST",
         "/api/2.0/genie/spaces",
         body={
-            "title": _title(industry),
-            "description": _description(industry),
+            "title": _title(industry, room_type),
+            "description": _description(industry, room_type),
             "warehouse_id": warehouse_id,
             "serialized_space": json.dumps(payload),
         },
@@ -190,14 +238,14 @@ def _create_space(w: WorkspaceClient, industry: str, warehouse_id: str) -> str:
     return created["space_id"]
 
 
-def _update_space(w: WorkspaceClient, space_id: str, industry: str, warehouse_id: str) -> None:
-    payload = _space_payload(industry)
+def _update_space(w: WorkspaceClient, space_id: str, industry: str, warehouse_id: str, room_type: str) -> None:
+    payload = _space_payload(industry, room_type)
     w.api_client.do(
         "PATCH",
         f"/api/2.0/genie/spaces/{space_id}",
         body={
-            "title": _title(industry),
-            "description": _description(industry),
+            "title": _title(industry, room_type),
+            "description": _description(industry, room_type),
             "warehouse_id": warehouse_id,
             "serialized_space": json.dumps(payload),
         },
@@ -208,19 +256,21 @@ def main() -> None:
     args = parse_args()
     w = WorkspaceClient(profile=args.profile)
     mapping: dict[str, str] = {}
+    room_type = str(args.room_type or "ops").lower()
+    out = str(args.output or "").strip() or _default_output(room_type)
 
     for industry in INDUSTRIES:
-        title = _title(industry)
+        title = _title(industry, room_type)
         space_id = _find_space_id_by_title(w, title)
         if space_id:
-            _update_space(w, space_id, industry, args.warehouse_id)
-            print(f"updated {industry}: {space_id}")
+            _update_space(w, space_id, industry, args.warehouse_id, room_type)
+            print(f"updated {room_type} {industry}: {space_id}")
         else:
-            space_id = _create_space(w, industry, args.warehouse_id)
-            print(f"created {industry}: {space_id}")
+            space_id = _create_space(w, industry, args.warehouse_id, room_type)
+            print(f"created {room_type} {industry}: {space_id}")
         mapping[industry] = space_id
 
-    out_path = Path(args.output)
+    out_path = Path(out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(mapping, indent=2), encoding="utf-8")
     print(f"wrote mapping: {out_path}")

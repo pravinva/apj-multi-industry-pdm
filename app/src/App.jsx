@@ -92,6 +92,12 @@ const JA_UI = {
   "Hierarchy tree": "階層ツリー",
   "Physical layout map": "物理レイアウトマップ",
   "Investigate in Genie": "Genieで調査",
+  "Map reset": "マップをリセット",
+  "Map zoom in": "マップ拡大",
+  "Map zoom out": "マップ縮小",
+  "Ask AI": "AIに質問",
+  "Ask about this location and incident context...": "この場所とインシデント状況について質問...",
+  "Sending...": "送信中...",
   "Processing your request...": "リクエストを処理中...",
   "Ask about risk, RUL, and next action...": "リスク、RUL、次アクションを質問...",
   "Processing...": "処理中...",
@@ -255,35 +261,102 @@ function healthRing(health) {
   };
 }
 
-function assetPinPosition(industry, assetId, index, total) {
-  const id = String(assetId || "");
-  const bucket = Math.max(1, total || 1);
-  const ring = Math.floor(index / 8);
-  const lane = index % 8;
-  const baseX = 14 + (lane * 10.5);
-  const baseY = 18 + (ring * 14);
-  // Industry-specific nudges keep visual grouping realistic by domain.
-  if (industry === "water") {
-    if (id.startsWith("MT-")) return { x: 18 + lane * 9, y: 20 + ring * 10 };
-    if (id.startsWith("PS-")) return { x: 52 + lane * 6, y: 44 + ring * 9 };
-    if (id.startsWith("TP-")) return { x: 28 + lane * 7, y: 68 + ring * 8 };
-    if (id.startsWith("VS-")) return { x: 72 + lane * 5, y: 22 + ring * 10 };
+function hashSeed(text) {
+  const s = String(text || "");
+  let out = 0;
+  for (let i = 0; i < s.length; i += 1) out = ((out << 5) - out + s.charCodeAt(i)) | 0;
+  return Math.abs(out);
+}
+
+function zoneRects(industry) {
+  if (industry === "water") return [{ x: 16, y: 20, w: 30, h: 20 }, { x: 56, y: 20, w: 30, h: 20 }, { x: 16, y: 56, w: 30, h: 24 }, { x: 56, y: 56, w: 30, h: 24 }];
+  if (industry === "mining") return [{ x: 12, y: 16, w: 36, h: 24 }, { x: 52, y: 16, w: 34, h: 24 }, { x: 12, y: 52, w: 36, h: 30 }, { x: 52, y: 52, w: 34, h: 30 }];
+  if (industry === "automotive") return [{ x: 10, y: 18, w: 38, h: 26 }, { x: 52, y: 18, w: 36, h: 26 }, { x: 10, y: 52, w: 38, h: 28 }, { x: 52, y: 52, w: 36, h: 28 }];
+  if (industry === "semiconductor") return [{ x: 12, y: 20, w: 34, h: 24 }, { x: 54, y: 20, w: 34, h: 24 }, { x: 12, y: 54, w: 34, h: 24 }, { x: 54, y: 54, w: 34, h: 24 }];
+  return [{ x: 14, y: 18, w: 34, h: 24 }, { x: 52, y: 18, w: 34, h: 24 }, { x: 14, y: 54, w: 34, h: 24 }, { x: 52, y: 54, w: 34, h: 24 }];
+}
+
+function buildMapPinLayout(assets, industry) {
+  const list = Array.isArray(assets) ? assets : [];
+  if (!list.length) return { pins: [], zoneChips: [] };
+  const byZone = new Map();
+  list.forEach((a) => {
+    const key = `${a.site || "site"} · ${a.area || "area"} · ${a.unit || "unit"}`;
+    if (!byZone.has(key)) byZone.set(key, []);
+    byZone.get(key).push(a);
+  });
+  const zones = Array.from(byZone.entries()).sort((a, b) => b[1].length - a[1].length);
+  const rects = zoneRects(industry);
+  const pins = [];
+  const zoneChips = zones.slice(0, 4).map(([name, rows], i) => ({ name, count: rows.length, slot: i }));
+  zones.forEach(([name, rows], zoneIdx) => {
+    const rect = rects[zoneIdx % rects.length];
+    const cx = rect.x + rect.w / 2;
+    const cy = rect.y + rect.h / 2;
+    rows.forEach((a, idx) => {
+      const angle = (idx * 137.5 * Math.PI) / 180;
+      const norm = Math.sqrt((idx + 0.5) / Math.max(1, rows.length));
+      const seed = hashSeed(`${a.id}:${name}`);
+      const jitter = ((seed % 7) - 3) * 0.25;
+      const rx = rect.w * 0.38;
+      const ry = rect.h * 0.4;
+      const x = Math.max(6, Math.min(94, cx + Math.cos(angle) * norm * rx + jitter));
+      const y = Math.max(8, Math.min(92, cy + Math.sin(angle) * norm * ry + jitter));
+      pins.push({
+        id: a.id,
+        status: a.status,
+        health: a.health_score_pct,
+        anomaly: a.anomaly_score,
+        type: a.type,
+        zone: name,
+        minX: rect.x + 2,
+        maxX: rect.x + rect.w - 2,
+        minY: rect.y + 2,
+        maxY: rect.y + rect.h - 2,
+        x,
+        y
+      });
+    });
+  });
+  // Relax pin positions to avoid overlaps while staying inside zone bounds.
+  const minDist = 5.2;
+  for (let iter = 0; iter < 60; iter += 1) {
+    for (let i = 0; i < pins.length; i += 1) {
+      for (let j = i + 1; j < pins.length; j += 1) {
+        const a = pins[i];
+        const b = pins[j];
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const d2 = (dx * dx) + (dy * dy);
+        if (d2 <= 0.0001) {
+          const nudge = ((hashSeed(`${a.id}:${b.id}:${iter}`) % 5) - 2) * 0.14;
+          a.x = Math.max(a.minX, Math.min(a.maxX, a.x - nudge));
+          b.x = Math.max(b.minX, Math.min(b.maxX, b.x + nudge));
+          continue;
+        }
+        const d = Math.sqrt(d2);
+        if (d >= minDist) continue;
+        const push = (minDist - d) * 0.46;
+        const ux = dx / d;
+        const uy = dy / d;
+        a.x = Math.max(a.minX, Math.min(a.maxX, a.x - (ux * push)));
+        a.y = Math.max(a.minY, Math.min(a.maxY, a.y - (uy * push)));
+        b.x = Math.max(b.minX, Math.min(b.maxX, b.x + (ux * push)));
+        b.y = Math.max(b.minY, Math.min(b.maxY, b.y + (uy * push)));
+      }
+    }
   }
-  if (industry === "mining") {
-    if (id.startsWith("HV-")) return { x: 20 + lane * 8, y: 72 + ring * 7 };
-    if (id.startsWith("CV-")) return { x: 16 + lane * 9, y: 44 + ring * 8 };
-    if (id.startsWith("CR-")) return { x: 62 + lane * 6, y: 28 + ring * 9 };
-  }
-  if (industry === "automotive") {
-    return { x: 12 + lane * 10.8, y: 20 + (index % bucket < bucket / 2 ? 18 : 48) + ring * 6 };
-  }
-  if (industry === "semiconductor") {
-    return { x: 14 + lane * 10.2, y: 24 + (index % 2 === 0 ? 16 : 42) + ring * 7 };
-  }
-  if (industry === "energy") {
-    return { x: 16 + lane * 10, y: 24 + (index % 3) * 17 + ring * 6 };
-  }
-  return { x: baseX, y: baseY };
+  const normalizedPins = pins.map((p) => ({
+    id: p.id,
+    status: p.status,
+    health: p.health,
+    anomaly: p.anomaly,
+    type: p.type,
+    zone: p.zone,
+    x: p.x,
+    y: p.y
+  }));
+  return { pins: normalizedPins, zoneChips };
 }
 
 function toEpochMs(ts) {
@@ -450,6 +523,7 @@ function renderSimpleMarkdown(text) {
 
 export default function App() {
   const mainScrollRef = useRef(null);
+  const mapDragRef = useRef(null);
   const [industry, setIndustry] = useState("mining");
   const [demoCurrency, setDemoCurrency] = useState("AUTO");
   const [page, setPage] = useState("p1");
@@ -465,6 +539,9 @@ export default function App() {
   const [hierarchy, setHierarchy] = useState(null);
   const [hierSelection, setHierSelection] = useState(null);
   const [hierViewMode, setHierViewMode] = useState("map");
+  const [hierPanelWidth, setHierPanelWidth] = useState(520);
+  const [hierResizing, setHierResizing] = useState(false);
+  const [mapView, setMapView] = useState({ scale: 1, x: 0, y: 0 });
   const [model, setModel] = useState(null);
   const [advancedPdm, setAdvancedPdm] = useState(null);
   const [manualInput, setManualInput] = useState("");
@@ -497,6 +574,10 @@ export default function App() {
   const [agentInput, setAgentInput] = useState("");
   const [agentMsgs, setAgentMsgs] = useState([]);
   const [genieConversationByIndustry, setGenieConversationByIndustry] = useState({});
+  const [mapCopilotInput, setMapCopilotInput] = useState("");
+  const [mapCopilotPending, setMapCopilotPending] = useState(false);
+  const [mapCopilotMsgsByKey, setMapCopilotMsgsByKey] = useState({});
+  const [mapCopilotConversationByKey, setMapCopilotConversationByKey] = useState({});
   const [genieRooms, setGenieRooms] = useState({ industry: "", workspace_url: "", configured_count: 0, total_count: 5, missing: [], rooms: {} });
   const [agentPending, setAgentPending] = useState(false);
   const [financeInput, setFinanceInput] = useState("");
@@ -592,7 +673,25 @@ export default function App() {
     setAssetDetail(null);
     setModel(null);
     setAdvancedPdm(null);
+    setMapView({ scale: 1, x: 0, y: 0 });
+    setHierPanelWidth(520);
   }, [industry]);
+
+  useEffect(() => {
+    if (!hierResizing) return undefined;
+    const onMove = (e) => {
+      const minW = 360;
+      const maxW = Math.min(window.innerWidth - 420, 1200);
+      setHierPanelWidth(Math.max(minW, Math.min(maxW, e.clientX - 92)));
+    };
+    const onUp = () => setHierResizing(false);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [hierResizing]);
 
   useEffect(() => {
     let cancelled = false;
@@ -810,18 +909,11 @@ export default function App() {
     if (assetSeverityFilter === "warning") return assets.filter((a) => a.status === "warning");
     return assets;
   }, [overview.assets, assetSeverityFilter]);
-  const mapPins = useMemo(
-    () =>
-      (overview.assets || []).map((a, idx, arr) => ({
-        id: a.id,
-        status: a.status,
-        health: a.health_score_pct,
-        anomaly: a.anomaly_score,
-        type: a.type,
-        ...assetPinPosition(industry, a.id, idx, arr.length)
-      })),
-    [overview.assets, industry]
-  );
+  const mapLayout = useMemo(() => buildMapPinLayout(overview.assets || [], industry), [overview.assets, industry]);
+  const mapPins = mapLayout.pins;
+  const mapZoneChips = mapLayout.zoneChips;
+  const mapCopilotKey = `${industry}::${selectedAssetId || ""}`;
+  const mapCopilotMsgs = mapCopilotMsgsByKey[mapCopilotKey] || [];
   const activeGenieRoom = genieRooms?.rooms?.[industry] || {};
   const activeGenieUrl = String(activeGenieRoom?.url || "");
 
@@ -926,6 +1018,42 @@ export default function App() {
       setAgentMsgs((prev) => [...prev, { role: "agent", text: answer, label: t("Maintenance Supervisor AI"), references: refs }]);
     } finally {
       setAgentPending(false);
+    }
+  }
+
+  async function sendMapCopilotMessage() {
+    const assetId = String(selectedAssetId || "").trim();
+    if (!assetId || !mapCopilotInput.trim() || mapCopilotPending) return;
+    const k = `${industry}::${assetId}`;
+    const userText = mapCopilotInput.trim();
+    setMapCopilotInput("");
+    setMapCopilotPending(true);
+    setMapCopilotMsgsByKey((prev) => ({
+      ...prev,
+      [k]: [...(prev[k] || []), { role: "user", text: userText, label: "ME" }]
+    }));
+    try {
+      const context = `Map context: industry=${industry}, asset_id=${assetId}. Please focus this equipment and nearby zone impact.`;
+      const reply = await postJson(
+        "/api/agent/chat",
+        {
+          industry,
+          conversation_id: mapCopilotConversationByKey[k] || "",
+          messages: [{ role: "user", content: `${userText}\n\n${context}` }]
+        },
+        { choices: [{ message: { content: "Unable to get response." } }] }
+      );
+      if (reply?.conversation_id) {
+        setMapCopilotConversationByKey((prev) => ({ ...prev, [k]: reply.conversation_id }));
+      }
+      const answer = reply?.choices?.[0]?.message?.content || "No response.";
+      const refs = Array.isArray(reply?.references) ? reply.references : [];
+      setMapCopilotMsgsByKey((prev) => ({
+        ...prev,
+        [k]: [...(prev[k] || []), { role: "agent", text: answer, label: t("Maintenance Supervisor AI"), references: refs }]
+      }));
+    } finally {
+      setMapCopilotPending(false);
     }
   }
 
@@ -1118,6 +1246,37 @@ export default function App() {
   async function updateFault(assetId, patch) {
     const result = await postJson("/api/ui/simulator/fault", { industry, asset_id: assetId, ...patch }, { faults: simState.faults || {} });
     setSimState((prev) => ({ ...prev, faults: result.faults || prev.faults }));
+  }
+
+  function mapZoom(delta) {
+    setMapView((prev) => {
+      const nextScale = Math.max(0.7, Math.min(2.4, prev.scale + delta));
+      return { ...prev, scale: nextScale };
+    });
+  }
+
+  function mapReset() {
+    setMapView({ scale: 1, x: 0, y: 0 });
+  }
+
+  function startMapDrag(e) {
+    if (hierViewMode !== "map") return;
+    mapDragRef.current = { sx: e.clientX, sy: e.clientY, x: mapView.x, y: mapView.y };
+  }
+
+  function moveMapDrag(e) {
+    if (!mapDragRef.current) return;
+    const d = mapDragRef.current;
+    setMapView((prev) => ({ ...prev, x: d.x + (e.clientX - d.sx), y: d.y + (e.clientY - d.sy) }));
+  }
+
+  function endMapDrag() {
+    mapDragRef.current = null;
+  }
+
+  function onMapWheel(e) {
+    e.preventDefault();
+    mapZoom(e.deltaY < 0 ? 0.08 : -0.08);
   }
 
   async function forceCritical(assetId) {
@@ -1890,7 +2049,7 @@ export default function App() {
         </div>
 
         <div className={`page ${page === "p3" ? "active" : ""}`} id="p3">
-          <div className="p3-wrap">
+          <div className="p3-wrap" style={{ gridTemplateColumns: `${hierPanelWidth}px 8px 1fr` }}>
             <div className="tree-panel">
               <div className="tree-hdr-row">
                 <div className="tree-hdr">Asset hierarchy</div>
@@ -1902,31 +2061,44 @@ export default function App() {
               {hierViewMode === "tree" ? (
                 hierarchy && <TreeNode node={hierarchy} onSelect={setHierSelection} />
               ) : (
-                <div className={`factory-map industry-${industry}`}>
-                  <div className="factory-map-overlay" />
-                  <div className="factory-map-title">{t("Physical layout map")} · {industryLabel(industry)}</div>
-                  <div className="factory-map-zones">
-                    <span>Zone A</span><span>Zone B</span><span>Zone C</span><span>Zone D</span>
+                <div className={`factory-map industry-${industry}`} onMouseMove={moveMapDrag} onMouseUp={endMapDrag} onMouseLeave={endMapDrag} onWheel={onMapWheel}>
+                  <div className="factory-map-controls">
+                    <button className="map-ctrl-btn" onClick={() => mapZoom(-0.1)}>{t("Map zoom out")}</button>
+                    <button className="map-ctrl-btn" onClick={() => mapZoom(0.1)}>{t("Map zoom in")}</button>
+                    <button className="map-ctrl-btn" onClick={mapReset}>{t("Map reset")}</button>
+                    <span className="map-zoom-readout">{Math.round(mapView.scale * 100)}%</span>
                   </div>
-                  {mapPins.map((p) => (
-                    <button
-                      key={`pin-${p.id}`}
-                      className={`asset-pin ${p.status}`}
-                      style={{ left: `${p.x}%`, top: `${p.y}%` }}
-                      title={`${p.id} · ${p.type} · anomaly ${p.anomaly}`}
-                      onClick={() => {
-                        setSelectedAssetId(p.id);
-                        const targetNode = (hierarchy?.children || [])
-                          .flatMap((s) => (s.children || []).flatMap((a) => (a.children || [])))
-                          .flatMap((u) => u.children || [])
-                          .find((e) => e.asset_id === p.id);
-                        if (targetNode) setHierSelection(targetNode);
-                      }}
-                    >
-                      <span className="asset-pin-dot" />
-                      <span className="asset-pin-label">{p.id}</span>
-                    </button>
-                  ))}
+                  <div
+                    className={`factory-map-canvas industry-${industry}`}
+                    style={{ transform: `translate(${mapView.x}px, ${mapView.y}px) scale(${mapView.scale})` }}
+                    onMouseDown={startMapDrag}
+                  >
+                    <div className="factory-map-overlay" />
+                    <div className="factory-map-title">{t("Physical layout map")} · {industryLabel(industry)}</div>
+                    <div className="factory-map-zones">
+                      {mapZoneChips.slice(0, 4).map((z) => <span key={`mz-${z.name}`}>{z.name} ({z.count})</span>)}
+                    </div>
+                    {mapPins.map((p) => (
+                      <button
+                        key={`pin-${p.id}`}
+                        className={`asset-pin ${p.status}`}
+                        style={{ left: `${p.x}%`, top: `${p.y}%` }}
+                        title={`${p.id} · ${p.type} · ${p.zone} · anomaly ${p.anomaly}`}
+                      onMouseDown={(e) => e.stopPropagation()}
+                        onClick={() => {
+                          setSelectedAssetId(p.id);
+                          const targetNode = (hierarchy?.children || [])
+                            .flatMap((s) => (s.children || []).flatMap((a) => (a.children || [])))
+                            .flatMap((u) => u.children || [])
+                            .find((e) => e.asset_id === p.id);
+                          if (targetNode) setHierSelection(targetNode);
+                        }}
+                      >
+                        <span className="asset-pin-dot" />
+                        <span className="asset-pin-label">{p.id}</span>
+                      </button>
+                    ))}
+                  </div>
                   <div className="factory-map-legend">
                     <span className="lg healthy">Healthy</span>
                     <span className="lg warning">Warning</span>
@@ -1935,7 +2107,40 @@ export default function App() {
                 </div>
               )}
             </div>
+            <div className={`p3-splitter ${hierResizing ? "active" : ""}`} onMouseDown={() => setHierResizing(true)} />
             <div className="detail-panel">
+              {hierViewMode === "map" && (
+                <div className="map-copilot-panel">
+                  <div className="map-copilot-hdr">
+                    <strong>{t("Ask AI")}</strong>
+                    <span className="map-copilot-asset">{selectedAssetId || "Select an asset pin"}</span>
+                  </div>
+                  <div className="map-copilot-msgs">
+                    {mapCopilotMsgs.slice(-6).map((m, i) => (
+                      <div key={`mcp-${i}`} className={`map-copilot-msg ${m.role}`}>
+                        <div className="map-copilot-msg-lbl">{m.role === "user" ? t("ME") : t("AI")}</div>
+                        <div className="map-copilot-msg-body">
+                          {m.role === "agent" ? renderSimpleMarkdown(m.text) : m.text}
+                        </div>
+                      </div>
+                    ))}
+                    {mapCopilotPending && <div className="map-copilot-pending">{t("Sending...")}</div>}
+                  </div>
+                  <div className="map-copilot-input-row">
+                    <input
+                      className="map-copilot-input"
+                      value={mapCopilotInput}
+                      onChange={(e) => setMapCopilotInput(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && sendMapCopilotMessage()}
+                      placeholder={t("Ask about this location and incident context...")}
+                      disabled={!selectedAssetId || mapCopilotPending}
+                    />
+                    <button className="map-copilot-send" onClick={sendMapCopilotMessage} disabled={!selectedAssetId || mapCopilotPending}>
+                      {mapCopilotPending ? t("Sending...") : t("Ask AI")}
+                    </button>
+                  </div>
+                </div>
+              )}
               {hierSelection ? (
                 <>
                   <div className="node-detail-hdr">
