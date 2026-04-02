@@ -1580,19 +1580,82 @@ def _geo_currency(industry: str) -> str:
     return "USD"
 
 
-def _geo_suggestions(alert_message: str, severity: str, avoided_cost: float, intervention_cost: float) -> list[str]:
+def _geo_asset_defs_from_predictions(industry: str) -> list[dict[str, Any]]:
+    """Use Gold predictions as Geo equipment source of truth."""
+    predictions = _predictions_map(industry)
+    if not predictions:
+        return []
+    defs = _asset_defs(industry)
+    defs_by_norm = {_asset_token_norm(str(a.get("id") or "")): a for a in defs if a.get("id")}
+    out: list[dict[str, Any]] = []
+    for equipment_id in sorted(predictions.keys()):
+        key = _asset_token_norm(str(equipment_id))
+        base = defs_by_norm.get(key)
+        if base:
+            merged = dict(base)
+            merged["id"] = str(equipment_id)
+            out.append(merged)
+        else:
+            out.append(
+                {
+                    "id": str(equipment_id),
+                    "type": "equipment",
+                    "site": "site_1",
+                    "area": "area_1",
+                    "unit": "unit_1",
+                    "model": "",
+                }
+            )
+    return out
+
+
+def _geo_suggestions(
+    alert_message: str,
+    severity: str,
+    avoided_cost: float,
+    intervention_cost: float,
+    currency: str = "",
+) -> list[str]:
     sev = str(severity or "").lower()
+    jpy_mode = str(currency or "").strip().upper() == "JPY"
     if sev == "critical":
-        s1 = "Dispatch maintenance crew in current shift to avoid near-term failure."
+        s1 = (
+            "近い将来の故障を避けるため、現在シフトで保全チームを手配してください。"
+            if jpy_mode
+            else "Dispatch maintenance crew in current shift to avoid near-term failure."
+        )
     elif sev == "warning":
-        s1 = "Schedule maintenance in the next available window and monitor drift."
+        s1 = (
+            "次の保全ウィンドウで作業を計画し、ドリフトを監視してください。"
+            if jpy_mode
+            else "Schedule maintenance in the next available window and monitor drift."
+        )
     else:
-        s1 = "Continue monitoring and validate baseline trend for this asset."
+        s1 = (
+            "監視を継続し、この資産のベースライントレンドを確認してください。"
+            if jpy_mode
+            else "Continue monitoring and validate baseline trend for this asset."
+        )
     if avoided_cost > intervention_cost and avoided_cost > 0:
-        s2 = f"Prioritize this action: avoided cost exceeds intervention by {int(round(avoided_cost - intervention_cost))}."
+        s2 = (
+            f"この対応を優先してください: 回避コストが介入コストを {int(round(avoided_cost - intervention_cost))} 上回っています。"
+            if jpy_mode
+            else f"Prioritize this action: avoided cost exceeds intervention by {int(round(avoided_cost - intervention_cost))}."
+        )
     else:
-        s2 = "Recheck intervention scope and parts inventory before scheduling."
-    s3 = str(alert_message or "Review operator recommendation and validate root-cause signals.")
+        s2 = (
+            "計画前に介入スコープと部材在庫を再確認してください。"
+            if jpy_mode
+            else "Recheck intervention scope and parts inventory before scheduling."
+        )
+    s3 = str(
+        alert_message
+        or (
+            "オペレーター推奨を確認し、根本原因シグナルを検証してください。"
+            if jpy_mode
+            else "Review operator recommendation and validate root-cause signals."
+        )
+    )
     return [s1, s2, s3]
 
 
@@ -4766,7 +4829,7 @@ def agent_finance_chat(payload: dict) -> dict:
 
 
 @app.get("/api/geo/sites")
-def geo_sites(industries: str = "") -> dict[str, Any]:
+def geo_sites(industries: str = "", currency: str = "") -> dict[str, Any]:
     selected = [s.strip().lower() for s in str(industries or "").split(",") if s.strip()]
     if not selected:
         selected = list(INDUSTRIES)
@@ -4777,8 +4840,13 @@ def geo_sites(industries: str = "") -> dict[str, Any]:
         if not site_meta:
             continue
         site_id = str(site_meta.get("site_id") or "")
-        cfg_assets = _industry_cfg(ind).get("simulator", {}).get("assets", []) or _default_industry_cfg(ind).get("simulator", {}).get("assets", [])
-        rows = [_asset_snapshot(ind, a, None, display_currency=_geo_currency(ind)) for a in cfg_assets if a.get("id")]
+        cfg_assets = _geo_asset_defs_from_predictions(ind)
+        predictions = _predictions_map(ind)
+        rows = [
+            _asset_snapshot(ind, a, predictions.get(str(a.get("id") or "")), display_currency=currency)
+            for a in cfg_assets
+            if a.get("id")
+        ]
         running = 0
         warning = 0
         critical = 0
@@ -4797,10 +4865,15 @@ def geo_sites(industries: str = "") -> dict[str, Any]:
             if sev_rank > 0 and (sev_rank > (2 if top_alert and top_alert.get("severity") == "critical" else 1 if top_alert else 0) or score >= best_score):
                 best_score = score
                 equipment_id = str(r.get("id") or "")
+                jpy_mode = _effective_demo_currency(currency, _geo_currency(ind)) == "JPY"
                 top_alert = {
                     "asset_name": equipment_id,
                     "severity": sev,
-                    "message": f"{equipment_id} anomaly score {score:.2f}",
+                    "message": (
+                        f"{equipment_id} 異常スコア {score:.2f}"
+                        if jpy_mode
+                        else f"{equipment_id} anomaly score {score:.2f}"
+                    ),
                 }
         out.append(
             {
@@ -4824,13 +4897,19 @@ def geo_sites(industries: str = "") -> dict[str, Any]:
 
 
 @app.get("/api/geo/assets/{site_id}")
-def geo_assets(site_id: str) -> dict[str, Any]:
+def geo_assets(site_id: str, currency: str = "") -> dict[str, Any]:
     industry = _geo_industry_for_site(site_id)
     if not industry:
         raise HTTPException(status_code=404, detail="Unknown site_id")
-    cfg_assets = _industry_cfg(industry).get("simulator", {}).get("assets", []) or _default_industry_cfg(industry).get("simulator", {}).get("assets", [])
-    overview_assets = [_asset_snapshot(industry, a, None, display_currency=_geo_currency(industry)) for a in cfg_assets if a.get("id")]
-    currency = _geo_currency(industry)
+    cfg_assets = _geo_asset_defs_from_predictions(industry)
+    predictions = _predictions_map(industry)
+    overview_assets = [
+        _asset_snapshot(industry, a, predictions.get(str(a.get("id") or "")), display_currency=currency)
+        for a in cfg_assets
+        if a.get("id")
+    ]
+    native_currency = _geo_currency(industry)
+    display_currency = _effective_demo_currency(currency, native_currency)
     assets_out: list[dict[str, Any]] = []
     for row in overview_assets:
         aid = str(row.get("id") or "")
@@ -4864,8 +4943,13 @@ def geo_assets(site_id: str) -> dict[str, Any]:
         avoided_cost = round(exposure_value * 0.62, 2)
         intervention_cost = round(exposure_value * 0.17, 2)
         source_table = "overview.synthetic"
+        jpy_mode = display_currency == "JPY"
         alert_msg = (
-            f"{aid} has elevated risk (score {anomaly_score:.2f})."
+            (
+                f"{aid} はリスクが上昇しています (スコア {anomaly_score:.2f})。"
+                if jpy_mode
+                else f"{aid} has elevated risk (score {anomaly_score:.2f})."
+            )
             if status in {"critical", "warning"}
             else ""
         )
@@ -4874,14 +4958,18 @@ def geo_assets(site_id: str) -> dict[str, Any]:
             active_alert = {
                 "severity": status,
                 "message": alert_msg,
-                "recommended_action": "Investigate root cause and execute planned maintenance window.",
+                "recommended_action": (
+                    "根本原因を調査し、計画メンテナンスを実行してください。"
+                    if jpy_mode
+                    else "Investigate root cause and execute planned maintenance window."
+                ),
             }
         fin_payload = None
         if avoided_cost or intervention_cost:
             fin_payload = {
                 "avoided_cost": round(avoided_cost, 2),
                 "intervention_cost": round(intervention_cost, 2),
-                "currency": currency,
+                "currency": display_currency,
             }
         assets_out.append(
             {
@@ -4901,7 +4989,13 @@ def geo_assets(site_id: str) -> dict[str, Any]:
                 "tags": sorted(tag_rows, key=lambda t: str(t.get("name"))),
                 "active_alert": active_alert,
                 "financial": fin_payload,
-                "suggestions": _geo_suggestions(alert_msg, status, avoided_cost, intervention_cost),
+                "suggestions": _geo_suggestions(
+                    alert_msg,
+                    status,
+                    avoided_cost,
+                    intervention_cost,
+                    display_currency,
+                ),
                 "data_source": source_table,
             }
         )
@@ -4916,7 +5010,7 @@ def geo_schematic(site_id: str) -> dict[str, Any]:
     industry = _geo_industry_for_site(site_key)
     if not industry:
         return GEO_SCHEMATICS[site_key]
-    cfg_assets = _industry_cfg(industry).get("simulator", {}).get("assets", []) or _default_industry_cfg(industry).get("simulator", {}).get("assets", [])
+    cfg_assets = _geo_asset_defs_from_predictions(industry)
     eq_ids = [str(a.get("id") or "") for a in cfg_assets if a.get("id")]
     template = GEO_SCHEMATICS[site_key]
     if not eq_ids or not template.get("nodes"):
@@ -4934,6 +5028,7 @@ def geo_schematic(site_id: str) -> dict[str, Any]:
 @app.post("/api/geo/genie/ask")
 def geo_genie_ask(payload: dict[str, Any]) -> dict[str, Any]:
     industry = str(payload.get("industry", "") or "").strip().lower()
+    currency = str(payload.get("currency", "") or "").strip().upper()
     question = str(payload.get("question", "") or "").strip()
     asset_context = payload.get("asset_context")
     if industry not in INDUSTRIES:
@@ -4941,8 +5036,16 @@ def geo_genie_ask(payload: dict[str, Any]) -> dict[str, Any]:
     if not question:
         raise HTTPException(status_code=400, detail="Missing question")
     prompt = question
+    if currency and currency != "AUTO":
+        if currency == "JPY":
+            prompt = (
+                "Respond in Japanese and use JPY for all monetary values in your answer.\n\n"
+                f"{prompt}"
+            )
+        else:
+            prompt = f"Use {currency} for all monetary values in your answer.\n\n{prompt}"
     if asset_context:
-        prompt = f"{question}\n\nAsset context:\n{json.dumps(asset_context, ensure_ascii=True)}"
+        prompt = f"{prompt}\n\nAsset context:\n{json.dumps(asset_context, ensure_ascii=True)}"
     # Use the same path/token/room resolution as existing industry/finance genie flows.
     reply = agent_chat(
         {

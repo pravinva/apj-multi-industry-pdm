@@ -679,8 +679,8 @@ export default function App() {
   const [selectedTags, setSelectedTags] = useState([]);
   const [tagMappings, setTagMappings] = useState([]);
   const currencyParam = demoCurrency === "AUTO" ? "" : `&currency=${encodeURIComponent(demoCurrency)}`;
-  const { sites: geoSites, loading: geoLoading, error: geoError, refetch: refetchGeoSites } = useGeoData(visibleIndustries);
-  const { assets: geoAssets, schematic: geoSchematic, loading: geoAssetLoading } = useAssetData(activeSiteId);
+  const { sites: geoSites, loading: geoLoading, error: geoError, refetch: refetchGeoSites } = useGeoData(visibleIndustries, demoCurrency);
+  const { assets: geoAssets, schematic: geoSchematic, loading: geoAssetLoading } = useAssetData(activeSiteId, demoCurrency);
 
   useEffect(() => {
     // Prevent stale cross-industry asset IDs from triggering 404 API calls
@@ -3143,7 +3143,8 @@ export default function App() {
                           assets={geoAssets}
                           site={activeGeoSite}
                           industry={activeGeoSite.industry || industry}
-                        genieUrl={activeGeoGenieUrl}
+                          currency={demoCurrency}
+                          genieUrl={activeGeoGenieUrl}
                           onSelectAsset={setActiveAssetId}
                           onClose={() => setActiveAssetId(null)}
                         />

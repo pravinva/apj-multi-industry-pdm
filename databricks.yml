@@ -46,6 +46,7 @@ resources:
   pipelines:
     ot_pdm_dlt_pipeline:
       name: ot-pdm-dlt-${var.industry}
+      allow_duplicate_names: true
       continuous: true
       clusters:
         - label: default

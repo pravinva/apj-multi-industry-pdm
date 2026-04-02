@@ -149,6 +149,13 @@ The app supports both currency adaptation and localization-aware presentation.
 - Backend keeps numeric and unit payloads normalized while frontend handles language-facing rendering.
 - Currency, date window, and narrative statements are designed for executive readability across regional audiences.
 
+### Geo intelligence currency behavior
+
+- Geo APIs (`/api/geo/sites`, `/api/geo/assets/{site_id}`) accept `currency` and return converted financial values in the selected display currency.
+- Geo asset list, site rollups, and drill-down financial cards update when the currency selector changes.
+- Geo Genie requests include selected currency context so monetary responses remain aligned with UI selection.
+- For `JPY`, Geo quick prompts, alert phrasing, and Genie guidance are localized to Japanese.
+
 ## PI plus OT Integration
 
 PI simulation is integrated alongside OT ingestion, not as a separate disconnected demo path.
@@ -256,6 +263,13 @@ Deploy a specific industry:
 - `databricks bundle deploy --target dev -p DEFAULT --var industry=water`
 - `databricks bundle deploy --target dev -p DEFAULT --var industry=automotive`
 - `databricks bundle deploy --target dev -p DEFAULT --var industry=semiconductor`
+
+For app-only refreshes in Databricks Apps (without uploading local virtual environments):
+
+- Sync a clean source path:
+  - `databricks sync -p DEFAULT app /Workspace/Users/<user>/apj-multi-industry-pdm/app-fresh-clean --exclude ".venv" --exclude "node_modules" --exclude "package.json" --exclude "package-lock.json"`
+- Deploy app from that path:
+  - `databricks apps deploy ot-pdm-app -p DEFAULT --source-code-path "/Workspace/Users/<user>/apj-multi-industry-pdm/app-fresh-clean"`
 
 Resource consistency checks:
 

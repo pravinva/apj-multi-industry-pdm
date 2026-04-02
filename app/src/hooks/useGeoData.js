@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
-export function useGeoData(activeIndustries) {
+export function useGeoData(activeIndustries, currency = "") {
   const [sites, setSites] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -10,7 +10,10 @@ export function useGeoData(activeIndustries) {
     setLoading(true);
     setError("");
     try {
-      const query = industries.length ? `?industries=${encodeURIComponent(industries.join(","))}` : "";
+      const params = new URLSearchParams();
+      if (industries.length) params.set("industries", industries.join(","));
+      if (currency && currency !== "AUTO") params.set("currency", currency);
+      const query = params.toString() ? `?${params.toString()}` : "";
       const res = await fetch(`/api/geo/sites${query}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const payload = await res.json();
@@ -21,7 +24,7 @@ export function useGeoData(activeIndustries) {
     } finally {
       setLoading(false);
     }
-  }, [activeIndustries]);
+  }, [activeIndustries, currency]);
 
   useEffect(() => {
     refetch();
@@ -30,7 +33,7 @@ export function useGeoData(activeIndustries) {
   return { sites, loading, error, refetch };
 }
 
-export function useAssetData(siteId) {
+export function useAssetData(siteId, currency = "") {
   const [assets, setAssets] = useState([]);
   const [schematic, setSchematic] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -46,9 +49,12 @@ export function useAssetData(siteId) {
     const load = async () => {
       setLoading(true);
       try {
+        const currencyQuery = currency && currency !== "AUTO"
+          ? `?currency=${encodeURIComponent(currency)}`
+          : "";
         const [assetsRes, schematicRes] = await Promise.all([
-          fetch(`/api/geo/assets/${encodeURIComponent(siteId)}`),
-          fetch(`/api/geo/schematic/${encodeURIComponent(siteId)}`)
+          fetch(`/api/geo/assets/${encodeURIComponent(siteId)}${currencyQuery}`),
+          fetch(`/api/geo/schematic/${encodeURIComponent(siteId)}${currencyQuery}`)
         ]);
         const assetsPayload = assetsRes.ok ? await assetsRes.json() : { assets: [] };
         const schematicPayload = schematicRes.ok ? await schematicRes.json() : null;
@@ -69,7 +75,7 @@ export function useAssetData(siteId) {
     return () => {
       cancelled = true;
     };
-  }, [siteId]);
+  }, [siteId, currency]);
 
   return { assets, schematic, loading };
 }

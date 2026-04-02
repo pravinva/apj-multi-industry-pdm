@@ -4142,11 +4142,23 @@ body,
 .geo-chat-msg { font-size: 12px; margin-bottom: 6px; padding: 6px 8px; border-radius: 8px; }
 .geo-chat-msg.user { background: #dbeafe; color: #1e3a8a; margin-left: 18px; }
 .geo-chat-msg.assistant { background: #f1f5f9; color: #1f2937; margin-right: 18px; }
+.geo-ai-top-block { margin-top: 8px; }
 .geo-suggestions { margin-top: 7px; display: flex; gap: 5px; flex-wrap: wrap; }
 .geo-suggestions button { border: 1px solid #cbd5e1; background: #fff; border-radius: 999px; font-size: 10px; padding: 4px 7px; }
 .geo-input-row { margin-top: 7px; display: flex; gap: 6px; }
-.geo-input-row input { flex: 1; border: 1px solid #cbd5e1; border-radius: 7px; padding: 7px; font-size: 12px; }
-.geo-input-row button { border: 1px solid #cbd5e1; background: #fff; border-radius: 7px; padding: 7px 10px; }
+.geo-input-row textarea {
+  flex: 1;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  padding: 7px;
+  font-size: 12px;
+  resize: none;
+  min-height: 34px;
+  max-height: 160px;
+  overflow-y: auto;
+  line-height: 1.4;
+}
+.geo-input-row button { border: 1px solid #cbd5e1; background: #fff; border-radius: 7px; padding: 7px 10px; align-self: flex-end; }
 .geo-action-row { margin-top: 8px; display: flex; gap: 6px; align-items: center; }
 .geo-action-row button { border: 1px solid #cbd5e1; background: #fff; border-radius: 7px; padding: 5px 8px; font-size: 11px; }
 .geo-action-confirm { font-size: 11px; color: #166534; }

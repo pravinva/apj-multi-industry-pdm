@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Sparkline from "./Sparkline";
 
 function formatNumber(value) {
@@ -7,11 +7,12 @@ function formatNumber(value) {
   return n.toLocaleString();
 }
 
-export default function GeoGeniePanel({ asset, assets, site, industry, genieUrl, onSelectAsset, onClose }) {
+export default function GeoGeniePanel({ asset, assets, site, industry, currency, genieUrl, onSelectAsset, onClose }) {
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [actionDone, setActionDone] = useState("");
+  const inputRef = useRef(null);
   const suggestions = useMemo(() => (Array.isArray(asset?.suggestions) ? asset.suggestions.slice(0, 3) : []), [asset]);
   const drillAssets = useMemo(() => (Array.isArray(assets) ? assets : []), [assets]);
   const drillIdx = useMemo(
@@ -20,18 +21,28 @@ export default function GeoGeniePanel({ asset, assets, site, industry, genieUrl,
   );
   const prevAsset = drillIdx > 0 ? drillAssets[drillIdx - 1] : null;
   const nextAsset = drillIdx >= 0 && drillIdx < drillAssets.length - 1 ? drillAssets[drillIdx + 1] : null;
+  const isJpy = String(currency || "").toUpperCase() === "JPY";
 
   useEffect(() => {
     if (!asset || !site) return;
     setMessages([
       {
         role: "assistant",
-        text: `I can investigate ${asset.name} at ${site.customer} ${site.name}. Ask for root cause, risk, and action sequencing.`
+        text: isJpy
+          ? `${site.customer} ${site.name} の ${asset.name} を調査できます。根本原因、リスク、対応順序を質問してください。金額は JPY で回答します。`
+          : `I can investigate ${asset.name} at ${site.customer} ${site.name}. Ask for root cause, risk, and action sequencing.${currency && currency !== "AUTO" ? ` I will respond with costs in ${currency}.` : ""}`
       }
     ]);
     setInputValue("");
     setActionDone("");
-  }, [asset, site]);
+  }, [asset, site, currency, isJpy]);
+
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  }, [inputValue]);
 
   function selectNeighbor(target) {
     if (!target?.asset_id) return;
@@ -50,6 +61,7 @@ export default function GeoGeniePanel({ asset, assets, site, industry, genieUrl,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           industry,
+          currency,
           question: q,
           asset_context: { name: asset?.name, status: asset?.status, tags: asset?.tags || [] }
         })
@@ -104,7 +116,7 @@ export default function GeoGeniePanel({ asset, assets, site, industry, genieUrl,
         </div>
       </div>
       <div className="geo-drill-row">
-        <button className="geo-drill-btn" onClick={() => selectNeighbor(prevAsset)} disabled={!prevAsset}>Prev</button>
+        <button className="geo-drill-btn" onClick={() => selectNeighbor(prevAsset)} disabled={!prevAsset}>{isJpy ? "前へ" : "Prev"}</button>
         <select
           className="geo-drill-select"
           value={asset.asset_id || ""}
@@ -116,17 +128,17 @@ export default function GeoGeniePanel({ asset, assets, site, industry, genieUrl,
             </option>
           ))}
         </select>
-        <button className="geo-drill-btn" onClick={() => selectNeighbor(nextAsset)} disabled={!nextAsset}>Next</button>
+        <button className="geo-drill-btn" onClick={() => selectNeighbor(nextAsset)} disabled={!nextAsset}>{isJpy ? "次へ" : "Next"}</button>
       </div>
       <div className="geo-drill-meta-grid">
-        <div className="geo-drill-meta-cell"><span>Asset ID</span><strong>{asset.asset_id || "-"}</strong></div>
-        <div className="geo-drill-meta-cell"><span>Type</span><strong>{asset.type || "-"}</strong></div>
-        <div className="geo-drill-meta-cell"><span>RUL (hrs)</span><strong>{formatNumber(asset.rul_hours)}</strong></div>
-        <div className="geo-drill-meta-cell"><span>Confidence</span><strong>{formatNumber(Math.round(Number(asset.confidence || 0) * 100))}%</strong></div>
+        <div className="geo-drill-meta-cell"><span>{isJpy ? "資産ID" : "Asset ID"}</span><strong>{asset.asset_id || "-"}</strong></div>
+        <div className="geo-drill-meta-cell"><span>{isJpy ? "タイプ" : "Type"}</span><strong>{asset.type || "-"}</strong></div>
+        <div className="geo-drill-meta-cell"><span>{isJpy ? "RUL (時間)" : "RUL (hrs)"}</span><strong>{formatNumber(asset.rul_hours)}</strong></div>
+        <div className="geo-drill-meta-cell"><span>{isJpy ? "信頼度" : "Confidence"}</span><strong>{formatNumber(Math.round(Number(asset.confidence || 0) * 100))}%</strong></div>
       </div>
       {asset.top_alert ? (
         <div className="geo-drill-alert">
-          <div className="geo-drill-alert-title">Top alert</div>
+          <div className="geo-drill-alert-title">{isJpy ? "最重要アラート" : "Top alert"}</div>
           <div>{asset.top_alert.message}</div>
         </div>
       ) : null}
@@ -144,29 +156,37 @@ export default function GeoGeniePanel({ asset, assets, site, industry, genieUrl,
           Avoided {asset.financial.currency} {Math.round(asset.financial.avoided_cost || 0).toLocaleString()} vs Intervention {asset.financial.currency} {Math.round(asset.financial.intervention_cost || 0).toLocaleString()}
         </div>
       ) : null}
+      <div className="geo-ai-top-block">
+        <div className="geo-suggestions">
+          {suggestions.map((s, idx) => (
+            <button key={`${idx}`} onClick={() => setInputValue(s)}>{s}</button>
+          ))}
+        </div>
+        <div className="geo-input-row">
+          <textarea
+            ref={inputRef}
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            placeholder={isJpy ? "この資産について AI に質問..." : "Ask AI about this asset..."}
+            rows={1}
+          />
+          <button onClick={ask} disabled={isLoading}>{isJpy ? "質問" : "Ask"}</button>
+        </div>
+        {asset.active_alert ? (
+          <div className="geo-action-row">
+            <button disabled={!!actionDone} onClick={() => act("approve")}>{isJpy ? "承認" : "Approve"}</button>
+            <button disabled={!!actionDone} onClick={() => act("defer")}>{isJpy ? "保留" : "Defer"}</button>
+            <button disabled={!!actionDone} onClick={() => act("reject")}>{isJpy ? "却下" : "Reject"}</button>
+            {actionDone && actionDone !== "pending" ? <span className="geo-action-confirm">{isJpy ? `保存済み: ${actionDone}` : `Action saved: ${actionDone}`}</span> : null}
+          </div>
+        ) : null}
+      </div>
       <div className="geo-chat-area">
         {messages.map((m, idx) => (
           <div key={`${m.role}-${idx}`} className={`geo-chat-msg ${m.role}`}>{m.text}</div>
         ))}
         {isLoading ? <div className="geo-chat-msg assistant">Thinking...</div> : null}
       </div>
-      <div className="geo-suggestions">
-        {suggestions.map((s, idx) => (
-          <button key={`${idx}`} onClick={() => setInputValue(s)}>{s}</button>
-        ))}
-      </div>
-      <div className="geo-input-row">
-        <input value={inputValue} onChange={(e) => setInputValue(e.target.value)} placeholder="Ask AI about this asset..." />
-        <button onClick={ask} disabled={isLoading}>Ask</button>
-      </div>
-      {asset.active_alert ? (
-        <div className="geo-action-row">
-          <button disabled={!!actionDone} onClick={() => act("approve")}>Approve</button>
-          <button disabled={!!actionDone} onClick={() => act("defer")}>Defer</button>
-          <button disabled={!!actionDone} onClick={() => act("reject")}>Reject</button>
-          {actionDone && actionDone !== "pending" ? <span className="geo-action-confirm">Action saved: {actionDone}</span> : null}
-        </div>
-      ) : null}
     </aside>
   );
 }
