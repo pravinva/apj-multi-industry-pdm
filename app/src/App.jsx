@@ -1,4 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import GeoMap from "./components/GeoMap";
+import PIDSchematic from "./components/PIDSchematic";
+import WindSchematic from "./components/WindSchematic";
+import AssetSidebar from "./components/AssetSidebar";
+import GeoStatusBar from "./components/GeoStatusBar";
+import GeoGeniePanel from "./components/GeoGeniePanel";
+import { useGeoData, useAssetData } from "./hooks/useGeoData";
 
 const INDUSTRIES = ["mining", "energy", "water", "automotive", "semiconductor"];
 const CURRENCIES = ["AUTO", "USD", "AUD", "JPY"];
@@ -47,7 +54,8 @@ const PAGE_META = [
   ["p4", "Stream", "≋"],
   ["p5", "Model", "↗"],
   ["p6", "Sim", "◎"],
-  ["p7", "Finance", "¥"]
+  ["p7", "Finance", "¥"],
+  ["p8", "Geo", "◌"]
 ];
 const JA_INDUSTRY_LABELS = {
   mining: "鉱業",
@@ -64,6 +72,7 @@ const JA_UI = {
   Model: "モデル",
   Sim: "シミュレーター",
   Finance: "財務",
+  Geo: "地理",
   Currency: "通貨",
   Operator: "オペレーター",
   Executive: "経営",
@@ -586,6 +595,11 @@ export default function App() {
   const [financePending, setFinancePending] = useState(false);
   const [execDelayWeeks, setExecDelayWeeks] = useState(0);
   const [liveClock, setLiveClock] = useState(() => new Date().toLocaleString());
+  const [geoView, setGeoView] = useState("geo");
+  const [activeSiteId, setActiveSiteId] = useState(null);
+  const [activeAssetId, setActiveAssetId] = useState(null);
+  const [mapLayer, setMapLayer] = useState("terrain");
+  const [visibleIndustries, setVisibleIndustries] = useState(new Set(INDUSTRIES));
 
   const [simState, setSimState] = useState({
     running: false,
@@ -665,6 +679,8 @@ export default function App() {
   const [selectedTags, setSelectedTags] = useState([]);
   const [tagMappings, setTagMappings] = useState([]);
   const currencyParam = demoCurrency === "AUTO" ? "" : `&currency=${encodeURIComponent(demoCurrency)}`;
+  const { sites: geoSites, loading: geoLoading, error: geoError, refetch: refetchGeoSites } = useGeoData(visibleIndustries);
+  const { assets: geoAssets, schematic: geoSchematic, loading: geoAssetLoading } = useAssetData(activeSiteId);
 
   useEffect(() => {
     // Prevent stale cross-industry asset IDs from triggering 404 API calls
@@ -675,6 +691,9 @@ export default function App() {
     setAdvancedPdm(null);
     setMapView({ scale: 1, x: 0, y: 0 });
     setHierPanelWidth(520);
+    setGeoView("geo");
+    setActiveSiteId(null);
+    setActiveAssetId(null);
   }, [industry]);
 
   useEffect(() => {
@@ -898,6 +917,16 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    if (!activeSiteId) return;
+    const exists = (geoSites || []).some((s) => s.site_id === activeSiteId);
+    if (!exists) {
+      setActiveSiteId(null);
+      setActiveAssetId(null);
+      setGeoView("geo");
+    }
+  }, [geoSites, activeSiteId]);
+
   const selectedAsset = useMemo(
     () => overview.assets.find((a) => a.id === selectedAssetId) || overview.assets[0] || null,
     [overview.assets, selectedAssetId]
@@ -916,6 +945,22 @@ export default function App() {
   const mapCopilotMsgs = mapCopilotMsgsByKey[mapCopilotKey] || [];
   const activeGenieRoom = genieRooms?.rooms?.[industry] || {};
   const activeGenieUrl = String(activeGenieRoom?.url || "");
+  const activeGeoSite = useMemo(
+    () => (geoSites || []).find((s) => s.site_id === activeSiteId) || null,
+    [geoSites, activeSiteId]
+  );
+  const activeGeoIndustry = String(activeGeoSite?.industry || industry || "").toLowerCase();
+  const activeGeoGenieUrl = String((genieRooms?.rooms?.[activeGeoIndustry] || {}).url || "");
+  const activeGeoAsset = useMemo(
+    () => (geoAssets || []).find((a) => a.asset_id === activeAssetId) || null,
+    [geoAssets, activeAssetId]
+  );
+  useEffect(() => {
+    if (!activeSiteId) return;
+    if (activeAssetId) return;
+    if (!geoAssets.length) return;
+    setActiveAssetId(String(geoAssets[0].asset_id || ""));
+  }, [activeSiteId, activeAssetId, geoAssets]);
 
   const simFlowDelta = useMemo(() => {
     const b = simPipeline.baseline;
@@ -1537,6 +1582,22 @@ export default function App() {
       assets: [...prev.assets, { id: `ASSET-${prev.assets.length + 1}`, type: "Equipment", path: "Site / Area / Unit", sensors }]
     }));
     setSimTab("config");
+  }
+
+  function toggleGeoIndustry(ind) {
+    setVisibleIndustries((prev) => {
+      const next = new Set(prev);
+      if (next.has(ind)) next.delete(ind);
+      else next.add(ind);
+      if (!next.size) INDUSTRIES.forEach((v) => next.add(v));
+      return next;
+    });
+  }
+
+  function onGeoSiteClick(siteId) {
+    setActiveSiteId(siteId);
+    setActiveAssetId(null);
+    setGeoView("facility");
   }
 
   return (
@@ -3026,6 +3087,81 @@ export default function App() {
                   />
                   <button className="sbtn" onClick={sendFinanceMessage} disabled={financePending}>{financePending ? t("Processing...") : t("Ask")}</button>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className={`page ${page === "p8" ? "active" : ""}`} id="p8">
+          <div className="geo-page">
+            <div className="geo-topbar">
+              <div className="geo-top-title">Geo Intelligence</div>
+              <div className="geo-top-meta">
+                {geoLoading ? "Loading sites..." : `${geoSites.length} sites`}
+                {geoError ? <span className="geo-err">{geoError}</span> : null}
+              </div>
+              <button className="sbtn" onClick={refetchGeoSites}>Refresh</button>
+            </div>
+            <div className="geo-stack">
+              <div className="geo-map-top">
+                <GeoMap
+                  sites={geoSites}
+                  onSiteClick={onGeoSiteClick}
+                  activeSiteId={activeSiteId}
+                  activeIndustries={visibleIndustries}
+                  onToggleIndustry={toggleGeoIndustry}
+                  mapLayer={mapLayer}
+                  onMapLayerChange={setMapLayer}
+                />
+              </div>
+              <div className="geo-drill-wrap">
+                {activeGeoSite ? (
+                  <div className="geo-facility-wrap">
+                    <div className="geo-facility-hdr">
+                      <button className="chip" onClick={() => { setGeoView("geo"); setActiveSiteId(null); setActiveAssetId(null); }}>Clear selection</button>
+                      <div className="geo-facility-title">{activeGeoSite.customer} · {activeGeoSite.name}</div>
+                      <div className="geo-facility-sub">{activeGeoSite.industry} · {geoSchematic?.subtitle || ""} · Assets {geoAssets.length}</div>
+                    </div>
+                    <div className="geo-facility-main">
+                      <div className="geo-schematic-pane">
+                        {activeSiteId === "alinta-hsdale" ? (
+                          <WindSchematic assets={geoAssets} activeAssetId={activeAssetId} onAssetClick={setActiveAssetId} />
+                        ) : (
+                          <PIDSchematic
+                            schematic={geoSchematic}
+                            assets={geoAssets}
+                            industry={activeGeoSite.industry}
+                            activeAssetId={activeAssetId}
+                            onAssetClick={setActiveAssetId}
+                          />
+                        )}
+                      </div>
+                      <AssetSidebar assets={geoAssets} activeAssetId={activeAssetId} onAssetClick={setActiveAssetId} />
+                      {activeGeoAsset ? (
+                        <GeoGeniePanel
+                          asset={activeGeoAsset}
+                          assets={geoAssets}
+                          site={activeGeoSite}
+                          industry={activeGeoSite.industry || industry}
+                        genieUrl={activeGeoGenieUrl}
+                          onSelectAsset={setActiveAssetId}
+                          onClose={() => setActiveAssetId(null)}
+                        />
+                      ) : null}
+                    </div>
+                    <GeoStatusBar
+                      assets={geoAssets}
+                      kpi={{
+                        oee: geoAssets.length ? Math.round((geoAssets.filter((a) => a.status === "running").length / geoAssets.length) * 100) : 0,
+                        mtbf: geoAssets.length ? Math.round(geoAssets.reduce((sum, a) => sum + Number(a.rul_hours || 0), 0) / geoAssets.length) : 0,
+                        location: activeGeoSite.name
+                      }}
+                    />
+                    {geoAssetLoading ? <div className="geo-loading-strip">Refreshing site assets...</div> : null}
+                  </div>
+                ) : (
+                  <div className="geo-empty">Select a site from map above to open PID drill-down + Genie.</div>
+                )}
               </div>
             </div>
           </div>

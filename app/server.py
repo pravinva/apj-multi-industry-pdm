@@ -40,6 +40,98 @@ GENIE_ROOM_MAP_PATH = ROOT / "genie_rooms.json"
 FINANCE_GENIE_ROOM_MAP_PATH = ROOT / "genie_rooms_finance.json"
 INDUSTRIES = ["mining", "energy", "water", "automotive", "semiconductor"]
 SUPPORTED_CURRENCIES = {"USD", "AUD", "JPY"}
+GEO_SITES: dict[str, dict[str, Any]] = {
+    "mining": {
+        "site_id": "rio-pilbara",
+        "name": "Rio Pilbara Operations",
+        "customer": "Rio Tinto",
+        "description": "Pilbara iron ore processing and materials handling.",
+        "lat": -22.34,
+        "lng": 118.52,
+    },
+    "water": {
+        "site_id": "sydney-water",
+        "name": "Sydney Water Western Hub",
+        "customer": "Sydney Water",
+        "description": "Water treatment and distribution pumping network.",
+        "lat": -33.81,
+        "lng": 150.91,
+    },
+    "automotive": {
+        "site_id": "toyota-motomachi",
+        "name": "Toyota Motomachi Plant",
+        "customer": "Toyota Motor Corporation",
+        "description": "Japan automotive stamping, welding, and final assembly operations.",
+        "lat": 35.084,
+        "lng": 137.156,
+    },
+    "semiconductor": {
+        "site_id": "renesas-naka",
+        "name": "Renesas Naka Fab",
+        "customer": "Renesas",
+        "description": "Fab equipment reliability for etch and lithography lines.",
+        "lat": 36.38,
+        "lng": 140.44,
+    },
+    "energy": {
+        "site_id": "alinta-hsdale",
+        "name": "Hornsdale Grid Storage",
+        "customer": "Alinta Energy",
+        "description": "Wind, BESS, and grid balancing assets.",
+        "lat": -33.07,
+        "lng": 138.67,
+    },
+}
+GEO_SCHEMATICS: dict[str, dict[str, Any]] = {
+    "rio-pilbara": {
+        "subtitle": "Crushing and slurry transfer P&ID",
+        "nodes": [
+            {"id": "n1", "label": "Crusher Feed", "equip_id": "CR-01", "x": 120, "y": 100, "w": 150, "h": 56},
+            {"id": "n2", "label": "Primary Crusher", "equip_id": "CR-07", "x": 340, "y": 100, "w": 170, "h": 56},
+            {"id": "n3", "label": "Mill Circuit", "equip_id": "ML-04", "x": 620, "y": 100, "w": 170, "h": 56},
+            {"id": "n4", "label": "Slurry Pump Train", "equip_id": "PS-12", "x": 620, "y": 240, "w": 190, "h": 56},
+            {"id": "n5", "label": "Tailings", "equip_id": "TG-02", "x": 920, "y": 240, "w": 140, "h": 56},
+        ],
+        "pipes": [{"from": "n1", "to": "n2"}, {"from": "n2", "to": "n3"}, {"from": "n3", "to": "n4"}, {"from": "n4", "to": "n5"}],
+    },
+    "sydney-water": {
+        "subtitle": "Treatment to distribution flow",
+        "nodes": [
+            {"id": "n1", "label": "Intake", "equip_id": "MT-03", "x": 120, "y": 120, "w": 140, "h": 56},
+            {"id": "n2", "label": "Filtration", "equip_id": "TP-01", "x": 360, "y": 120, "w": 160, "h": 56},
+            {"id": "n3", "label": "Disinfection", "equip_id": "TP-03", "x": 620, "y": 120, "w": 160, "h": 56},
+            {"id": "n4", "label": "High Lift Pump", "equip_id": "PS-09", "x": 620, "y": 250, "w": 190, "h": 56},
+            {"id": "n5", "label": "Distribution", "equip_id": "VS-11", "x": 920, "y": 250, "w": 160, "h": 56},
+        ],
+        "pipes": [{"from": "n1", "to": "n2"}, {"from": "n2", "to": "n3"}, {"from": "n3", "to": "n4"}, {"from": "n4", "to": "n5"}],
+    },
+    "toyota-motomachi": {
+        "subtitle": "Press line to final assembly",
+        "nodes": [
+            {"id": "n1", "label": "Stamping", "equip_id": "PR-03", "x": 120, "y": 120, "w": 150, "h": 56},
+            {"id": "n2", "label": "Body Weld", "equip_id": "WB-02", "x": 350, "y": 120, "w": 150, "h": 56},
+            {"id": "n3", "label": "Paint Booth", "equip_id": "PB-04", "x": 580, "y": 120, "w": 150, "h": 56},
+            {"id": "n4", "label": "Final Line", "equip_id": "AL-09", "x": 810, "y": 120, "w": 150, "h": 56},
+        ],
+        "pipes": [{"from": "n1", "to": "n2"}, {"from": "n2", "to": "n3"}, {"from": "n3", "to": "n4"}],
+    },
+    "renesas-naka": {
+        "subtitle": "Fab process chain and utilities",
+        "nodes": [
+            {"id": "n1", "label": "Load Port", "equip_id": "CMP-07", "x": 130, "y": 110, "w": 150, "h": 56},
+            {"id": "n2", "label": "Etch Cluster", "equip_id": "ET-02", "x": 360, "y": 110, "w": 160, "h": 56},
+            {"id": "n3", "label": "Litho Scanner", "equip_id": "LS-05", "x": 610, "y": 110, "w": 170, "h": 56},
+            {"id": "n4", "label": "Vacuum Utility", "equip_id": "VU-03", "x": 610, "y": 250, "w": 170, "h": 56},
+            {"id": "n5", "label": "Metrology", "equip_id": "ME-01", "x": 900, "y": 250, "w": 150, "h": 56},
+        ],
+        "pipes": [{"from": "n1", "to": "n2"}, {"from": "n2", "to": "n3"}, {"from": "n3", "to": "n4"}, {"from": "n4", "to": "n5"}],
+    },
+    "alinta-hsdale": {
+        "subtitle": "Wind farm collection and storage",
+        "nodes": [],
+        "pipes": [],
+    },
+}
 ISA_EMOJI = {
     "site": "🏭",
     "area": "📍",
@@ -1464,6 +1556,44 @@ def _load_genie_room_map(room_type: str = "ops") -> dict[str, str]:
         except Exception:
             pass
     return {}
+
+
+def _geo_site_for_industry(industry: str) -> dict[str, Any] | None:
+    return GEO_SITES.get(str(industry or "").lower())
+
+
+def _geo_industry_for_site(site_id: str) -> str | None:
+    target = str(site_id or "").strip().lower()
+    if not target:
+        return None
+    for ind, meta in GEO_SITES.items():
+        if str(meta.get("site_id", "")).lower() == target:
+            return ind
+    return None
+
+
+def _geo_currency(industry: str) -> str:
+    if industry in {"mining", "water", "energy"}:
+        return "AUD"
+    if industry in {"automotive", "semiconductor"}:
+        return "JPY"
+    return "USD"
+
+
+def _geo_suggestions(alert_message: str, severity: str, avoided_cost: float, intervention_cost: float) -> list[str]:
+    sev = str(severity or "").lower()
+    if sev == "critical":
+        s1 = "Dispatch maintenance crew in current shift to avoid near-term failure."
+    elif sev == "warning":
+        s1 = "Schedule maintenance in the next available window and monitor drift."
+    else:
+        s1 = "Continue monitoring and validate baseline trend for this asset."
+    if avoided_cost > intervention_cost and avoided_cost > 0:
+        s2 = f"Prioritize this action: avoided cost exceeds intervention by {int(round(avoided_cost - intervention_cost))}."
+    else:
+        s2 = "Recheck intervention scope and parts inventory before scheduling."
+    s3 = str(alert_message or "Review operator recommendation and validate root-cause signals.")
+    return [s1, s2, s3]
 
 
 def _genie_extract_text(message: dict[str, Any]) -> str:
@@ -4633,6 +4763,223 @@ def agent_finance_chat(payload: dict) -> dict:
             },
         )
     return reply
+
+
+@app.get("/api/geo/sites")
+def geo_sites(industries: str = "") -> dict[str, Any]:
+    selected = [s.strip().lower() for s in str(industries or "").split(",") if s.strip()]
+    if not selected:
+        selected = list(INDUSTRIES)
+    selected = [s for s in selected if s in INDUSTRIES]
+    out: list[dict[str, Any]] = []
+    for ind in selected:
+        site_meta = _geo_site_for_industry(ind)
+        if not site_meta:
+            continue
+        site_id = str(site_meta.get("site_id") or "")
+        cfg_assets = _industry_cfg(ind).get("simulator", {}).get("assets", []) or _default_industry_cfg(ind).get("simulator", {}).get("assets", [])
+        rows = [_asset_snapshot(ind, a, None, display_currency=_geo_currency(ind)) for a in cfg_assets if a.get("id")]
+        running = 0
+        warning = 0
+        critical = 0
+        top_alert: dict[str, Any] | None = None
+        best_score = -1.0
+        for r in rows:
+            sev = str(r.get("status") or "running").lower()
+            score = _to_float(r.get("anomaly_score"), 0.0)
+            if sev == "critical":
+                critical += 1
+            elif sev == "warning":
+                warning += 1
+            else:
+                running += 1
+            sev_rank = 2 if sev == "critical" else (1 if sev == "warning" else 0)
+            if sev_rank > 0 and (sev_rank > (2 if top_alert and top_alert.get("severity") == "critical" else 1 if top_alert else 0) or score >= best_score):
+                best_score = score
+                equipment_id = str(r.get("id") or "")
+                top_alert = {
+                    "asset_name": equipment_id,
+                    "severity": sev,
+                    "message": f"{equipment_id} anomaly score {score:.2f}",
+                }
+        out.append(
+            {
+                "site_id": site_id,
+                "name": site_meta.get("name"),
+                "customer": site_meta.get("customer"),
+                "industry": ind,
+                "lat": site_meta.get("lat"),
+                "lng": site_meta.get("lng"),
+                "description": site_meta.get("description"),
+                "asset_counts": {
+                    "running": running,
+                    "warning": warning,
+                    "critical": critical,
+                    "total": running + warning + critical,
+                },
+                "top_alert": top_alert,
+            }
+        )
+    return {"sites": out}
+
+
+@app.get("/api/geo/assets/{site_id}")
+def geo_assets(site_id: str) -> dict[str, Any]:
+    industry = _geo_industry_for_site(site_id)
+    if not industry:
+        raise HTTPException(status_code=404, detail="Unknown site_id")
+    cfg_assets = _industry_cfg(industry).get("simulator", {}).get("assets", []) or _default_industry_cfg(industry).get("simulator", {}).get("assets", [])
+    overview_assets = [_asset_snapshot(industry, a, None, display_currency=_geo_currency(industry)) for a in cfg_assets if a.get("id")]
+    currency = _geo_currency(industry)
+    assets_out: list[dict[str, Any]] = []
+    for row in overview_assets:
+        aid = str(row.get("id") or "")
+        if not aid:
+            continue
+        status = str(row.get("status") or "running").lower()
+        anomaly_score = _to_float(row.get("anomaly_score"), 0.0)
+        srng = _asset_rng(industry, aid)
+        sensors = _sensor_defs(industry, str(row.get("type") or ""))[:6]
+        tag_rows = []
+        for sensor in sensors:
+            low, high = (sensor.get("normal_range") or [0.0, 100.0])[:2]
+            low_f = _to_float(low, 0.0)
+            high_f = _to_float(high, 100.0)
+            if high_f <= low_f:
+                high_f = low_f + 1.0
+            span = high_f - low_f
+            center = low_f + span * srng.uniform(0.3, 0.8)
+            history = [round(center + srng.uniform(-0.08, 0.08) * span, 3) for _ in range(24)]
+            slope = history[-1] - history[0] if history else 0.0
+            tag_rows.append(
+                {
+                    "name": str(sensor.get("name") or ""),
+                    "value": round(history[-1], 3) if history else round(center, 3),
+                    "unit": str(sensor.get("unit") or ""),
+                    "trend": "up" if slope > 0.2 else "down" if slope < -0.2 else "stable",
+                    "history_24h": history,
+                }
+            )
+        exposure_value = _to_float(row.get("cost_exposure_value"), 0.0)
+        avoided_cost = round(exposure_value * 0.62, 2)
+        intervention_cost = round(exposure_value * 0.17, 2)
+        source_table = "overview.synthetic"
+        alert_msg = (
+            f"{aid} has elevated risk (score {anomaly_score:.2f})."
+            if status in {"critical", "warning"}
+            else ""
+        )
+        active_alert = None
+        if status in {"critical", "warning"}:
+            active_alert = {
+                "severity": status,
+                "message": alert_msg,
+                "recommended_action": "Investigate root cause and execute planned maintenance window.",
+            }
+        fin_payload = None
+        if avoided_cost or intervention_cost:
+            fin_payload = {
+                "avoided_cost": round(avoided_cost, 2),
+                "intervention_cost": round(intervention_cost, 2),
+                "currency": currency,
+            }
+        assets_out.append(
+            {
+                "asset_id": aid,
+                "equip_id": aid,
+                "name": f"{aid} {str(row.get('type') or 'asset')}".strip(),
+                "type": str(row.get("type") or "asset"),
+                "model": str(row.get("model") or ""),
+                "crumb": str(row.get("crumb") or ""),
+                "status": status,
+                "anomaly_score": round(anomaly_score, 4),
+                "rul_hours": round(_to_float(row.get("rul_hours"), 0.0), 2),
+                "anomaly_probability": round(max(0.0, min(1.0, anomaly_score)), 4),
+                "confidence": round(max(0.0, min(1.0, 1.0 - abs(0.5 - anomaly_score))), 4),
+                "exposure": row.get("cost_exposure", ""),
+                "exposure_value": exposure_value,
+                "tags": sorted(tag_rows, key=lambda t: str(t.get("name"))),
+                "active_alert": active_alert,
+                "financial": fin_payload,
+                "suggestions": _geo_suggestions(alert_msg, status, avoided_cost, intervention_cost),
+                "data_source": source_table,
+            }
+        )
+    return {"site_id": site_id, "industry": industry, "assets": assets_out}
+
+
+@app.get("/api/geo/schematic/{site_id}")
+def geo_schematic(site_id: str) -> dict[str, Any]:
+    site_key = str(site_id or "").strip().lower()
+    if site_key not in GEO_SCHEMATICS:
+        raise HTTPException(status_code=404, detail="Unknown site_id")
+    industry = _geo_industry_for_site(site_key)
+    if not industry:
+        return GEO_SCHEMATICS[site_key]
+    cfg_assets = _industry_cfg(industry).get("simulator", {}).get("assets", []) or _default_industry_cfg(industry).get("simulator", {}).get("assets", [])
+    eq_ids = [str(a.get("id") or "") for a in cfg_assets if a.get("id")]
+    template = GEO_SCHEMATICS[site_key]
+    if not eq_ids or not template.get("nodes"):
+        return template
+    nodes_out: list[dict[str, Any]] = []
+    for idx, node in enumerate(template.get("nodes", [])):
+        equip_id = eq_ids[idx] if idx < len(eq_ids) else str(node.get("equip_id") or "")
+        updated = dict(node)
+        updated["equip_id"] = equip_id
+        updated["label"] = equip_id or str(node.get("label") or "")
+        nodes_out.append(updated)
+    return {"subtitle": template.get("subtitle"), "nodes": nodes_out, "pipes": template.get("pipes", [])}
+
+
+@app.post("/api/geo/genie/ask")
+def geo_genie_ask(payload: dict[str, Any]) -> dict[str, Any]:
+    industry = str(payload.get("industry", "") or "").strip().lower()
+    question = str(payload.get("question", "") or "").strip()
+    asset_context = payload.get("asset_context")
+    if industry not in INDUSTRIES:
+        raise HTTPException(status_code=400, detail="Invalid industry")
+    if not question:
+        raise HTTPException(status_code=400, detail="Missing question")
+    prompt = question
+    if asset_context:
+        prompt = f"{question}\n\nAsset context:\n{json.dumps(asset_context, ensure_ascii=True)}"
+    # Use the same path/token/room resolution as existing industry/finance genie flows.
+    reply = agent_chat(
+        {
+            "industry": industry,
+            "room_type": "ops",
+            "messages": [{"role": "user", "content": prompt}],
+        }
+    )
+    if isinstance(reply, dict):
+        choices = reply.get("choices", [])
+        if choices and isinstance(choices[0], dict):
+            answer = str((choices[0].get("message") or {}).get("content") or "").strip()
+            if answer:
+                return {"answer": answer}
+    raise HTTPException(status_code=500, detail="Genie request failed: no response returned.")
+
+
+@app.post("/api/geo/alert/action")
+def geo_alert_action(payload: dict[str, Any]) -> dict[str, Any]:
+    asset_id = str(payload.get("asset_id", "") or "").strip()
+    industry = str(payload.get("industry", "") or "").strip().lower()
+    action = str(payload.get("action", "") or "").strip().lower()
+    note = str(payload.get("note", "") or "").strip()
+    if not asset_id:
+        raise HTTPException(status_code=400, detail="Missing asset_id")
+    if industry not in INDUSTRIES:
+        raise HTTPException(status_code=400, detail="Invalid industry")
+    if action not in {"approve", "reject", "defer"}:
+        raise HTTPException(status_code=400, detail="action must be approve, reject, or defer")
+    return ui_recommendation_action(
+        {
+            "industry": industry,
+            "equipment_id": asset_id,
+            "decision": action,
+            "note": note,
+        }
+    )
 
 
 @app.get("/{full_path:path}")
