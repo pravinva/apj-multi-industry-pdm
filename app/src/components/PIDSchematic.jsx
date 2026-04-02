@@ -12,13 +12,18 @@ function buildLayoutNodes(schematic, assets) {
   const safeAssets = Array.isArray(assets) ? assets : [];
   if (!safeAssets.length) return inputNodes;
 
-  const cols = 5;
-  const startX = 60;
-  const startY = 96;
-  const xStep = 220;
-  const yStep = 160;
+  // Always use computed grid coordinates for live assets so boxes never overlap,
+  // regardless of template node positions per industry.
+  const canvasWidth = 1200;
+  const outerPadX = 56;
+  const startY = 92;
+  const yStep = 138;
   const w = 170;
   const h = 56;
+  const safeCount = safeAssets.length;
+  const cols = Math.min(5, Math.max(3, Math.ceil(Math.sqrt(safeCount * 1.9))));
+  const usableWidth = canvasWidth - outerPadX * 2;
+  const xStep = cols > 1 ? Math.floor((usableWidth - w) / (cols - 1)) : 0;
 
   return safeAssets.map((asset, idx) => {
     const row = Math.floor(idx / cols);
@@ -28,8 +33,8 @@ function buildLayoutNodes(schematic, assets) {
       id: `asset-${asset.asset_id || idx}`,
       label: String(asset.asset_id || fallback.label || `A-${idx + 1}`),
       equip_id: String(asset.equip_id || asset.asset_id || fallback.equip_id || ""),
-      x: Number(fallback.x ?? (startX + col * xStep)),
-      y: Number(fallback.y ?? (startY + row * yStep)),
+      x: Number(outerPadX + col * xStep),
+      y: Number(startY + row * yStep),
       w: Number(fallback.w ?? w),
       h: Number(fallback.h ?? h),
     };
@@ -59,12 +64,33 @@ export default function PIDSchematic({ schematic, assets, activeAssetId, onAsset
   const nodes = buildLayoutNodes(schematic, assets);
   const pipes = buildLayoutPipes(nodes, schematic);
   const nodesById = new Map(nodes.map((n) => [n.id, n]));
+  const maxNodeBottom = nodes.reduce((max, n) => {
+    const box = nodeBox(n);
+    return Math.max(max, box.y + box.h);
+  }, 360);
+  const svgHeight = Math.max(460, Math.ceil(maxNodeBottom + 28));
   return (
     <div className="geo-schematic-wrap">
-      <svg className="geo-schematic" viewBox="0 0 1200 460" preserveAspectRatio="xMinYMin meet">
+      <svg className="geo-schematic" viewBox={`0 0 1200 ${svgHeight}`} preserveAspectRatio="xMinYMin meet">
         <defs>
+          <linearGradient id="geoPidBg" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#0b1730" />
+            <stop offset="50%" stopColor="#11264b" />
+            <stop offset="100%" stopColor="#0a1a36" />
+          </linearGradient>
+          <radialGradient id="geoPidGlowA" cx="18%" cy="28%" r="50%">
+            <stop offset="0%" stopColor="rgba(59,130,246,0.24)" />
+            <stop offset="100%" stopColor="rgba(59,130,246,0)" />
+          </radialGradient>
+          <radialGradient id="geoPidGlowB" cx="88%" cy="18%" r="46%">
+            <stop offset="0%" stopColor="rgba(16,185,129,0.18)" />
+            <stop offset="100%" stopColor="rgba(16,185,129,0)" />
+          </radialGradient>
           <pattern id="geoGrid" width="20" height="20" patternUnits="userSpaceOnUse">
-            <path d="M20 0 L0 0 0 20" fill="none" stroke="rgba(148,163,184,0.2)" strokeWidth="1" />
+            <path d="M20 0 L0 0 0 20" fill="none" stroke="rgba(148,163,184,0.16)" strokeWidth="1" />
+          </pattern>
+          <pattern id="geoGridMajor" width="100" height="100" patternUnits="userSpaceOnUse">
+            <path d="M100 0 L0 0 0 100" fill="none" stroke="rgba(148,163,184,0.22)" strokeWidth="1.2" />
           </pattern>
           <marker id="geoArrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
             <path d="M0,0 L8,3 L0,6 Z" fill="#d97706" />
@@ -73,8 +99,11 @@ export default function PIDSchematic({ schematic, assets, activeAssetId, onAsset
             <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor="#0f172a" floodOpacity="0.12" />
           </filter>
         </defs>
-        <rect x="0" y="0" width="1200" height="460" fill="#fcfdff" />
-        <rect x="0" y="0" width="1200" height="460" fill="url(#geoGrid)" />
+        <rect x="0" y="0" width="1200" height={svgHeight} fill="url(#geoPidBg)" />
+        <rect x="0" y="0" width="1200" height={svgHeight} fill="url(#geoPidGlowA)" />
+        <rect x="0" y="0" width="1200" height={svgHeight} fill="url(#geoPidGlowB)" />
+        <rect x="0" y="0" width="1200" height={svgHeight} fill="url(#geoGrid)" />
+        <rect x="0" y="0" width="1200" height={svgHeight} fill="url(#geoGridMajor)" />
         <text x="20" y="24" className="geo-pid-header">{String(schematic?.subtitle || "Process flow")}</text>
         {pipes.map((p, idx) => {
           const from = nodesById.get(p.from);
@@ -108,7 +137,8 @@ export default function PIDSchematic({ schematic, assets, activeAssetId, onAsset
               className={`geo-node ${clickable ? "live" : "ghost"} ${status} ${isActive ? "active" : ""}`}
               onClick={() => clickable && onAssetClick?.(asset.asset_id)}
             >
-              <rect x={box.x} y={box.y} width={box.w} height={box.h} rx="12" filter="url(#geoNodeShadow)" />
+              <rect className="geo-node-body" x={box.x} y={box.y} width={box.w} height={box.h} rx="14" filter="url(#geoNodeShadow)" />
+              <rect className="geo-node-frame" x={box.x + 2} y={box.y + 2} width={box.w - 4} height={box.h - 4} rx="12" />
               <rect className={`geo-node-accent ${status}`} x={box.x} y={box.y} width="7" height={box.h} rx="3" />
               <text className="geo-node-title" x={box.x + 14} y={box.y + 22}>{node.label}</text>
               {clickable ? (

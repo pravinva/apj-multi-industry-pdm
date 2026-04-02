@@ -587,6 +587,12 @@ export default function App() {
   const [mapCopilotPending, setMapCopilotPending] = useState(false);
   const [mapCopilotMsgsByKey, setMapCopilotMsgsByKey] = useState({});
   const [mapCopilotConversationByKey, setMapCopilotConversationByKey] = useState({});
+  const [hierGenieOpen, setHierGenieOpen] = useState(false);
+  const [hierGenieInput, setHierGenieInput] = useState("");
+  const [hierGeniePending, setHierGeniePending] = useState(false);
+  const [hierGenieMsgsByKey, setHierGenieMsgsByKey] = useState({});
+  const [hierGenieConversationByKey, setHierGenieConversationByKey] = useState({});
+  const [hierGenieTargetAssetId, setHierGenieTargetAssetId] = useState("");
   const [genieRooms, setGenieRooms] = useState({ industry: "", workspace_url: "", configured_count: 0, total_count: 5, missing: [], rooms: {} });
   const [agentPending, setAgentPending] = useState(false);
   const [financeInput, setFinanceInput] = useState("");
@@ -943,6 +949,14 @@ export default function App() {
   const mapZoneChips = mapLayout.zoneChips;
   const mapCopilotKey = `${industry}::${selectedAssetId || ""}`;
   const mapCopilotMsgs = mapCopilotMsgsByKey[mapCopilotKey] || [];
+  const hierGenieAssetId = String(hierGenieTargetAssetId || hierSelection?.asset_id || selectedAssetId || "");
+  const hierGenieKey = `${industry}::${hierGenieAssetId}`;
+  const hierGenieMsgs = hierGenieMsgsByKey[hierGenieKey] || [];
+  const hierGenieAssetOptions = useMemo(() => {
+    const pinIds = (mapPins || []).map((p) => String(p.id || "")).filter(Boolean);
+    const overviewIds = (overview.assets || []).map((a) => String(a.id || "")).filter(Boolean);
+    return Array.from(new Set([...pinIds, ...overviewIds]));
+  }, [mapPins, overview.assets]);
   const activeGenieRoom = genieRooms?.rooms?.[industry] || {};
   const activeGenieUrl = String(activeGenieRoom?.url || "");
   const activeGeoSite = useMemo(
@@ -1038,11 +1052,11 @@ export default function App() {
     return tags.sort((a, b) => Number(b[metricKey] || 0) - Number(a[metricKey] || 0));
   }, [sdtReport.tags, sdtMetric]);
 
-  async function sendMessage() {
-    if (!agentInput.trim() || agentPending) return;
-    const userText = agentInput.trim();
+  async function sendMessage(overrideText = "", overrideAssetId = "") {
+    const userText = String(overrideText || agentInput || "").trim();
+    if (!userText || agentPending) return;
     setAgentMsgs((prev) => [...prev, { role: "user", text: userText, label: "ME" }]);
-    setAgentInput("");
+    if (!overrideText) setAgentInput("");
     setAgentPending(true);
     try {
       const reply = await postJson(
@@ -1050,6 +1064,7 @@ export default function App() {
         {
           industry,
           currency: demoCurrency === "AUTO" ? executive.currency : demoCurrency,
+          asset_id: String(overrideAssetId || selectedAssetId || ""),
           conversation_id: genieConversationByIndustry[industry] || "",
           messages: [{ role: "user", content: userText }]
         },
@@ -1064,6 +1079,54 @@ export default function App() {
     } finally {
       setAgentPending(false);
     }
+  }
+
+  async function sendHierarchyGenieMessage(overrideText = "") {
+    const assetId = String(hierSelection?.asset_id || selectedAssetId || "").trim();
+    const userText = String(overrideText || hierGenieInput || "").trim();
+    if (!assetId || !userText || hierGeniePending) return;
+    const k = `${industry}::${assetId}`;
+    if (!overrideText) setHierGenieInput("");
+    setHierGeniePending(true);
+    setHierGenieMsgsByKey((prev) => ({
+      ...prev,
+      [k]: [...(prev[k] || []), { role: "user", text: userText, label: "ME" }]
+    }));
+    try {
+      const context = `Hierarchy context: industry=${industry}, asset_id=${assetId}. Focus root cause, risk, and action sequence for this equipment.`;
+      const reply = await postJson(
+        "/api/agent/chat",
+        {
+          industry,
+          currency: demoCurrency === "AUTO" ? executive.currency : demoCurrency,
+          asset_id: assetId,
+          conversation_id: hierGenieConversationByKey[k] || "",
+          messages: [{ role: "user", content: `${userText}\n\n${context}` }]
+        },
+        { choices: [{ message: { content: "Unable to get response." } }] }
+      );
+      if (reply?.conversation_id) {
+        setHierGenieConversationByKey((prev) => ({ ...prev, [k]: reply.conversation_id }));
+      }
+      const answer = reply?.choices?.[0]?.message?.content || "No response.";
+      const refs = Array.isArray(reply?.references) ? reply.references : [];
+      setHierGenieMsgsByKey((prev) => ({
+        ...prev,
+        [k]: [...(prev[k] || []), { role: "agent", text: answer, label: t("Maintenance Supervisor AI"), references: refs }]
+      }));
+    } finally {
+      setHierGeniePending(false);
+    }
+  }
+
+  async function investigateHierarchyInGenie(assetId) {
+    const targetAsset = String(assetId || "").trim();
+    if (!targetAsset) return;
+    setSelectedAssetId(targetAsset);
+    setHierGenieTargetAssetId(targetAsset);
+    setHierGenieOpen(true);
+    const question = `Investigate asset ${targetAsset} for root cause, current risk, and recommended action sequence.`;
+    await sendHierarchyGenieMessage(question);
   }
 
   async function sendMapCopilotMessage() {
@@ -2246,15 +2309,66 @@ export default function App() {
                       <button className="back-btn" onClick={() => { setSelectedAssetId(hierSelection.asset_id); setPage("p2"); }}>
                         View asset drilldown →
                       </button>
-                      <a
+                      <button
                         className="back-btn"
-                        href={(genieRooms?.rooms?.[industry]?.url || "")}
-                        target="_blank"
-                        rel="noreferrer"
-                        style={{ textDecoration: "none" }}
+                        onClick={() => investigateHierarchyInGenie(hierSelection.asset_id)}
                       >
                         {t("Investigate in Genie")}
-                      </a>
+                      </button>
+                    </div>
+                  )}
+                  {hierViewMode === "tree" && hierGenieOpen && (hierGenieAssetOptions.length > 0 || !!hierSelection?.asset_id) && (
+                    <div className="map-copilot-panel" style={{ marginTop: 10 }}>
+                      <div className="map-copilot-hdr">
+                        <strong>{t("Ask AI")}</strong>
+                        <span className="map-copilot-asset">{hierGenieAssetId || "Select asset"}</span>
+                        <button className="map-copilot-send" onClick={() => setHierGenieOpen(false)} style={{ marginLeft: "auto" }}>
+                          Close
+                        </button>
+                      </div>
+                      <div className="map-copilot-input-row" style={{ marginBottom: 8 }}>
+                        <select
+                          className="map-copilot-input"
+                          value={hierGenieAssetId}
+                          onChange={(e) => {
+                            setHierGenieTargetAssetId(e.target.value);
+                            setSelectedAssetId(e.target.value);
+                          }}
+                        >
+                          <option value="">Select asset from picture...</option>
+                          {hierGenieAssetOptions.map((id) => (
+                            <option key={`hgo-${id}`} value={id}>{id}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="map-copilot-msgs">
+                        {hierGenieMsgs.slice(-8).map((m, i) => (
+                          <div key={`hgp-${i}`} className={`map-copilot-msg ${m.role}`}>
+                            <div className="map-copilot-msg-lbl">{m.role === "user" ? t("ME") : t("AI")}</div>
+                            <div className="map-copilot-msg-body">
+                              {m.role === "agent" ? renderSimpleMarkdown(m.text) : m.text}
+                            </div>
+                          </div>
+                        ))}
+                        {hierGeniePending && <div className="map-copilot-pending">{t("Sending...")}</div>}
+                      </div>
+                      <div className="map-copilot-input-row">
+                        <input
+                          className="map-copilot-input"
+                          value={hierGenieInput}
+                          onChange={(e) => setHierGenieInput(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && sendHierarchyGenieMessage()}
+                          placeholder={t("Ask about this equipment, risk, and action plan...")}
+                          disabled={!hierGenieAssetId || hierGeniePending}
+                        />
+                        <button
+                          className="map-copilot-send"
+                          onClick={() => sendHierarchyGenieMessage()}
+                          disabled={!hierGenieAssetId || hierGeniePending}
+                        >
+                          {hierGeniePending ? t("Sending...") : t("Ask AI")}
+                        </button>
+                      </div>
                     </div>
                   )}
                 </>

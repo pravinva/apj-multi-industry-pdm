@@ -2731,19 +2731,30 @@ def _asset_snapshot(
     aid = asset_def["id"]
     rng = _asset_rng(industry, aid)
     sev = float(asset_def.get("fault_severity", 0.0))
+    st = _sim_state(industry)
+    fault_cfg = (st.get("faults", {}) or {}).get(aid, {"enabled": False, "severity": 0, "mode": "degradation"})
+    fault_enabled = bool(fault_cfg.get("enabled"))
+    fault_sev = max(0.0, min(100.0, float(fault_cfg.get("severity", 0) or 0))) / 100.0
     if pred and pred.get("anomaly_score") is not None:
         anomaly = round(float(pred.get("anomaly_score")), 2)
     elif sev > 0:
         anomaly = round(max(0.02, min(0.99, sev + rng.uniform(-0.08, 0.06))), 2)
     else:
         anomaly = round(max(0.02, min(0.45, rng.uniform(0.08, 0.28))), 2)
-    health = max(5, int((1 - anomaly) * 100))
-    status = "critical" if anomaly >= 0.8 else "warning" if anomaly >= 0.5 else "healthy"
+    # Pin simulator-injected faults so they remain visible until manually cleared.
+    if fault_enabled:
+        injected_floor = round(max(0.5, min(0.99, 0.5 + (fault_sev * 0.49))), 2)
+        anomaly = max(anomaly, injected_floor)
     if pred and pred.get("rul_hours") is not None:
         rul = round(float(pred.get("rul_hours")), 1)
     else:
         rul = round(max(4.0, (220.0 * (1 - anomaly)) + rng.uniform(-16, 12)), 1)
-    inject_fault = asset_def.get("inject_fault")
+    if fault_enabled:
+        pinned_rul_cap = round(max(1.0, 24.0 * (1.0 - fault_sev) + 2.0), 1)
+        rul = min(rul, pinned_rul_cap)
+    health = max(5, int((1 - anomaly) * 100))
+    status = "critical" if anomaly >= 0.8 else "warning" if anomaly >= 0.5 else "healthy"
+    inject_fault = fault_cfg.get("mode") or asset_def.get("inject_fault")
     fm = _industry_cfg(industry).get("failure_modes", {}).get(inject_fault or "", {})
     base_cost = int(fm.get("cost_per_event", rng.uniform(8_000, 95_000)))
     exposure = int(base_cost * max(0.3, anomaly))
@@ -2771,6 +2782,7 @@ def _asset_snapshot(
         "prediction_timestamp": (pred or {}).get("prediction_timestamp"),
         "top_contributing_sensor": (pred or {}).get("top_contributing_sensor"),
         "top_contributing_score": (pred or {}).get("top_contributing_score"),
+        "fault_pinned": fault_enabled,
     }
 
 
@@ -4565,6 +4577,17 @@ def stream_latest(industry: str = "mining", limit: int = 50) -> dict:
     now = datetime.now(timezone.utc)
     if industry not in INDUSTRIES:
         raise HTTPException(status_code=400, detail="Invalid industry")
+    # If simulator is running, emit live ticks from stream page polling so users
+    # can see motion without having to stay on Simulator tab.
+    st = _sim_state(industry)
+    if st.get("running"):
+        try:
+            ticked = ui_simulator_tick({"industry": industry})
+            recent = list(ticked.get("rows", []) or [])[: max(1, min(limit, 200))]
+            if recent:
+                return {"rows": recent}
+        except Exception:
+            pass
     live_rows = _bronze_latest(industry, limit)
     if live_rows:
         return {
