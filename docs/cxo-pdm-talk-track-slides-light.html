@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CXO Talk Track - Customer Theme</title>
+  <style>
+    :root {
+      --bg: #f3f6fb;
+      --panel: #ffffff;
+      --ink: #0f172a;
+      --muted: #475569;
+      --brand: #ff3621;
+      --accent: #2563eb;
+      --line: #d8e1ef;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Inter, "Segoe UI", Arial, sans-serif; background: var(--bg); color: var(--ink); }
+    .deck { width: 1280px; margin: 0 auto; padding: 20px; }
+    .slide {
+      width: 1240px;
+      min-height: 700px;
+      margin: 0 0 20px 0;
+      padding: 34px 40px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      page-break-after: always;
+      break-after: page;
+      position: relative;
+    }
+    .slide:last-child { page-break-after: auto; break-after: auto; }
+    .brand-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .logo-slot {
+      border: 1px dashed #b8c6dc;
+      color: #64748b;
+      border-radius: 10px;
+      padding: 6px 10px;
+      font-size: 12px;
+      background: #f8fafc;
+    }
+    .kicker { font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
+    h1 { margin: 0 0 10px 0; font-size: 48px; line-height: 1.1; }
+    h2 { margin: 0 0 10px 0; font-size: 38px; line-height: 1.12; }
+    p.lead { margin: 0 0 16px 0; font-size: 22px; color: var(--muted); max-width: 1060px; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+    .card { border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; background: #fff; }
+    .card h3 { margin: 0 0 6px 0; font-size: 21px; }
+    ul { margin: 8px 0 0 20px; padding: 0; font-size: 20px; color: #334155; }
+    li { margin: 7px 0; }
+    .flow {
+      margin-top: 10px;
+      border: 1px solid #cbd7ea;
+      border-radius: 12px;
+      background: #f8fbff;
+      padding: 12px 14px;
+      font-size: 19px;
+      color: #1e293b;
+    }
+    .metric-row { margin-top: 14px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+    .metric { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+    .metric .v { font-size: 32px; font-weight: 700; color: #111827; }
+    .metric .l { font-size: 13px; color: #475569; text-transform: uppercase; letter-spacing: 0.04em; }
+    .diagram-wrap { margin-top: 14px; border: 1px solid var(--line); border-radius: 12px; background: #fcfdff; padding: 10px; }
+    .diagram-wrap svg { width: 100%; height: auto; display: block; }
+    .node { fill: #ffffff; stroke: #9db2d3; stroke-width: 1.4; }
+    .node-title { fill: #0f172a; font-size: 13px; font-weight: 700; }
+    .node-sub { fill: #475569; font-size: 11px; }
+    .edge { stroke: #2563eb; stroke-width: 1.6; fill: none; marker-end: url(#arrowLight); }
+    .foot { position: absolute; left: 40px; right: 40px; bottom: 18px; display: flex; justify-content: space-between; font-size: 13px; color: #64748b; }
+    @media print {
+      body { background: #fff; }
+      .deck { width: 100%; margin: 0; padding: 0; }
+      .slide { width: 100%; min-height: 100vh; border: none; border-radius: 0; margin: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="deck">
+    <section class="slide">
+      <div class="brand-row">
+        <div class="kicker">Customer Executive Briefing</div>
+        <div class="logo-slot">Customer Logo / Databricks Co-brand</div>
+      </div>
+      <h1>Predictive + Prescriptive Maintenance for CXO Impact</h1>
+      <p class="lead">Reduce operational risk, accelerate decisions, and make maintenance value highly visible on the bottom line.</p>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Executive Priority</h3>
+          <ul>
+            <li>Lower unplanned downtime and disruption cost</li>
+            <li>Prioritize interventions by economic value</li>
+            <li>Create shared truth for operations + finance</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Field Team Readiness (AE + SA)</h3>
+          <ul>
+            <li>One reusable value story across 5 industries</li>
+            <li>Mining, Energy, Water, Automotive, Semiconductor</li>
+            <li>Demo-to-business case in minutes</li>
+          </ul>
+        </div>
+      </div>
+      <div class="foot"><span>OT PdM Intelligence</span><span>Slide 1 of 6</span></div>
+    </section>
+
+    <section class="slide">
+      <div class="brand-row">
+        <div class="kicker">Business Value</div>
+        <div class="logo-slot">Customer KPI View</div>
+      </div>
+      <h2>From Alerts to Financial Decisions</h2>
+      <p class="lead">Predictive models identify risk and remaining life; prescriptive logic recommends action sequencing with clear ROI.</p>
+      <div class="flow">
+        OT signal drift -> Failure probability + RUL -> Recommended action -> Avoided loss vs intervention cost -> Action captured for accountability
+      </div>
+      <div class="metric-row">
+        <div class="metric"><div class="v">30-50%</div><div class="l">Fewer critical surprises</div></div>
+        <div class="metric"><div class="v">2-4x</div><div class="l">Faster response decisions</div></div>
+        <div class="metric"><div class="v">10-20%</div><div class="l">Waste reduction</div></div>
+        <div class="metric"><div class="v">+ROI</div><div class="l">Avoided loss visibility</div></div>
+      </div>
+      <div class="foot"><span>Decision Economics</span><span>Slide 2 of 6</span></div>
+    </section>
+
+    <section class="slide">
+      <div class="brand-row">
+        <div class="kicker">Localization</div>
+        <div class="logo-slot">Regional Executive Lens</div>
+      </div>
+      <h2>Change Currency to Localize the Solution Story</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Local Executive Context</h3>
+          <ul>
+            <li>Display values in USD, AUD, JPY</li>
+            <li>Geo and AI narratives follow selected currency</li>
+            <li>Regional leadership sees impact in familiar units</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Example</h3>
+          <ul>
+            <li>Avoided JPY 1,849,543</li>
+            <li>Intervention JPY 507,133</li>
+            <li>Net protected value: JPY 1,342,410</li>
+          </ul>
+        </div>
+      </div>
+      <div class="foot"><span>Global-to-Local Value</span><span>Slide 3 of 6</span></div>
+    </section>
+
+    <section class="slide">
+      <div class="brand-row">
+        <div class="kicker">End-to-End Architecture</div>
+        <div class="logo-slot">Governed Lakehouse + AI</div>
+      </div>
+      <h2>Databricks Powers the Full Lifecycle</h2>
+      <div class="diagram-wrap">
+        <svg viewBox="0 0 1120 210" role="img" aria-label="End-to-end app architecture">
+          <defs>
+            <marker id="arrowLight" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+              <path d="M0,0 L10,4 L0,8 z" fill="#2563eb"></path>
+            </marker>
+          </defs>
+          <rect class="node" x="12" y="28" width="160" height="72"></rect>
+          <text class="node-title" x="24" y="52">OT Sources</text>
+          <text class="node-sub" x="24" y="70">Zerobus / PI / Simulator</text>
+          <rect class="node" x="210" y="28" width="150" height="72"></rect>
+          <text class="node-title" x="222" y="52">Delta Bronze</text>
+          <text class="node-sub" x="222" y="70">Ingest + normalize</text>
+          <rect class="node" x="396" y="28" width="178" height="72"></rect>
+          <text class="node-title" x="408" y="52">DLT Silver/Gold</text>
+          <text class="node-sub" x="408" y="70">Features + predictions</text>
+          <rect class="node" x="610" y="28" width="156" height="72"></rect>
+          <text class="node-title" x="622" y="52">MLflow</text>
+          <text class="node-sub" x="622" y="70">Anomaly + RUL models</text>
+          <rect class="node" x="802" y="28" width="156" height="72"></rect>
+          <text class="node-title" x="814" y="52">App + Genie</text>
+          <text class="node-sub" x="814" y="70">Geo + actions + AI</text>
+          <rect class="node" x="972" y="28" width="132" height="72"></rect>
+          <text class="node-title" x="984" y="52">Bottom Line</text>
+          <text class="node-sub" x="984" y="70">EBITDA protection</text>
+          <path class="edge" d="M172 64 L210 64"></path>
+          <path class="edge" d="M360 64 L396 64"></path>
+          <path class="edge" d="M574 64 L610 64"></path>
+          <path class="edge" d="M766 64 L802 64"></path>
+          <path class="edge" d="M958 64 L972 64"></path>
+          <rect class="node" x="180" y="142" width="240" height="38"></rect>
+          <text class="node-sub" x="196" y="165">Unity Catalog Governance + Lineage</text>
+          <rect class="node" x="450" y="142" width="220" height="38"></rect>
+          <text class="node-sub" x="466" y="165">Action Audit Trail + Human-in-loop</text>
+          <rect class="node" x="700" y="142" width="280" height="38"></rect>
+          <text class="node-sub" x="716" y="165">Localization via Currency and Language</text>
+        </svg>
+      </div>
+      <div class="foot"><span>Platform Blueprint</span><span>Slide 4 of 6</span></div>
+    </section>
+
+    <section class="slide">
+      <div class="brand-row">
+        <div class="kicker">Governance + Trust</div>
+        <div class="logo-slot">Enterprise Controls</div>
+      </div>
+      <h2>Board-Ready: Secure, Governed, Auditable</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Data Governance</h3>
+          <ul>
+            <li>Policy controls and access governance</li>
+            <li>Lineage from sensor to executive KPI</li>
+            <li>Cross-industry schema consistency</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>AI Governance</h3>
+          <ul>
+            <li>Model versioning and reproducibility</li>
+            <li>Decision traceability (approve/defer/reject)</li>
+            <li>Human accountability in final action</li>
+          </ul>
+        </div>
+      </div>
+      <div class="foot"><span>Risk Management</span><span>Slide 5 of 6</span></div>
+    </section>
+
+    <section class="slide">
+      <div class="brand-row">
+        <div class="kicker">Executive Ask</div>
+        <div class="logo-slot">Next Step Decision</div>
+      </div>
+      <h2>Approve a 30-45 Day Pilot</h2>
+      <p class="lead">One site and one critical asset class to baseline downtime, validate avoided-loss economics, and establish rollout blueprint.</p>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Pilot Scope</h3>
+          <ul>
+            <li>Operational + financial decision cadence</li>
+            <li>Weekly KPI and governance review</li>
+            <li>Direct AE/SA customer narrative support</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Expected Output</h3>
+          <ul>
+            <li>Quantified bottom-line value</li>
+            <li>Validated architecture and controls</li>
+            <li>Scale plan across the five industries</li>
+          </ul>
+        </div>
+      </div>
+      <div class="foot"><span>Call to Action</span><span>Slide 6 of 6</span></div>
+    </section>
+  </div>
+</body>
+</html>
