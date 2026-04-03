@@ -33,6 +33,33 @@ The app closes this gap by computing recommendations and business impact on top 
 | `automotive` | Toyota | Press and weld line stop-risk reduction |
 | `semiconductor` | Renesas | Etch and lithography yield protection |
 
+## APJ Site Coverage (Current)
+
+Each industry now includes 4 APJ sites (20 total), with site-level currency and localized Geo/Genie behavior.
+
+| Industry | Site ID | Site Name | Country/Region | Native Currency |
+|---|---|---|---|---|
+| `mining` | `rio-pilbara` | Rio Pilbara Operations | Australia | `AUD` |
+| `mining` | `tata-odisha` | Tata Steel Diagnostic Operations | India | `INR` |
+| `mining` | `adaro-kalimantan` | PETRONAS Reliability Operations Hub | ASEAN | `SGD` |
+| `mining` | `posco-gangwon` | POSCO Gangwon Mining Hub | South Korea | `KRW` |
+| `water` | `sydney-water` | Sydney Water Western Hub | Australia | `AUD` |
+| `water` | `chennai-water` | CRIS Infrastructure Reliability Hub | India | `INR` |
+| `water` | `pub-singapore` | PUB Singapore Hub | ASEAN | `SGD` |
+| `water` | `seoul-water` | Seoul Water Reliability Hub | South Korea | `KRW` |
+| `automotive` | `toyota-motomachi` | Toyota Motomachi Plant | Japan | `JPY` |
+| `automotive` | `tata-pune` | Mahindra Telemetry Operations | India | `INR` |
+| `automotive` | `toyota-thailand` | VinFast IIoT Operations Hub | ASEAN | `SGD` |
+| `automotive` | `hyundai-ulsan` | Hyundai Ulsan Plant | South Korea | `KRW` |
+| `semiconductor` | `renesas-naka` | Renesas Naka Fab | Japan | `JPY` |
+| `semiconductor` | `vedanta-bengaluru` | Vedanta Bengaluru Fab | India | `INR` |
+| `semiconductor` | `infineon-penang` | Infineon Penang Fab | ASEAN | `SGD` |
+| `semiconductor` | `samsung-giheung` | Samsung Giheung Fab | South Korea | `KRW` |
+| `energy` | `alinta-hsdale` | Hornsdale Grid Storage | Australia | `AUD` |
+| `energy` | `adani-gujarat` | Reliance Network Reliability Hub | India | `INR` |
+| `energy` | `petronas-johor` | GPSC Maintenance Optimization Hub | ASEAN | `SGD` |
+| `energy` | `kepco-jeju` | KEPCO Jeju Grid Hub | South Korea | `KRW` |
+
 ## End-to-End Flow
 
 ```text
@@ -148,12 +175,17 @@ The app supports both currency adaptation and localization-aware presentation.
 - UI includes localized labels and presentation logic (including Japanese title path in header rendering).
 - Backend keeps numeric and unit payloads normalized while frontend handles language-facing rendering.
 - Currency, date window, and narrative statements are designed for executive readability across regional audiences.
+- Language behavior is currency-driven for operator UX:
+  - `JPY` -> Japanese prompts/text
+  - `KRW` -> Korean prompts/text
+  - other currencies (`USD`, `AUD`, `INR`, `SGD`) -> English text with currency conversion
 
 ### Geo intelligence currency behavior
 
 - Geo APIs (`/api/geo/sites`, `/api/geo/assets/{site_id}`) accept `currency` and return converted financial values in the selected display currency.
 - In `AUTO` mode, each Geo site uses its native currency (for example India sites use `INR`, ASEAN sites use `SGD`, and South Korea sites use `KRW`).
 - Geo asset list, site rollups, and drill-down financial cards update when the currency selector changes.
+- Fleet risk matrix now includes a site filter (`All sites` + per-site values) for faster operations triage.
 - Geo Genie requests include selected currency context so monetary responses remain aligned with UI selection.
 - For `JPY`, Geo quick prompts, alert phrasing, and Genie guidance are localized to Japanese.
 - For `KRW`, Geo quick prompts, alert phrasing, and Genie guidance are localized to Korean.
