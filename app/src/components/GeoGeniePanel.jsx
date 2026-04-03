@@ -21,21 +21,28 @@ export default function GeoGeniePanel({ asset, assets, site, industry, currency,
   );
   const prevAsset = drillIdx > 0 ? drillAssets[drillIdx - 1] : null;
   const nextAsset = drillIdx >= 0 && drillIdx < drillAssets.length - 1 ? drillAssets[drillIdx + 1] : null;
-  const isJpy = String(currency || "").toUpperCase() === "JPY";
+  const resolvedCurrency = String(
+    currency && currency !== "AUTO" ? currency : asset?.financial?.currency || ""
+  ).toUpperCase();
+  const isJpy = resolvedCurrency === "JPY";
+  const isKrw = resolvedCurrency === "KRW";
+  const locale = isJpy ? "ja" : isKrw ? "ko" : "en";
 
   useEffect(() => {
     if (!asset || !site) return;
     setMessages([
       {
         role: "assistant",
-        text: isJpy
+        text: locale === "ja"
           ? `${site.customer} ${site.name} の ${asset.name} を調査できます。根本原因、リスク、対応順序を質問してください。金額は JPY で回答します。`
-          : `I can investigate ${asset.name} at ${site.customer} ${site.name}. Ask for root cause, risk, and action sequencing.${currency && currency !== "AUTO" ? ` I will respond with costs in ${currency}.` : ""}`
+          : locale === "ko"
+          ? `${site.customer} ${site.name}의 ${asset.name} 자산을 조사할 수 있습니다. 근본 원인, 위험도, 조치 순서를 질문해 주세요. 금액은 KRW로 답변합니다.`
+          : `I can investigate ${asset.name} at ${site.customer} ${site.name}. Ask for root cause, risk, and action sequencing.${resolvedCurrency ? ` I will respond with costs in ${resolvedCurrency}.` : ""}`
       }
     ]);
     setInputValue("");
     setActionDone("");
-  }, [asset, site, currency, isJpy]);
+  }, [asset, site, resolvedCurrency, locale]);
 
   useEffect(() => {
     const el = inputRef.current;
@@ -61,7 +68,8 @@ export default function GeoGeniePanel({ asset, assets, site, industry, currency,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           industry,
-          currency,
+          site_id: site?.site_id || "",
+          currency: resolvedCurrency || currency,
           question: q,
           asset_context: { name: asset?.name, status: asset?.status, tags: asset?.tags || [] }
         })
@@ -101,22 +109,22 @@ export default function GeoGeniePanel({ asset, assets, site, industry, currency,
       <div className="geo-genie-header">
         <div className="geo-genie-title-row">
           <span className="geo-industry-badge">{industry}</span>
-          <button className="geo-close-btn" onClick={onClose}>Close</button>
+          <button className="geo-close-btn" onClick={onClose}>{locale === "ja" ? "閉じる" : locale === "ko" ? "닫기" : "Close"}</button>
         </div>
         <div className="geo-genie-asset">{asset.name}</div>
         <div className="geo-genie-sub">{site.customer} · {site.name}</div>
         {genieUrl ? (
           <a className="geo-genie-link" href={genieUrl} target="_blank" rel="noreferrer">
-            Open Genie conversation
+            {locale === "ja" ? "Genie 会話を開く" : locale === "ko" ? "Genie 대화 열기" : "Open Genie conversation"}
           </a>
         ) : null}
         <div className="geo-status-pills">
           <span className={`pill ${asset.status}`}>{String(asset.status || "").toUpperCase()}</span>
-          {String(asset.data_source || "").toUpperCase() === "SIMULATOR" ? <span className="pill sim">Simulated fault active</span> : null}
+          {String(asset.data_source || "").toUpperCase() === "SIMULATOR" ? <span className="pill sim">{locale === "ja" ? "シミュレータ故障注入中" : locale === "ko" ? "시뮬레이터 장애 주입 활성" : "Simulated fault active"}</span> : null}
         </div>
       </div>
       <div className="geo-drill-row">
-        <button className="geo-drill-btn" onClick={() => selectNeighbor(prevAsset)} disabled={!prevAsset}>{isJpy ? "前へ" : "Prev"}</button>
+        <button className="geo-drill-btn" onClick={() => selectNeighbor(prevAsset)} disabled={!prevAsset}>{locale === "ja" ? "前へ" : locale === "ko" ? "이전" : "Prev"}</button>
         <select
           className="geo-drill-select"
           value={asset.asset_id || ""}
@@ -128,17 +136,17 @@ export default function GeoGeniePanel({ asset, assets, site, industry, currency,
             </option>
           ))}
         </select>
-        <button className="geo-drill-btn" onClick={() => selectNeighbor(nextAsset)} disabled={!nextAsset}>{isJpy ? "次へ" : "Next"}</button>
+        <button className="geo-drill-btn" onClick={() => selectNeighbor(nextAsset)} disabled={!nextAsset}>{locale === "ja" ? "次へ" : locale === "ko" ? "다음" : "Next"}</button>
       </div>
       <div className="geo-drill-meta-grid">
-        <div className="geo-drill-meta-cell"><span>{isJpy ? "資産ID" : "Asset ID"}</span><strong>{asset.asset_id || "-"}</strong></div>
-        <div className="geo-drill-meta-cell"><span>{isJpy ? "タイプ" : "Type"}</span><strong>{asset.type || "-"}</strong></div>
-        <div className="geo-drill-meta-cell"><span>{isJpy ? "RUL (時間)" : "RUL (hrs)"}</span><strong>{formatNumber(asset.rul_hours)}</strong></div>
-        <div className="geo-drill-meta-cell"><span>{isJpy ? "信頼度" : "Confidence"}</span><strong>{formatNumber(Math.round(Number(asset.confidence || 0) * 100))}%</strong></div>
+        <div className="geo-drill-meta-cell"><span>{locale === "ja" ? "資産ID" : locale === "ko" ? "자산 ID" : "Asset ID"}</span><strong>{asset.asset_id || "-"}</strong></div>
+        <div className="geo-drill-meta-cell"><span>{locale === "ja" ? "タイプ" : locale === "ko" ? "유형" : "Type"}</span><strong>{asset.type || "-"}</strong></div>
+        <div className="geo-drill-meta-cell"><span>{locale === "ja" ? "RUL (時間)" : locale === "ko" ? "RUL (시간)" : "RUL (hrs)"}</span><strong>{formatNumber(asset.rul_hours)}</strong></div>
+        <div className="geo-drill-meta-cell"><span>{locale === "ja" ? "信頼度" : locale === "ko" ? "신뢰도" : "Confidence"}</span><strong>{formatNumber(Math.round(Number(asset.confidence || 0) * 100))}%</strong></div>
       </div>
       {asset.top_alert ? (
         <div className="geo-drill-alert">
-          <div className="geo-drill-alert-title">{isJpy ? "最重要アラート" : "Top alert"}</div>
+          <div className="geo-drill-alert-title">{locale === "ja" ? "最重要アラート" : locale === "ko" ? "최상위 알림" : "Top alert"}</div>
           <div>{asset.top_alert.message}</div>
         </div>
       ) : null}
@@ -167,17 +175,17 @@ export default function GeoGeniePanel({ asset, assets, site, industry, currency,
             ref={inputRef}
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
-            placeholder={isJpy ? "この資産について AI に質問..." : "Ask AI about this asset..."}
+            placeholder={locale === "ja" ? "この資産について AI に質問..." : locale === "ko" ? "이 자산에 대해 AI에게 질문..." : "Ask AI about this asset..."}
             rows={1}
           />
-          <button onClick={ask} disabled={isLoading}>{isJpy ? "質問" : "Ask"}</button>
+          <button onClick={ask} disabled={isLoading}>{locale === "ja" ? "質問" : locale === "ko" ? "질문" : "Ask"}</button>
         </div>
         {asset.active_alert ? (
           <div className="geo-action-row">
-            <button disabled={!!actionDone} onClick={() => act("approve")}>{isJpy ? "承認" : "Approve"}</button>
-            <button disabled={!!actionDone} onClick={() => act("defer")}>{isJpy ? "保留" : "Defer"}</button>
-            <button disabled={!!actionDone} onClick={() => act("reject")}>{isJpy ? "却下" : "Reject"}</button>
-            {actionDone && actionDone !== "pending" ? <span className="geo-action-confirm">{isJpy ? `保存済み: ${actionDone}` : `Action saved: ${actionDone}`}</span> : null}
+            <button disabled={!!actionDone} onClick={() => act("approve")}>{locale === "ja" ? "承認" : locale === "ko" ? "승인" : "Approve"}</button>
+            <button disabled={!!actionDone} onClick={() => act("defer")}>{locale === "ja" ? "保留" : locale === "ko" ? "보류" : "Defer"}</button>
+            <button disabled={!!actionDone} onClick={() => act("reject")}>{locale === "ja" ? "却下" : locale === "ko" ? "거절" : "Reject"}</button>
+            {actionDone && actionDone !== "pending" ? <span className="geo-action-confirm">{locale === "ja" ? `保存済み: ${actionDone}` : locale === "ko" ? `저장됨: ${actionDone}` : `Action saved: ${actionDone}`}</span> : null}
           </div>
         ) : null}
       </div>
@@ -185,7 +193,7 @@ export default function GeoGeniePanel({ asset, assets, site, industry, currency,
         {messages.map((m, idx) => (
           <div key={`${m.role}-${idx}`} className={`geo-chat-msg ${m.role}`}>{m.text}</div>
         ))}
-        {isLoading ? <div className="geo-chat-msg assistant">Thinking...</div> : null}
+        {isLoading ? <div className="geo-chat-msg assistant">{locale === "ja" ? "考え中..." : locale === "ko" ? "생각 중..." : "Thinking..."}</div> : null}
       </div>
     </aside>
   );

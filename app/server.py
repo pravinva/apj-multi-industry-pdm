@@ -39,48 +39,218 @@ SDT_REPORT_DIR = (ROOT / "sdt-compression") if (ROOT / "sdt-compression").exists
 GENIE_ROOM_MAP_PATH = ROOT / "genie_rooms.json"
 FINANCE_GENIE_ROOM_MAP_PATH = ROOT / "genie_rooms_finance.json"
 INDUSTRIES = ["mining", "energy", "water", "automotive", "semiconductor"]
-SUPPORTED_CURRENCIES = {"USD", "AUD", "JPY"}
-GEO_SITES: dict[str, dict[str, Any]] = {
-    "mining": {
-        "site_id": "rio-pilbara",
-        "name": "Rio Pilbara Operations",
-        "customer": "Rio Tinto",
-        "description": "Pilbara iron ore processing and materials handling.",
-        "lat": -22.34,
-        "lng": 118.52,
-    },
-    "water": {
-        "site_id": "sydney-water",
-        "name": "Sydney Water Western Hub",
-        "customer": "Sydney Water",
-        "description": "Water treatment and distribution pumping network.",
-        "lat": -33.81,
-        "lng": 150.91,
-    },
-    "automotive": {
-        "site_id": "toyota-motomachi",
-        "name": "Toyota Motomachi Plant",
-        "customer": "Toyota Motor Corporation",
-        "description": "Japan automotive stamping, welding, and final assembly operations.",
-        "lat": 35.084,
-        "lng": 137.156,
-    },
-    "semiconductor": {
-        "site_id": "renesas-naka",
-        "name": "Renesas Naka Fab",
-        "customer": "Renesas",
-        "description": "Fab equipment reliability for etch and lithography lines.",
-        "lat": 36.38,
-        "lng": 140.44,
-    },
-    "energy": {
-        "site_id": "alinta-hsdale",
-        "name": "Hornsdale Grid Storage",
-        "customer": "Alinta Energy",
-        "description": "Wind, BESS, and grid balancing assets.",
-        "lat": -33.07,
-        "lng": 138.67,
-    },
+SUPPORTED_CURRENCIES = {"USD", "AUD", "JPY", "INR", "SGD", "KRW"}
+GEO_SITES: dict[str, list[dict[str, Any]]] = {
+    "mining": [
+        {
+            "site_id": "rio-pilbara",
+            "site_key": "gudai_darri",
+            "currency": "AUD",
+            "name": "Rio Pilbara Operations",
+            "customer": "Rio Tinto",
+            "description": "Pilbara iron ore processing and materials handling.",
+            "lat": -22.34,
+            "lng": 118.52,
+        },
+        {
+            "site_id": "tata-odisha",
+            "site_key": "odisha_hub",
+            "currency": "INR",
+            "name": "Tata Steel Diagnostic Operations",
+            "customer": "Tata Steel",
+            "description": "India metals predictive maintenance and diagnostic center operations.",
+            "lat": 20.264,
+            "lng": 85.84,
+        },
+        {
+            "site_id": "adaro-kalimantan",
+            "site_key": "kalimantan_hub",
+            "currency": "SGD",
+            "name": "PETRONAS Reliability Operations Hub",
+            "customer": "PETRONAS",
+            "description": "ASEAN reliability operations and predictive maintenance program.",
+            "lat": -3.316,
+            "lng": 114.59,
+        },
+        {
+            "site_id": "posco-gangwon",
+            "site_key": "gangwon_mine",
+            "currency": "KRW",
+            "name": "POSCO Gangwon Mining Hub",
+            "customer": "POSCO",
+            "description": "Korea mining haul and processing reliability operations.",
+            "lat": 37.8813,
+            "lng": 127.7298,
+        },
+    ],
+    "water": [
+        {
+            "site_id": "sydney-water",
+            "site_key": "sydney_hub",
+            "currency": "AUD",
+            "name": "Sydney Water Western Hub",
+            "customer": "Sydney Water",
+            "description": "Water treatment and distribution pumping network.",
+            "lat": -33.81,
+            "lng": 150.91,
+        },
+        {
+            "site_id": "chennai-water",
+            "site_key": "chennai_hub",
+            "currency": "INR",
+            "name": "CRIS Infrastructure Reliability Hub",
+            "customer": "CRIS (Indian Railways)",
+            "description": "India utilities and infrastructure asset-failure prediction operations.",
+            "lat": 13.0827,
+            "lng": 80.2707,
+        },
+        {
+            "site_id": "pub-singapore",
+            "site_key": "singapore_hub",
+            "currency": "SGD",
+            "name": "PUB Singapore Hub",
+            "customer": "PUB Singapore",
+            "description": "ASEAN water treatment and metering reliability operations.",
+            "lat": 1.3521,
+            "lng": 103.8198,
+        },
+        {
+            "site_id": "seoul-water",
+            "site_key": "seoul_hub",
+            "currency": "KRW",
+            "name": "Seoul Water Reliability Hub",
+            "customer": "K-water",
+            "description": "Korea treatment, pumping, and metering reliability network.",
+            "lat": 37.5665,
+            "lng": 126.978,
+        },
+    ],
+    "automotive": [
+        {
+            "site_id": "toyota-motomachi",
+            "site_key": "nagoya",
+            "currency": "JPY",
+            "name": "Toyota Motomachi Plant",
+            "customer": "Toyota Motor Corporation",
+            "description": "Japan automotive stamping, welding, and final assembly operations.",
+            "lat": 35.084,
+            "lng": 137.156,
+        },
+        {
+            "site_id": "tata-pune",
+            "site_key": "pune_plant",
+            "currency": "INR",
+            "name": "Mahindra Telemetry Operations",
+            "customer": "Mahindra & Mahindra",
+            "description": "India automotive and EV telemetry analytics operations.",
+            "lat": 18.5204,
+            "lng": 73.8567,
+        },
+        {
+            "site_id": "toyota-thailand",
+            "site_key": "bangkok_plant",
+            "currency": "SGD",
+            "name": "VinFast IIoT Operations Hub",
+            "customer": "VinFast",
+            "description": "ASEAN automotive and transport IIoT analytics operations.",
+            "lat": 13.7563,
+            "lng": 100.5018,
+        },
+        {
+            "site_id": "hyundai-ulsan",
+            "site_key": "ulsan_plant",
+            "currency": "KRW",
+            "name": "Hyundai Ulsan Plant",
+            "customer": "Hyundai Motor",
+            "description": "Korea stamping, welding, and assembly reliability operations.",
+            "lat": 35.5384,
+            "lng": 129.3114,
+        },
+    ],
+    "semiconductor": [
+        {
+            "site_id": "renesas-naka",
+            "site_key": "naka_fab",
+            "currency": "JPY",
+            "name": "Renesas Naka Fab",
+            "customer": "Renesas",
+            "description": "Fab equipment reliability for etch and lithography lines.",
+            "lat": 36.38,
+            "lng": 140.44,
+        },
+        {
+            "site_id": "vedanta-bengaluru",
+            "site_key": "bengaluru_fab",
+            "currency": "INR",
+            "name": "Vedanta Bengaluru Fab",
+            "customer": "Vedanta",
+            "description": "India etch and lithography fab reliability operations.",
+            "lat": 12.9716,
+            "lng": 77.5946,
+        },
+        {
+            "site_id": "infineon-penang",
+            "site_key": "penang_fab",
+            "currency": "SGD",
+            "name": "Infineon Penang Fab",
+            "customer": "Infineon",
+            "description": "ASEAN fab tool reliability and metrology operations.",
+            "lat": 5.4141,
+            "lng": 100.3288,
+        },
+        {
+            "site_id": "samsung-giheung",
+            "site_key": "giheung_fab",
+            "currency": "KRW",
+            "name": "Samsung Giheung Fab",
+            "customer": "Samsung",
+            "description": "Korea fab etch, lithography, and metrology reliability operations.",
+            "lat": 37.2805,
+            "lng": 127.1113,
+        },
+    ],
+    "energy": [
+        {
+            "site_id": "alinta-hsdale",
+            "site_key": "northhub",
+            "currency": "AUD",
+            "name": "Hornsdale Grid Storage",
+            "customer": "Alinta Energy",
+            "description": "Wind, BESS, and grid balancing assets.",
+            "lat": -33.07,
+            "lng": 138.67,
+        },
+        {
+            "site_id": "adani-gujarat",
+            "site_key": "gujarat_grid",
+            "currency": "INR",
+            "name": "Reliance Network Reliability Hub",
+            "customer": "Reliance (Jio)",
+            "description": "India network quality, fault analytics, and reliability operations.",
+            "lat": 22.2587,
+            "lng": 71.1924,
+        },
+        {
+            "site_id": "petronas-johor",
+            "site_key": "vietnam_delta",
+            "currency": "SGD",
+            "name": "GPSC Maintenance Optimization Hub",
+            "customer": "GPSC (Thailand)",
+            "description": "ASEAN predictive and corrective maintenance optimization operations.",
+            "lat": 1.4927,
+            "lng": 103.7414,
+        },
+        {
+            "site_id": "kepco-jeju",
+            "site_key": "jeju_grid",
+            "currency": "KRW",
+            "name": "KEPCO Jeju Grid Hub",
+            "customer": "KEPCO",
+            "description": "Korea wind, BESS, and transformer reliability operations.",
+            "lat": 33.4996,
+            "lng": 126.5312,
+        },
+    ],
 }
 GEO_SCHEMATICS: dict[str, dict[str, Any]] = {
     "rio-pilbara": {
@@ -131,6 +301,81 @@ GEO_SCHEMATICS: dict[str, dict[str, Any]] = {
         "nodes": [],
         "pipes": [],
     },
+    "tata-odisha": {
+        "subtitle": "Crushing and slurry transfer P&ID",
+        "nodes": [],
+        "pipes": [],
+    },
+    "adaro-kalimantan": {
+        "subtitle": "Crushing and slurry transfer P&ID",
+        "nodes": [],
+        "pipes": [],
+    },
+    "chennai-water": {
+        "subtitle": "Treatment to distribution flow",
+        "nodes": [],
+        "pipes": [],
+    },
+    "pub-singapore": {
+        "subtitle": "Treatment to distribution flow",
+        "nodes": [],
+        "pipes": [],
+    },
+    "tata-pune": {
+        "subtitle": "Press line to final assembly",
+        "nodes": [],
+        "pipes": [],
+    },
+    "toyota-thailand": {
+        "subtitle": "Press line to final assembly",
+        "nodes": [],
+        "pipes": [],
+    },
+    "vedanta-bengaluru": {
+        "subtitle": "Fab process chain and utilities",
+        "nodes": [],
+        "pipes": [],
+    },
+    "infineon-penang": {
+        "subtitle": "Fab process chain and utilities",
+        "nodes": [],
+        "pipes": [],
+    },
+    "adani-gujarat": {
+        "subtitle": "Wind farm collection and storage",
+        "nodes": [],
+        "pipes": [],
+    },
+    "petronas-johor": {
+        "subtitle": "Wind farm collection and storage",
+        "nodes": [],
+        "pipes": [],
+    },
+    "posco-gangwon": {
+        "subtitle": "Crushing and slurry transfer P&ID",
+        "nodes": [],
+        "pipes": [],
+    },
+    "seoul-water": {
+        "subtitle": "Treatment to distribution flow",
+        "nodes": [],
+        "pipes": [],
+    },
+    "hyundai-ulsan": {
+        "subtitle": "Press line to final assembly",
+        "nodes": [],
+        "pipes": [],
+    },
+    "samsung-giheung": {
+        "subtitle": "Fab process chain and utilities",
+        "nodes": [],
+        "pipes": [],
+    },
+    "kepco-jeju": {
+        "subtitle": "Wind farm collection and storage",
+        "nodes": [],
+        "pipes": [],
+    },
 }
 ISA_EMOJI = {
     "site": "🏭",
@@ -141,7 +386,7 @@ ISA_EMOJI = {
 }
 SIM_STATE: dict[str, dict[str, Any]] = {}
 _SQL_CACHE: dict[str, tuple[float, list[dict[str, Any]]]] = {}
-_CACHE_TTL_S = 20.0
+_CACHE_TTL_S = float(os.getenv("OT_PDM_SQL_CACHE_TTL_S", "90"))
 _MANUAL_KB_CACHE: dict[str, list[dict[str, Any]]] = {}
 _DEFAULT_ZEROBUS_WORKSPACE_URL = os.getenv("OT_PDM_DEFAULT_WORKSPACE_URL", "https://e2-demo-field-eng.cloud.databricks.com")
 _DEFAULT_ZEROBUS_ENDPOINT = os.getenv(
@@ -154,10 +399,10 @@ _DEFAULT_ZEROBUS_CLIENT_ID = os.getenv(
 )
 _DEFAULT_ZEROBUS_TARGET_TABLE = os.getenv("OT_PDM_DEFAULT_ZEROBUS_TARGET_TABLE", "pravin_zerobus")
 _LAKEBASE_PG_DSN = os.getenv("OT_PDM_LAKEBASE_PG_DSN", "").strip()
-_LAKEBASE_PG_HOST = os.getenv("OT_PDM_LAKEBASE_PG_HOST", "ep-jolly-sea-d1xnctly.database.us-west-2.cloud.databricks.com").strip()
+_LAKEBASE_PG_HOST = os.getenv("OT_PDM_LAKEBASE_PG_HOST", "").strip()
 _LAKEBASE_PG_PORT = int(os.getenv("OT_PDM_LAKEBASE_PG_PORT", "5432"))
-_LAKEBASE_PG_DB = os.getenv("OT_PDM_LAKEBASE_PG_DB", "databricks_postgres").strip()
-_LAKEBASE_PG_USER = os.getenv("OT_PDM_LAKEBASE_PG_USER", "pravin.varma@databricks.com").strip()
+_LAKEBASE_PG_DB = os.getenv("OT_PDM_LAKEBASE_PG_DB", "").strip()
+_LAKEBASE_PG_USER = os.getenv("OT_PDM_LAKEBASE_PG_USER", "").strip()
 _LAKEBASE_PG_PASSWORD = os.getenv("OT_PDM_LAKEBASE_PG_PASSWORD", "").strip()
 _LAKEBASE_PG_SSLMODE = os.getenv("OT_PDM_LAKEBASE_PG_SSLMODE", "require").strip() or "require"
 _LAKEBASE_ACTION_TABLE = os.getenv("OT_PDM_LAKEBASE_ACTION_TABLE", "otpdm.operator_recommendation_actions").strip() or "otpdm.operator_recommendation_actions"
@@ -1558,38 +1803,71 @@ def _load_genie_room_map(room_type: str = "ops") -> dict[str, str]:
     return {}
 
 
+def _geo_sites_for_industry(industry: str) -> list[dict[str, Any]]:
+    return list(GEO_SITES.get(str(industry or "").lower()) or [])
+
+
 def _geo_site_for_industry(industry: str) -> dict[str, Any] | None:
-    return GEO_SITES.get(str(industry or "").lower())
+    sites = _geo_sites_for_industry(industry)
+    return sites[0] if sites else None
+
+
+def _geo_site_meta(site_id: str) -> tuple[str, dict[str, Any]] | tuple[None, None]:
+    target = str(site_id or "").strip().lower()
+    if not target:
+        return None, None
+    for ind, metas in GEO_SITES.items():
+        for meta in metas:
+            if str(meta.get("site_id", "")).lower() == target:
+                return ind, meta
+    return None, None
 
 
 def _geo_industry_for_site(site_id: str) -> str | None:
-    target = str(site_id or "").strip().lower()
-    if not target:
-        return None
-    for ind, meta in GEO_SITES.items():
-        if str(meta.get("site_id", "")).lower() == target:
-            return ind
-    return None
+    industry, _meta = _geo_site_meta(site_id)
+    return industry
 
 
-def _geo_currency(industry: str) -> str:
-    if industry in {"mining", "water", "energy"}:
-        return "AUD"
-    if industry in {"automotive", "semiconductor"}:
-        return "JPY"
+def _geo_currency(industry: str, site_id: str = "") -> str:
+    if site_id:
+        _ind, site_meta = _geo_site_meta(site_id)
+        if site_meta:
+            return _normalize_currency(str(site_meta.get("currency") or ""), "USD")
+    sites = _geo_sites_for_industry(industry)
+    if sites:
+        return _normalize_currency(str(sites[0].get("currency") or ""), "USD")
     return "USD"
+
+
+def _geo_assets_for_site(industry: str, site_id: str) -> list[dict[str, Any]]:
+    defs = _geo_asset_defs_from_predictions(industry)
+    _ind, meta = _geo_site_meta(site_id)
+    if not meta:
+        return defs
+    site_key = _asset_token_norm(str(meta.get("site_key") or ""))
+    if not site_key:
+        return defs
+    filtered = [
+        a
+        for a in defs
+        if _asset_token_norm(str(a.get("site") or "")) == site_key
+    ]
+    return filtered
 
 
 def _geo_asset_defs_from_predictions(industry: str) -> list[dict[str, Any]]:
     """Use Gold predictions as Geo equipment source of truth."""
     predictions = _predictions_map(industry)
-    if not predictions:
-        return []
     defs = _asset_defs(industry)
+    if not predictions:
+        # Keep Geo fully populated even if Gold is temporarily empty.
+        return defs
     defs_by_norm = {_asset_token_norm(str(a.get("id") or "")): a for a in defs if a.get("id")}
     out: list[dict[str, Any]] = []
+    seen_norm: set[str] = set()
     for equipment_id in sorted(predictions.keys()):
         key = _asset_token_norm(str(equipment_id))
+        seen_norm.add(key)
         base = defs_by_norm.get(key)
         if base:
             merged = dict(base)
@@ -1606,6 +1884,11 @@ def _geo_asset_defs_from_predictions(industry: str) -> list[dict[str, Any]]:
                     "model": "",
                 }
             )
+    # Preserve full ISA view even when only a subset has fresh predictions.
+    for d in defs:
+        key = _asset_token_norm(str(d.get("id") or ""))
+        if key and key not in seen_norm:
+            out.append(d)
     return out
 
 
@@ -1617,35 +1900,47 @@ def _geo_suggestions(
     currency: str = "",
 ) -> list[str]:
     sev = str(severity or "").lower()
-    jpy_mode = str(currency or "").strip().upper() == "JPY"
+    ccy = str(currency or "").strip().upper()
+    jpy_mode = ccy == "JPY"
+    krw_mode = ccy == "KRW"
     if sev == "critical":
         s1 = (
             "近い将来の故障を避けるため、現在シフトで保全チームを手配してください。"
             if jpy_mode
+            else "근시일 내 고장을 방지하기 위해 현재 교대에 정비팀을 배치하세요."
+            if krw_mode
             else "Dispatch maintenance crew in current shift to avoid near-term failure."
         )
     elif sev == "warning":
         s1 = (
             "次の保全ウィンドウで作業を計画し、ドリフトを監視してください。"
             if jpy_mode
+            else "다음 정비 윈도우에 작업을 계획하고 드리프트를 모니터링하세요."
+            if krw_mode
             else "Schedule maintenance in the next available window and monitor drift."
         )
     else:
         s1 = (
             "監視を継続し、この資産のベースライントレンドを確認してください。"
             if jpy_mode
+            else "모니터링을 계속하고 이 자산의 기준 추세를 확인하세요."
+            if krw_mode
             else "Continue monitoring and validate baseline trend for this asset."
         )
     if avoided_cost > intervention_cost and avoided_cost > 0:
         s2 = (
             f"この対応を優先してください: 回避コストが介入コストを {int(round(avoided_cost - intervention_cost))} 上回っています。"
             if jpy_mode
+            else f"이 조치를 우선하세요: 회피 비용이 개입 비용보다 {int(round(avoided_cost - intervention_cost))} 만큼 큽니다."
+            if krw_mode
             else f"Prioritize this action: avoided cost exceeds intervention by {int(round(avoided_cost - intervention_cost))}."
         )
     else:
         s2 = (
             "計画前に介入スコープと部材在庫を再確認してください。"
             if jpy_mode
+            else "일정을 확정하기 전에 작업 범위와 부품 재고를 다시 확인하세요."
+            if krw_mode
             else "Recheck intervention scope and parts inventory before scheduling."
         )
     s3 = str(
@@ -1653,6 +1948,8 @@ def _geo_suggestions(
         or (
             "オペレーター推奨を確認し、根本原因シグナルを検証してください。"
             if jpy_mode
+            else "운영자 권고를 검토하고 근본 원인 신호를 검증하세요."
+            if krw_mode
             else "Review operator recommendation and validate root-cause signals."
         )
     )
@@ -2125,6 +2422,9 @@ def _fx_convert(amount: float, from_currency: str, to_currency: str) -> float:
         "USD": 1.0,
         "AUD": 0.66,
         "JPY": 0.0067,
+        "INR": 0.012,
+        "SGD": 0.74,
+        "KRW": 0.00074,
     }
     src_to_usd = per_unit_to_usd.get(src, 1.0)
     dst_to_usd = per_unit_to_usd.get(dst, 1.0)
@@ -2851,6 +3151,8 @@ def _overview(industry: str, display_currency: str | None = None) -> dict[str, A
                 "text": (
                     "高リスク設備の優先順位付け、部品の準備状況、推奨アクションを案内できます。"
                     if _effective_demo_currency(display_currency, "USD") == "JPY"
+                    else "고위험 설비 우선순위, 부품 준비 상태, 권장 조치를 안내할 수 있습니다."
+                    if _effective_demo_currency(display_currency, "USD") == "KRW"
                     else "I can triage top-risk equipment, parts readiness, and recommended actions."
                 ),
             }
@@ -3791,10 +4093,10 @@ def ui_simulator_state(industry: str = "mining") -> dict:
 
 
 @app.get("/api/ui/genie/rooms")
-def ui_genie_rooms(industry: str = "mining") -> dict:
+def ui_genie_rooms(industry: str = "mining", room_type: str = "ops") -> dict:
     if industry not in INDUSTRIES:
         raise HTTPException(status_code=400, detail="Invalid industry")
-    room_map = _load_genie_room_map(str(payload.get("room_type", "ops") or "ops"))
+    room_map = _load_genie_room_map(str(room_type or "ops"))
     workspace_url = (
         str(
             os.getenv("DATABRICKS_HOST")
@@ -4659,11 +4961,18 @@ def agent_chat(payload: dict) -> dict:
             "respond in english",
             "answer in english",
         ]
-    ) or ("英語" in user_text)
+    ) or ("英語" in user_text) or ("영어" in user_text)
     currency = _normalize_currency(str(payload.get("currency", "") or "").strip().upper(), "")
     respond_japanese = (currency == "JPY") and not force_english
+    respond_korean = (currency == "KRW") and not force_english
     if not user_text:
-        msg = "質問を入力してください。" if respond_japanese else "Please enter a question."
+        msg = (
+            "質問を入力してください。"
+            if respond_japanese
+            else "질문을 입력해 주세요."
+            if respond_korean
+            else "Please enter a question."
+        )
         return {"choices": [{"message": {"content": msg}}]}
 
     industry = str(payload.get("industry", "mining") or "mining").lower()
@@ -4677,6 +4986,8 @@ def agent_chat(payload: dict) -> dict:
         confirm_q = (
             f"「'{alias}' を '{resolved_asset}' と解釈しました。この認識でよろしいですか？」"
             if respond_japanese
+            else f"'{alias}'를 '{resolved_asset}'로 해석했습니다. 이 해석이 맞을까요?"
+            if respond_korean
             else f"\"I interpreted '{alias}' as '{resolved_asset}' — is that what you meant?\""
         )
         effective_user_text = (
@@ -4689,6 +5000,11 @@ def agent_chat(payload: dict) -> dict:
         effective_user_text = (
             f"{effective_user_text}\n\n"
             "Language note: respond entirely in Japanese. Keep numbers, equipment IDs, and units unchanged."
+        )
+    elif respond_korean:
+        effective_user_text = (
+            f"{effective_user_text}\n\n"
+            "Language note: respond entirely in Korean. Keep numbers, equipment IDs, and units unchanged."
         )
     elif force_english:
         effective_user_text = (
@@ -4820,13 +5136,61 @@ def agent_finance_chat(payload: dict) -> dict:
     predictions = f"{catalog}.gold.pdm_predictions"
     features = f"{catalog}.silver.sensor_features"
     ot_raw = f"{catalog}.bronze.sensor_readings"
+    site_finance_daily = f"{catalog}.finance.pm_site_financial_daily"
+    site_summary_lines: list[str] = []
+    site_rollup: list[dict[str, Any]] = []
+    try:
+        site_rows = _run_sql(
+            f"""
+            SELECT
+              site_id,
+              SUM(CASE WHEN severity='critical' THEN 1 ELSE 0 END) AS critical_events,
+              SUM(CASE WHEN severity='warning' THEN 1 ELSE 0 END) AS warning_events
+            FROM {catalog}.gold.financial_impact_events
+            GROUP BY site_id
+            ORDER BY site_id
+            """,
+            cache_key=None,
+        )
+        for r in site_rows:
+            sid = str(r.get("site_id") or "")
+            if not sid:
+                continue
+            c = int(_to_float(r.get("critical_events"), 0))
+            w = int(_to_float(r.get("warning_events"), 0))
+            site_rollup.append({"site_id": sid, "critical_events": c, "warning_events": w})
+            site_summary_lines.append(f"- {sid}: critical={c}, warning={w}")
+        if not site_rollup:
+            fallback_rows = _run_sql(
+                f"""
+                SELECT site_id, MAX(critical_assets) AS critical_events, MAX(warning_assets) AS warning_events
+                FROM {catalog}.finance.pm_site_financial_daily
+                GROUP BY site_id
+                ORDER BY site_id
+                """,
+                cache_key=None,
+            )
+            for r in fallback_rows:
+                sid = str(r.get("site_id") or "")
+                if not sid:
+                    continue
+                c = int(_to_float(r.get("critical_events"), 0))
+                w = int(_to_float(r.get("warning_events"), 0))
+                site_rollup.append({"site_id": sid, "critical_events": c, "warning_events": w})
+                site_summary_lines.append(f"- {sid}: critical={c}, warning={w}")
+    except Exception:
+        site_summary_lines = []
+        site_rollup = []
+
     context = (
         f"Finance room contract ({industry}): answer using SQL-grounded reasoning on real tables only.\n"
         f"- EBIT source table: {finance_daily}\n"
+        f"- Site-level EBIT source table: {site_finance_daily}\n"
         f"- Work-order/operations tables: {maintenance_schedule}, {parts_inventory}\n"
         f"- OT signal chain: {ot_raw} -> {features} -> {predictions}\n"
-        "Do not claim missing finance/work-order tables unless you explicitly verified they are absent in schema. "
-        "If data is incomplete, state what is missing and provide exact SQL checks."
+        + ("- Site event summary (latest table scan):\n" + "\n".join(site_summary_lines) + "\n" if site_summary_lines else "")
+        + "Do not claim missing finance/work-order tables unless you explicitly verified they are absent in schema. "
+        + "If data is incomplete, state what is missing and provide exact SQL checks."
     )
     merged = f"{user_text}\n\n{context}"
     base_payload = {
@@ -4844,8 +5208,10 @@ def agent_finance_chat(payload: dict) -> dict:
                 "industry": industry,
                 "currency": ex.get("currency", ""),
                 "source_table": ex.get("source_table", finance_daily),
+                "site_source_table": site_finance_daily,
                 "ebit_saved_fmt": ex.get("ebit_saved_fmt", ""),
                 "roi_pct": ex.get("roi_pct", 0),
+                "site_rollup": site_rollup,
             },
         )
     return reply
@@ -4859,80 +5225,87 @@ def geo_sites(industries: str = "", currency: str = "") -> dict[str, Any]:
     selected = [s for s in selected if s in INDUSTRIES]
     out: list[dict[str, Any]] = []
     for ind in selected:
-        site_meta = _geo_site_for_industry(ind)
-        if not site_meta:
-            continue
-        site_id = str(site_meta.get("site_id") or "")
-        cfg_assets = _geo_asset_defs_from_predictions(ind)
+        site_metas = _geo_sites_for_industry(ind)
         predictions = _predictions_map(ind)
-        rows = [
-            _asset_snapshot(ind, a, predictions.get(str(a.get("id") or "")), display_currency=currency)
-            for a in cfg_assets
-            if a.get("id")
-        ]
-        running = 0
-        warning = 0
-        critical = 0
-        top_alert: dict[str, Any] | None = None
-        best_score = -1.0
-        for r in rows:
-            sev = str(r.get("status") or "running").lower()
-            score = _to_float(r.get("anomaly_score"), 0.0)
-            if sev == "critical":
-                critical += 1
-            elif sev == "warning":
-                warning += 1
-            else:
-                running += 1
-            sev_rank = 2 if sev == "critical" else (1 if sev == "warning" else 0)
-            if sev_rank > 0 and (sev_rank > (2 if top_alert and top_alert.get("severity") == "critical" else 1 if top_alert else 0) or score >= best_score):
-                best_score = score
-                equipment_id = str(r.get("id") or "")
-                jpy_mode = _effective_demo_currency(currency, _geo_currency(ind)) == "JPY"
-                top_alert = {
-                    "asset_name": equipment_id,
-                    "severity": sev,
-                    "message": (
-                        f"{equipment_id} 異常スコア {score:.2f}"
-                        if jpy_mode
-                        else f"{equipment_id} anomaly score {score:.2f}"
-                    ),
+        for site_meta in site_metas:
+            site_id = str(site_meta.get("site_id") or "")
+            if not site_id:
+                continue
+            native_currency = _geo_currency(ind, site_id)
+            display_currency = _effective_demo_currency(currency, native_currency)
+            cfg_assets = _geo_assets_for_site(ind, site_id)
+            rows = [
+                _asset_snapshot(ind, a, predictions.get(str(a.get("id") or "")), display_currency=display_currency)
+                for a in cfg_assets
+                if a.get("id")
+            ]
+            running = 0
+            warning = 0
+            critical = 0
+            top_alert: dict[str, Any] | None = None
+            best_score = -1.0
+            for r in rows:
+                sev = str(r.get("status") or "running").lower()
+                score = _to_float(r.get("anomaly_score"), 0.0)
+                if sev == "critical":
+                    critical += 1
+                elif sev == "warning":
+                    warning += 1
+                else:
+                    running += 1
+                sev_rank = 2 if sev == "critical" else (1 if sev == "warning" else 0)
+                if sev_rank > 0 and (sev_rank > (2 if top_alert and top_alert.get("severity") == "critical" else 1 if top_alert else 0) or score >= best_score):
+                    best_score = score
+                    equipment_id = str(r.get("id") or "")
+                    jpy_mode = display_currency == "JPY"
+                    krw_mode = display_currency == "KRW"
+                    top_alert = {
+                        "asset_name": equipment_id,
+                        "severity": sev,
+                        "message": (
+                            f"{equipment_id} 異常スコア {score:.2f}"
+                            if jpy_mode
+                            else f"{equipment_id} 이상 점수 {score:.2f}"
+                            if krw_mode
+                            else f"{equipment_id} anomaly score {score:.2f}"
+                        ),
+                    }
+            out.append(
+                {
+                    "site_id": site_id,
+                    "name": site_meta.get("name"),
+                    "customer": site_meta.get("customer"),
+                    "industry": ind,
+                    "lat": site_meta.get("lat"),
+                    "lng": site_meta.get("lng"),
+                    "description": site_meta.get("description"),
+                    "currency": native_currency,
+                    "asset_counts": {
+                        "running": running,
+                        "warning": warning,
+                        "critical": critical,
+                        "total": running + warning + critical,
+                    },
+                    "top_alert": top_alert,
                 }
-        out.append(
-            {
-                "site_id": site_id,
-                "name": site_meta.get("name"),
-                "customer": site_meta.get("customer"),
-                "industry": ind,
-                "lat": site_meta.get("lat"),
-                "lng": site_meta.get("lng"),
-                "description": site_meta.get("description"),
-                "asset_counts": {
-                    "running": running,
-                    "warning": warning,
-                    "critical": critical,
-                    "total": running + warning + critical,
-                },
-                "top_alert": top_alert,
-            }
-        )
+            )
     return {"sites": out}
 
 
 @app.get("/api/geo/assets/{site_id}")
 def geo_assets(site_id: str, currency: str = "") -> dict[str, Any]:
-    industry = _geo_industry_for_site(site_id)
-    if not industry:
+    industry, site_meta = _geo_site_meta(site_id)
+    if not industry or not site_meta:
         raise HTTPException(status_code=404, detail="Unknown site_id")
-    cfg_assets = _geo_asset_defs_from_predictions(industry)
+    cfg_assets = _geo_assets_for_site(industry, site_id)
     predictions = _predictions_map(industry)
+    native_currency = _geo_currency(industry, site_id)
+    display_currency = _effective_demo_currency(currency, native_currency)
     overview_assets = [
-        _asset_snapshot(industry, a, predictions.get(str(a.get("id") or "")), display_currency=currency)
+        _asset_snapshot(industry, a, predictions.get(str(a.get("id") or "")), display_currency=display_currency)
         for a in cfg_assets
         if a.get("id")
     ]
-    native_currency = _geo_currency(industry)
-    display_currency = _effective_demo_currency(currency, native_currency)
     assets_out: list[dict[str, Any]] = []
     for row in overview_assets:
         aid = str(row.get("id") or "")
@@ -4967,10 +5340,13 @@ def geo_assets(site_id: str, currency: str = "") -> dict[str, Any]:
         intervention_cost = round(exposure_value * 0.17, 2)
         source_table = "overview.synthetic"
         jpy_mode = display_currency == "JPY"
+        krw_mode = display_currency == "KRW"
         alert_msg = (
             (
                 f"{aid} はリスクが上昇しています (スコア {anomaly_score:.2f})。"
                 if jpy_mode
+                else f"{aid} 의 위험도가 상승했습니다 (점수 {anomaly_score:.2f})."
+                if krw_mode
                 else f"{aid} has elevated risk (score {anomaly_score:.2f})."
             )
             if status in {"critical", "warning"}
@@ -4984,6 +5360,8 @@ def geo_assets(site_id: str, currency: str = "") -> dict[str, Any]:
                 "recommended_action": (
                     "根本原因を調査し、計画メンテナンスを実行してください。"
                     if jpy_mode
+                    else "근본 원인을 조사하고 계획된 정비를 수행하세요."
+                    if krw_mode
                     else "Investigate root cause and execute planned maintenance window."
                 ),
             }
@@ -5022,7 +5400,11 @@ def geo_assets(site_id: str, currency: str = "") -> dict[str, Any]:
                 "data_source": source_table,
             }
         )
-    return {"site_id": site_id, "industry": industry, "assets": assets_out}
+    return {
+        "site_id": site_id,
+        "industry": industry,
+        "assets": assets_out,
+    }
 
 
 @app.get("/api/geo/schematic/{site_id}")
@@ -5033,7 +5415,7 @@ def geo_schematic(site_id: str) -> dict[str, Any]:
     industry = _geo_industry_for_site(site_key)
     if not industry:
         return GEO_SCHEMATICS[site_key]
-    cfg_assets = _geo_asset_defs_from_predictions(industry)
+    cfg_assets = _geo_assets_for_site(industry, site_key)
     eq_ids = [str(a.get("id") or "") for a in cfg_assets if a.get("id")]
     template = GEO_SCHEMATICS[site_key]
     if not eq_ids or not template.get("nodes"):
@@ -5052,6 +5434,7 @@ def geo_schematic(site_id: str) -> dict[str, Any]:
 def geo_genie_ask(payload: dict[str, Any]) -> dict[str, Any]:
     industry = str(payload.get("industry", "") or "").strip().lower()
     currency = str(payload.get("currency", "") or "").strip().upper()
+    site_id = str(payload.get("site_id", "") or "").strip().lower()
     question = str(payload.get("question", "") or "").strip()
     asset_context = payload.get("asset_context")
     if industry not in INDUSTRIES:
@@ -5063,6 +5446,11 @@ def geo_genie_ask(payload: dict[str, Any]) -> dict[str, Any]:
         if currency == "JPY":
             prompt = (
                 "Respond in Japanese and use JPY for all monetary values in your answer.\n\n"
+                f"{prompt}"
+            )
+        elif currency == "KRW":
+            prompt = (
+                "Respond in Korean and use KRW for all monetary values in your answer.\n\n"
                 f"{prompt}"
             )
         else:

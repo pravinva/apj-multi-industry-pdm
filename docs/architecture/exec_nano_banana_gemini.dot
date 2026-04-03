@@ -1,0 +1,125 @@
+digraph "OT_PdM_Intelligence_Executive_Architecture" {
+	// Graph Attributes
+	graph [
+		rankdir=LR,
+		bgcolor="#fdfdfd",
+		label="OT PdM Intelligence | Executive Architecture (Nano Banana via Gemini)",
+		labelloc="t",
+		fontname="Helvetica, Arial, sans-serif",
+		fontsize=20,
+		splines=ortho,
+		nodesep=0.8,
+		ranksep=1.5,
+		pad="0.5"
+	];
+
+	// Node Defaults
+	node [
+		shape=box,
+		style="rounded,filled",
+		fontname="Helvetica, Arial, sans-serif",
+		fontsize=12,
+		margin="0.4,0.3"
+	];
+
+	// Edge Defaults
+	edge [
+		color="#707070",
+		arrowsize=0.8,
+		fontname="Helvetica, Arial, sans-serif",
+		fontsize=10
+	];
+
+	// Clusters for logical grouping
+	subgraph cluster_sources {
+		label = "OT Sources";
+		style = "rounded,filled";
+		fillcolor = "#e3f2fd";
+		fontcolor = "#424242";
+		node [fillcolor="#bbdefb"];
+
+		ot_sources [label=<<b>OT Sources</b><br/><font point-size='10'>OPC-UA/MQTT/Modbus/CAN</font>>];
+		simulator [label="Simulator"];
+	}
+
+	subgraph cluster_platform {
+		label = "Databricks Lakehouse Platform";
+		style = "rounded,filled";
+		fillcolor = "#ede7f6";
+		fontcolor = "#424242";
+
+		lakehouse [
+			label=<
+			<table border="0" cellborder="0" cellspacing="0" cellpadding="5">
+			<tr><td><img src="icons/databricks/lakehouse.png"/></td></tr>
+			<tr><td><b>Databricks Lakehouse</b></td></tr>
+			<tr><td><font point-size='10'>Bronze / Silver / Gold</font></td></tr>
+			</table>>,
+			shape=plain,
+			fillcolor="#d1c4e9"
+		];
+
+		uc [
+			label=<
+			<table border="0" cellborder="0" cellspacing="0" cellpadding="5">
+			<tr><td><img src="icons/databricks/unity_catalog.png"/></td></tr>
+			<tr><td><b>Unity Catalog</b></td></tr>
+			<tr><td><font point-size='10'>Governance</font></td></tr>
+			</table>>,
+			shape=plain,
+			fillcolor="#d1c4e9"
+		];
+	}
+
+	subgraph cluster_intelligence {
+		label = "Intelligence Layer";
+		style = "rounded,filled";
+		fillcolor = "#fff9c4";
+		fontcolor = "#424242";
+		node [fillcolor="#fff59d"];
+
+		ml_models [label=<<b>MLflow+UC Models</b><br/><font point-size='10'>Anomaly+RUL</font>>];
+
+		app [
+			label=<
+			<table border="0" cellborder="0" cellspacing="0" cellpadding="5">
+			<tr><td><img src="icons/databricks/workspace.png"/></td></tr>
+			<tr><td><b>Databricks App</b></td></tr>
+			<tr><td><font point-size='10'>FastAPI+React</font></td></tr>
+			</table>>,
+			shape=plain,
+			fillcolor="#fff59d"
+		];
+	}
+
+	// Standalone Nodes
+	ingestor [
+		label="Zerobus Connector",
+		fillcolor="#c8e6c9"
+	];
+
+	insights [
+		label=<<b>Executive Insights</b><br/><font point-size='10'>EBIT/ROI/Risk</font>>,
+		fillcolor="#ffccbc"
+	];
+
+
+	// Edges & Flows
+	{ot_sources, simulator} -> ingestor;
+	ingestor -> lakehouse;
+	lakehouse -> app;
+	ml_models -> app [label="Predictions", style=dashed, color="#d32f2f"];
+	app -> insights;
+
+	// Invisible edge to guide layout (data for training)
+	lakehouse -> ml_models [style=invis];
+
+	// Governance Edge (non-ranking)
+	uc -> lakehouse [
+		style=dashed,
+		arrowhead=none,
+		color="#7b1fa2",
+		constraint=false,
+		label="Governs"
+	];
+}

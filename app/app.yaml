@@ -10,6 +10,8 @@ command:
 env:
   - name: OT_PDM_OWNER_USER
     value: "pravin.varma@databricks.com"
+  - name: OT_PDM_WAREHOUSE_ID
+    value: "4b9b953939869799"
   - name: OT_PDM_SCORING_JOB_ID_MINING
     value: "946602210024255"
   - name: OT_PDM_SCORING_JOB_ID_ENERGY

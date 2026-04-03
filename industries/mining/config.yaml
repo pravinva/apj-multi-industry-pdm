@@ -1,31 +1,30 @@
 industry: mining
-display_name: "Mining - Rio Tinto Haul Fleet"
+display_name: Mining - Rio Tinto Haul Fleet
 catalog: pdm_mining
-version: "1.0.0"
-
+version: 1.0.0
 accounts:
-  primary: "Rio Tinto"
-  references: ["BHP", "Fortescue"]
+  primary: Rio Tinto
+  references:
+  - BHP
+  - Fortescue
   pipeline_monthly: 2700000
-
 isa95_hierarchy:
   levels:
-    - key: site
-      display: Site
-      example: Gudai-Darri
-    - key: area
-      display: Area
-      example: Pit A
-    - key: unit
-      display: Unit
-      example: Haul Fleet
-    - key: equipment
-      display: Equipment
-      example: HT-012
-    - key: component
-      display: Component
-      example: Engine
-
+  - key: site
+    display: Site
+    example: Gudai-Darri
+  - key: area
+    display: Area
+    example: Pit A
+  - key: unit
+    display: Unit
+    example: Haul Fleet
+  - key: equipment
+    display: Equipment
+    example: HT-012
+  - key: component
+    display: Component
+    example: Engine
 simulator:
   tick_interval_ms: 800
   noise_factor: 0.02
@@ -36,278 +35,585 @@ simulator:
     epsilon_pct: 0.008
     heartbeat_ms: 30000
     tag_overrides:
-      vibration_rms: { epsilon_abs: 0.06, heartbeat_ms: 10000 }
-      roller_vibration: { epsilon_abs: 0.05, heartbeat_ms: 10000 }
-      engine_egt: { epsilon_abs: 1.5, heartbeat_ms: 20000 }
-      coolant_temp: { epsilon_abs: 0.8, heartbeat_ms: 20000 }
-      oil_temp: { epsilon_abs: 0.8, heartbeat_ms: 20000 }
-      tyre_pressure_fl: { epsilon_abs: 0.6, heartbeat_ms: 15000 }
-      tyre_pressure_fr: { epsilon_abs: 0.6, heartbeat_ms: 15000 }
-      payload_weight: { epsilon_abs: 1.2, heartbeat_ms: 20000 }
-      fuel_rate: { epsilon_abs: 2.5, heartbeat_ms: 20000 }
-      motor_current: { epsilon_abs: 1.2, heartbeat_ms: 12000 }
-      belt_tension: { epsilon_abs: 0.8, heartbeat_ms: 12000 }
-      throughput_rate: { epsilon_abs: 0.7, heartbeat_ms: 12000 }
+      vibration_rms:
+        epsilon_abs: 0.06
+        heartbeat_ms: 10000
+      roller_vibration:
+        epsilon_abs: 0.05
+        heartbeat_ms: 10000
+      engine_egt:
+        epsilon_abs: 1.5
+        heartbeat_ms: 20000
+      coolant_temp:
+        epsilon_abs: 0.8
+        heartbeat_ms: 20000
+      oil_temp:
+        epsilon_abs: 0.8
+        heartbeat_ms: 20000
+      tyre_pressure_fl:
+        epsilon_abs: 0.6
+        heartbeat_ms: 15000
+      tyre_pressure_fr:
+        epsilon_abs: 0.6
+        heartbeat_ms: 15000
+      payload_weight:
+        epsilon_abs: 1.2
+        heartbeat_ms: 20000
+      fuel_rate:
+        epsilon_abs: 2.5
+        heartbeat_ms: 20000
+      motor_current:
+        epsilon_abs: 1.2
+        heartbeat_ms: 12000
+      belt_tension:
+        epsilon_abs: 0.8
+        heartbeat_ms: 12000
+      throughput_rate:
+        epsilon_abs: 0.7
+        heartbeat_ms: 12000
   assets:
-    - id: HT-012
-      type: haul_truck
-      model: Cat 793F
-      site: gudai_darri
-      area: pit_a
-      unit: haul_fleet
-      inject_fault: engine_overheat
-      fault_severity: 0.92
-      fault_start_offset_hours: -6
-    - id: HT-007
-      type: haul_truck
-      model: Cat 793F
-      site: gudai_darri
-      area: pit_b
-      unit: haul_fleet
-      inject_fault: bearing_wear
-      fault_severity: 0.68
-      fault_start_offset_hours: -12
-    - id: HT-001
-      type: haul_truck
-      model: Cat 793F
-      site: gudai_darri
-      area: pit_a
-      unit: haul_fleet
-      fault_severity: 0.0
-      fault_start_offset_hours: 0
-    - id: CV-003
-      type: conveyor
-      model: Overland Conveyor
-      site: gudai_darri
-      area: process
-      unit: crushing
-      fault_severity: 0.0
-      fault_start_offset_hours: 0
-    - id: HT-018
-      type: haul_truck
-      model: Cat 793F
-      site: gudai_darri
-      area: pit_c
-      unit: haul_fleet
-      inject_fault: tyre_blowout
-      fault_severity: 0.54
-      fault_start_offset_hours: -5
-    - id: HT-021
-      type: haul_truck
-      model: Cat 793F
-      site: gudai_darri
-      area: pit_b
-      unit: haul_fleet
-      fault_severity: 0.0
-      fault_start_offset_hours: 0
-    - id: HT-025
-      type: haul_truck
-      model: Cat 793F
-      site: gudai_darri
-      area: pit_a
-      unit: haul_fleet
-      fault_severity: 0.0
-      fault_start_offset_hours: 0
-    - id: HT-029
-      type: haul_truck
-      model: Cat 793F
-      site: gudai_darri
-      area: pit_c
-      unit: haul_fleet
-      inject_fault: engine_overheat
-      fault_severity: 0.49
-      fault_start_offset_hours: -3
-    - id: CV-006
-      type: conveyor
-      model: Overland Conveyor
-      site: gudai_darri
-      area: process
-      unit: crushing
-      fault_severity: 0.0
-      fault_start_offset_hours: 0
-    - id: CV-010
-      type: conveyor
-      model: Overland Conveyor
-      site: gudai_darri
-      area: process
-      unit: secondary_crushing
-      fault_severity: 0.0
-      fault_start_offset_hours: 0
-
+  - id: HT-012
+    type: haul_truck
+    model: Cat 793F
+    site: odisha_hub
+    area: pit_a
+    unit: haul_fleet
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: HT-007
+    type: haul_truck
+    model: Cat 793F
+    site: odisha_hub
+    area: pit_b
+    unit: haul_fleet
+    fault_severity: 0.62
+    fault_start_offset_hours: -6
+    inject_fault: engine_overheat
+  - id: HT-001
+    type: haul_truck
+    model: Cat 793F
+    site: odisha_hub
+    area: pit_a
+    unit: haul_fleet
+    fault_severity: 0.62
+    fault_start_offset_hours: -6
+    inject_fault: engine_overheat
+  - id: CV-003
+    type: conveyor
+    model: Overland Conveyor
+    site: kalimantan_hub
+    area: process
+    unit: crushing
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: HT-018
+    type: haul_truck
+    model: Cat 793F
+    site: kalimantan_hub
+    area: pit_c
+    unit: haul_fleet
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: HT-021
+    type: haul_truck
+    model: Cat 793F
+    site: kalimantan_hub
+    area: pit_b
+    unit: haul_fleet
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: HT-025
+    type: haul_truck
+    model: Cat 793F
+    site: gudai_darri
+    area: pit_a
+    unit: haul_fleet
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: HT-029
+    type: haul_truck
+    model: Cat 793F
+    site: gangwon_mine
+    area: pit_c
+    unit: haul_fleet
+    fault_severity: 0.9
+    fault_start_offset_hours: -13
+    inject_fault: engine_overheat
+  - id: CV-006
+    type: conveyor
+    model: Overland Conveyor
+    site: gudai_darri
+    area: process
+    unit: crushing
+    fault_severity: 0.96
+    fault_start_offset_hours: -13
+    inject_fault: bearing_wear
+  - id: CV-010
+    type: conveyor
+    model: Overland Conveyor
+    site: gudai_darri
+    area: process
+    unit: secondary_crushing
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: CV-012
+    type: conveyor
+    model: Overland Conveyor
+    site: odisha_hub
+    area: process
+    unit: tertiary_crushing
+    fault_severity: 0.92
+    fault_start_offset_hours: -8
+    inject_fault: engine_overheat
+  - id: HT-031
+    type: haul_truck
+    model: Cat 793F
+    site: kalimantan_hub
+    area: pit_a
+    unit: haul_fleet
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: HT-033
+    type: haul_truck
+    model: Cat 793F
+    site: gudai_darri
+    area: pit_b
+    unit: haul_fleet
+    fault_severity: 0.58
+    fault_start_offset_hours: -10
+    inject_fault: engine_overheat
+  - id: HT-035
+    type: haul_truck
+    model: Cat 793F
+    site: gangwon_mine
+    area: pit_a
+    unit: haul_fleet
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: CV-014
+    type: conveyor
+    model: Overland Conveyor
+    site: gangwon_mine
+    area: process
+    unit: crushing
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: HT-037
+    type: haul_truck
+    model: Cat 793F
+    site: gangwon_mine
+    area: pit_b
+    unit: haul_fleet
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: HT-041
+    type: haul_truck
+    model: Cat 793F
+    site: odisha_hub
+    area: pit_a
+    unit: haul_fleet
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: HT-043
+    type: haul_truck
+    model: Cat 793F
+    site: odisha_hub
+    area: pit_b
+    unit: haul_fleet
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: HT-045
+    type: haul_truck
+    model: Cat 793F
+    site: odisha_hub
+    area: pit_c
+    unit: haul_fleet
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: HT-047
+    type: haul_truck
+    model: Cat 793F
+    site: odisha_hub
+    area: pit_a
+    unit: haul_fleet
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: CV-016
+    type: conveyor
+    model: Overland Conveyor
+    site: odisha_hub
+    area: process
+    unit: crushing
+    fault_severity: 0.92
+    fault_start_offset_hours: -8
+    inject_fault: engine_overheat
+  - id: CV-018
+    type: conveyor
+    model: Overland Conveyor
+    site: odisha_hub
+    area: process
+    unit: secondary_crushing
+    fault_severity: 0.92
+    fault_start_offset_hours: -8
+    inject_fault: engine_overheat
+  - id: HT-049
+    type: haul_truck
+    model: Cat 793F
+    site: kalimantan_hub
+    area: pit_a
+    unit: haul_fleet
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: HT-051
+    type: haul_truck
+    model: Cat 793F
+    site: kalimantan_hub
+    area: pit_b
+    unit: haul_fleet
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: HT-053
+    type: haul_truck
+    model: Cat 793F
+    site: kalimantan_hub
+    area: pit_c
+    unit: haul_fleet
+    fault_severity: 0.56
+    fault_start_offset_hours: -11
+    inject_fault: tyre_blowout
+  - id: HT-055
+    type: haul_truck
+    model: Cat 793F
+    site: kalimantan_hub
+    area: pit_a
+    unit: haul_fleet
+    fault_severity: 0.94
+    fault_start_offset_hours: -2
+    inject_fault: bearing_wear
+  - id: CV-020
+    type: conveyor
+    model: Overland Conveyor
+    site: kalimantan_hub
+    area: process
+    unit: crushing
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: CV-022
+    type: conveyor
+    model: Overland Conveyor
+    site: kalimantan_hub
+    area: process
+    unit: secondary_crushing
+    fault_severity: 0.95
+    fault_start_offset_hours: -12
+    inject_fault: belt_slip
+  - id: HT-057
+    type: haul_truck
+    model: Cat 793F
+    site: gudai_darri
+    area: pit_a
+    unit: haul_fleet
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: HT-059
+    type: haul_truck
+    model: Cat 793F
+    site: gudai_darri
+    area: pit_b
+    unit: haul_fleet
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: HT-061
+    type: haul_truck
+    model: Cat 793F
+    site: gudai_darri
+    area: pit_c
+    unit: haul_fleet
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: HT-063
+    type: haul_truck
+    model: Cat 793F
+    site: gudai_darri
+    area: pit_a
+    unit: haul_fleet
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: CV-024
+    type: conveyor
+    model: Overland Conveyor
+    site: gudai_darri
+    area: process
+    unit: crushing
+    fault_severity: 0.88
+    fault_start_offset_hours: -8
+    inject_fault: belt_slip
+  - id: CV-026
+    type: conveyor
+    model: Overland Conveyor
+    site: gudai_darri
+    area: process
+    unit: secondary_crushing
+    fault_severity: 0.54
+    fault_start_offset_hours: -4
+    inject_fault: bearing_wear
+  - id: HT-065
+    type: haul_truck
+    model: Cat 793F
+    site: gangwon_mine
+    area: pit_a
+    unit: haul_fleet
+    fault_severity: 0.91
+    fault_start_offset_hours: -9
+    inject_fault: bearing_wear
+  - id: HT-067
+    type: haul_truck
+    model: Cat 793F
+    site: gangwon_mine
+    area: pit_b
+    unit: haul_fleet
+    fault_severity: 0.53
+    fault_start_offset_hours: -11
+    inject_fault: tyre_blowout
+  - id: HT-069
+    type: haul_truck
+    model: Cat 793F
+    site: gangwon_mine
+    area: pit_c
+    unit: haul_fleet
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: HT-071
+    type: haul_truck
+    model: Cat 793F
+    site: gangwon_mine
+    area: pit_a
+    unit: haul_fleet
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: CV-028
+    type: conveyor
+    model: Overland Conveyor
+    site: gangwon_mine
+    area: process
+    unit: crushing
+    fault_severity: 0.52
+    fault_start_offset_hours: -11
+    inject_fault: motor_overload
+  - id: CV-030
+    type: conveyor
+    model: Overland Conveyor
+    site: gangwon_mine
+    area: process
+    unit: secondary_crushing
+    fault_severity: 0.91
+    fault_start_offset_hours: -12
+    inject_fault: belt_slip
 sensors:
   haul_truck:
-    - name: engine_egt
-      display: Engine EGT
-      unit: C
-      opc_ua_node: "ns=2;s=Engine.EGT"
-      normal_range: [480, 620]
-      warning_threshold: 680
-      critical_threshold: 740
-      dir: 1
-      failure_mode: engine_overheat
-    - name: coolant_temp
-      display: Coolant Temp
-      unit: C
-      opc_ua_node: "ns=2;s=Engine.CoolantTemp"
-      normal_range: [75, 92]
-      warning_threshold: 97
-      critical_threshold: 104
-      dir: 1
-      failure_mode: engine_overheat
-    - name: oil_temp
-      display: Oil Temp
-      unit: C
-      opc_ua_node: "ns=2;s=Engine.OilTemp"
-      normal_range: [68, 88]
-      warning_threshold: 95
-      critical_threshold: 102
-      dir: 1
-      failure_mode: bearing_wear
-    - name: vibration_rms
-      display: Vibration RMS
-      unit: mm/s
-      opc_ua_node: "ns=2;s=Drive.Vibration"
-      normal_range: [1.2, 3.1]
-      warning_threshold: 4.5
-      critical_threshold: 6.5
-      dir: 1
-      failure_mode: bearing_wear
-    - name: tyre_pressure_fl
-      display: Tyre Pressure FL
-      unit: psi
-      opc_ua_node: "ns=2;s=Tyre.FL.Pressure"
-      normal_range: [85, 105]
-      warning_threshold: 80
-      critical_threshold: 72
-      dir: -1
-      failure_mode: tyre_blowout
-    - name: tyre_pressure_fr
-      display: Tyre Pressure FR
-      unit: psi
-      opc_ua_node: "ns=2;s=Tyre.FR.Pressure"
-      normal_range: [85, 105]
-      warning_threshold: 80
-      critical_threshold: 72
-      dir: -1
-      failure_mode: tyre_blowout
-    - name: payload_weight
-      display: Payload Weight
-      unit: t
-      opc_ua_node: "ns=2;s=Payload.Weight"
-      normal_range: [210, 280]
-      warning_threshold: 295
-      critical_threshold: 310
-      dir: 1
-      failure_mode: null
-    - name: fuel_rate
-      display: Fuel Rate
-      unit: lph
-      opc_ua_node: "ns=2;s=Engine.FuelRate"
-      normal_range: [180, 350]
-      warning_threshold: 380
-      critical_threshold: 430
-      dir: 1
-      failure_mode: engine_overheat
+  - name: engine_egt
+    display: Engine EGT
+    unit: C
+    opc_ua_node: ns=2;s=Engine.EGT
+    normal_range:
+    - 480
+    - 620
+    warning_threshold: 680
+    critical_threshold: 740
+    dir: 1
+    failure_mode: engine_overheat
+  - name: coolant_temp
+    display: Coolant Temp
+    unit: C
+    opc_ua_node: ns=2;s=Engine.CoolantTemp
+    normal_range:
+    - 75
+    - 92
+    warning_threshold: 97
+    critical_threshold: 104
+    dir: 1
+    failure_mode: engine_overheat
+  - name: oil_temp
+    display: Oil Temp
+    unit: C
+    opc_ua_node: ns=2;s=Engine.OilTemp
+    normal_range:
+    - 68
+    - 88
+    warning_threshold: 95
+    critical_threshold: 102
+    dir: 1
+    failure_mode: bearing_wear
+  - name: vibration_rms
+    display: Vibration RMS
+    unit: mm/s
+    opc_ua_node: ns=2;s=Drive.Vibration
+    normal_range:
+    - 1.2
+    - 3.1
+    warning_threshold: 4.5
+    critical_threshold: 6.5
+    dir: 1
+    failure_mode: bearing_wear
+  - name: tyre_pressure_fl
+    display: Tyre Pressure FL
+    unit: psi
+    opc_ua_node: ns=2;s=Tyre.FL.Pressure
+    normal_range:
+    - 85
+    - 105
+    warning_threshold: 80
+    critical_threshold: 72
+    dir: -1
+    failure_mode: tyre_blowout
+  - name: tyre_pressure_fr
+    display: Tyre Pressure FR
+    unit: psi
+    opc_ua_node: ns=2;s=Tyre.FR.Pressure
+    normal_range:
+    - 85
+    - 105
+    warning_threshold: 80
+    critical_threshold: 72
+    dir: -1
+    failure_mode: tyre_blowout
+  - name: payload_weight
+    display: Payload Weight
+    unit: t
+    opc_ua_node: ns=2;s=Payload.Weight
+    normal_range:
+    - 210
+    - 280
+    warning_threshold: 295
+    critical_threshold: 310
+    dir: 1
+    failure_mode: null
+  - name: fuel_rate
+    display: Fuel Rate
+    unit: lph
+    opc_ua_node: ns=2;s=Engine.FuelRate
+    normal_range:
+    - 180
+    - 350
+    warning_threshold: 380
+    critical_threshold: 430
+    dir: 1
+    failure_mode: engine_overheat
   conveyor:
-    - name: belt_tension
-      display: Belt Tension
-      unit: kN
-      opc_ua_node: "ns=2;s=Conveyor.BeltTension"
-      normal_range: [46, 62]
-      warning_threshold: 68
-      critical_threshold: 74
-      dir: 1
-      failure_mode: belt_slip
-    - name: motor_current
-      display: Motor Current
-      unit: A
-      opc_ua_node: "ns=2;s=Conveyor.MotorCurrent"
-      normal_range: [220, 300]
-      warning_threshold: 330
-      critical_threshold: 360
-      dir: 1
-      failure_mode: motor_overload
-    - name: roller_vibration
-      display: Roller Vibration
-      unit: mm/s
-      opc_ua_node: "ns=2;s=Conveyor.RollerVibration"
-      normal_range: [1.0, 2.8]
-      warning_threshold: 3.8
-      critical_threshold: 5.5
-      dir: 1
-      failure_mode: bearing_wear
-    - name: throughput_rate
-      display: Throughput Rate
-      unit: tph
-      opc_ua_node: "ns=2;s=Conveyor.Throughput"
-      normal_range: [1500, 2200]
-      warning_threshold: null
-      critical_threshold: null
-      dir: 1
-      failure_mode: null
-
+  - name: belt_tension
+    display: Belt Tension
+    unit: kN
+    opc_ua_node: ns=2;s=Conveyor.BeltTension
+    normal_range:
+    - 46
+    - 62
+    warning_threshold: 68
+    critical_threshold: 74
+    dir: 1
+    failure_mode: belt_slip
+  - name: motor_current
+    display: Motor Current
+    unit: A
+    opc_ua_node: ns=2;s=Conveyor.MotorCurrent
+    normal_range:
+    - 220
+    - 300
+    warning_threshold: 330
+    critical_threshold: 360
+    dir: 1
+    failure_mode: motor_overload
+  - name: roller_vibration
+    display: Roller Vibration
+    unit: mm/s
+    opc_ua_node: ns=2;s=Conveyor.RollerVibration
+    normal_range:
+    - 1.0
+    - 2.8
+    warning_threshold: 3.8
+    critical_threshold: 5.5
+    dir: 1
+    failure_mode: bearing_wear
+  - name: throughput_rate
+    display: Throughput Rate
+    unit: tph
+    opc_ua_node: ns=2;s=Conveyor.Throughput
+    normal_range:
+    - 1500
+    - 2200
+    warning_threshold: null
+    critical_threshold: null
+    dir: 1
+    failure_mode: null
 failure_modes:
   engine_overheat:
     display: Engine Overheat
-    sensors: [engine_egt, coolant_temp, fuel_rate]
+    sensors:
+    - engine_egt
+    - coolant_temp
+    - fuel_rate
     mtbf_hours: 2400
     repair_time_hours: 8.0
     cost_per_event: 45000
     downtime_type: unplanned
   bearing_wear:
     display: Bearing Wear
-    sensors: [vibration_rms, oil_temp, roller_vibration]
+    sensors:
+    - vibration_rms
+    - oil_temp
+    - roller_vibration
     mtbf_hours: 1900
     repair_time_hours: 6.0
     cost_per_event: 12000
     downtime_type: planned
   tyre_blowout:
     display: Tyre Blowout
-    sensors: [tyre_pressure_fl, tyre_pressure_fr]
+    sensors:
+    - tyre_pressure_fl
+    - tyre_pressure_fr
     mtbf_hours: 1400
     repair_time_hours: 3.0
     cost_per_event: 8000
     downtime_type: unplanned
   belt_slip:
     display: Belt Slip
-    sensors: [belt_tension]
+    sensors:
+    - belt_tension
     mtbf_hours: 2200
     repair_time_hours: 4.0
     cost_per_event: 25000
     downtime_type: unplanned
   motor_overload:
     display: Motor Overload
-    sensors: [motor_current]
+    sensors:
+    - motor_current
     mtbf_hours: 2600
     repair_time_hours: 5.0
     cost_per_event: 35000
     downtime_type: unplanned
-
 features:
-  - name: mean_15m
-    formula: mean
-    window: "15 minutes"
-    apply_to: all
-  - name: stddev_15m
-    formula: stddev
-    window: "15 minutes"
-    apply_to: all
-  - name: slope_1h
-    formula: slope
-    window: "1 hour"
-    apply_to: all
-  - name: zscore_30d
-    formula: zscore
-    window: "30 days"
-    apply_to: all
-  - name: cumsum_24h
-    formula: cumsum
-    window: "1 day"
-    apply_to: all
-
+- name: mean_15m
+  formula: mean
+  window: 15 minutes
+  apply_to: all
+- name: stddev_15m
+  formula: stddev
+  window: 15 minutes
+  apply_to: all
+- name: slope_1h
+  formula: slope
+  window: 1 hour
+  apply_to: all
+- name: zscore_30d
+  formula: zscore
+  window: 30 days
+  apply_to: all
+- name: cumsum_24h
+  formula: cumsum
+  window: 1 day
+  apply_to: all
 agent:
-  persona: "Mining maintenance supervisor assistant"
-  system_prompt_file: "industries/mining/system_prompt.txt"
+  persona: Mining maintenance supervisor assistant
+  system_prompt_file: industries/mining/system_prompt.txt
   terminology:
     asset: haul truck
     asset_plural: haul trucks
@@ -317,22 +623,21 @@ agent:
     cost_currency: AUD
     cost_event_label: cost per downtime event
     site_timezone: AWST
-
 dashboard:
   primary_kpi: fleet_health_score
   kpis:
-    - label: Fleet health
-      field: health_score_pct
-      format: percent_1dp
-      good_direction: up
-      good_threshold: 85
-    - label: Critical assets
-      field: critical_assets
-      format: integer
-      good_direction: down
-      good_threshold: 1
-    - label: Avoided cost
-      field: avoided_cost
-      format: currency
-      good_direction: up
-      good_threshold: 100000
+  - label: Fleet health
+    field: health_score_pct
+    format: percent_1dp
+    good_direction: up
+    good_threshold: 85
+  - label: Critical assets
+    field: critical_assets
+    format: integer
+    good_direction: down
+    good_threshold: 1
+  - label: Avoided cost
+    field: avoided_cost
+    format: currency
+    good_direction: up
+    good_threshold: 100000

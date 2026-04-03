@@ -1,0 +1,72 @@
+digraph exec_nano_banana {
+  graph [
+    rankdir=LR,
+    splines=ortho,
+    nodesep=0.9,
+    ranksep=1.0,
+    pad=0.35,
+    bgcolor="white",
+    fontname="Helvetica-Bold",
+    fontsize=20,
+    label="OT PdM Intelligence | Executive Architecture (Nano Banana)",
+    labelloc=t
+  ];
+
+  node [
+    shape=box,
+    style="rounded,filled",
+    fillcolor="#FFF7ED",
+    color="#FDBA74",
+    fontname="Helvetica",
+    fontsize=11,
+    margin="0.16,0.10"
+  ];
+
+  edge [
+    color="#7C3AED",
+    penwidth=1.6,
+    arrowsize=0.8,
+    fontname="Helvetica",
+    fontsize=10
+  ];
+
+  ot_sources [label="OT Sources\nOPC-UA | MQTT | Modbus | CAN"];
+  simulator [label="Physics Simulator\nFault + SDT compression"];
+  ingest [label="Zerobus Connector\nCanonical Bronze landing"];
+
+  lakehouse [label=<
+    <TABLE BORDER="0" CELLBORDER="0" CELLPADDING="2">
+      <TR><TD><IMG SRC="icons/databricks/lakehouse.png"/></TD></TR>
+      <TR><TD>Databricks Lakehouse</TD></TR>
+      <TR><TD><FONT POINT-SIZE="9">Bronze to Silver to Gold</FONT></TD></TR>
+    </TABLE>
+  >, shape=none];
+
+  governance [label=<
+    <TABLE BORDER="0" CELLBORDER="0" CELLPADDING="2">
+      <TR><TD><IMG SRC="icons/databricks/unity_catalog.png"/></TD></TR>
+      <TR><TD>Unity Catalog</TD></TR>
+    </TABLE>
+  >, shape=none];
+
+  ml [label="MLflow + UC Models\nAnomaly + RUL", fillcolor="#F5F3FF", color="#C4B5FD"];
+
+  app [label=<
+    <TABLE BORDER="0" CELLBORDER="0" CELLPADDING="2">
+      <TR><TD><IMG SRC="icons/databricks/workspace.png"/></TD></TR>
+      <TR><TD>Databricks App</TD></TR>
+      <TR><TD><FONT POINT-SIZE="9">FastAPI + React</FONT></TD></TR>
+    </TABLE>
+  >, shape=none];
+
+  insights [label="Executive Insights\nEBIT impact | ROI | Risk actions", fillcolor="#ECFDF5", color="#86EFAC"];
+
+  ot_sources -> ingest;
+  simulator -> ingest;
+  ingest -> lakehouse [label="DLT pipeline"];
+  governance -> lakehouse [dir=none, style=dashed, color="#A78BFA"];
+  lakehouse -> ml [label="feature vectors"];
+  ml -> app [label="batch scoring"];
+  lakehouse -> app [label="predictions + finance"];
+  app -> insights;
+}

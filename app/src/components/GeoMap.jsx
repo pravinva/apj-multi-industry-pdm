@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import Map, { Marker, NavigationControl, Popup } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -11,6 +11,11 @@ const INDUSTRY_META = {
   semiconductor: { color: "#0F766E", icon: "🧩" }
 };
 
+const APJ_BOUNDS = [
+  [60, -50],
+  [155, 45]
+];
+
 export default function GeoMap({
   sites,
   onSiteClick,
@@ -22,6 +27,8 @@ export default function GeoMap({
 }) {
   const [hoverSite, setHoverSite] = useState(null);
   const [mapFatal, setMapFatal] = useState(false);
+  const [mapLoaded, setMapLoaded] = useState(false);
+  const mapRef = useRef(null);
   const style = useMemo(() => {
     const osmStandard = {
       version: 8,
@@ -58,6 +65,61 @@ export default function GeoMap({
     [sites, activeIndustries]
   );
   const showFallback = mapFatal;
+  const fitMapToApjSites = (focusSiteId = "") => {
+    const map = mapRef.current?.getMap?.();
+    if (!map) return;
+    const focused = filtered.find((s) => String(s.site_id) === String(focusSiteId));
+    if (focused) {
+      map.flyTo({
+        center: [Number(focused.lng), Number(focused.lat)],
+        zoom: Math.max(5.2, map.getZoom() || 0),
+        duration: 650
+      });
+      return;
+    }
+    if (!filtered.length) return;
+    if (filtered.length === 1) {
+      map.flyTo({
+        center: [Number(filtered[0].lng), Number(filtered[0].lat)],
+        zoom: 5.0,
+        duration: 650
+      });
+      return;
+    }
+    let minLng = 180;
+    let maxLng = -180;
+    let minLat = 90;
+    let maxLat = -90;
+    for (const s of filtered) {
+      const lng = Number(s.lng);
+      const lat = Number(s.lat);
+      minLng = Math.min(minLng, lng);
+      maxLng = Math.max(maxLng, lng);
+      minLat = Math.min(minLat, lat);
+      maxLat = Math.max(maxLat, lat);
+    }
+    const lngPad = Math.max(6, (maxLng - minLng) * 0.25);
+    const latPad = Math.max(4, (maxLat - minLat) * 0.3);
+    minLng = Math.max(APJ_BOUNDS[0][0], minLng - lngPad);
+    maxLng = Math.min(APJ_BOUNDS[1][0], maxLng + lngPad);
+    minLat = Math.max(APJ_BOUNDS[0][1], minLat - latPad);
+    maxLat = Math.min(APJ_BOUNDS[1][1], maxLat + latPad);
+    map.fitBounds(
+      [
+        [minLng, minLat],
+        [maxLng, maxLat]
+      ],
+      {
+        padding: { top: 84, right: 52, bottom: 52, left: 52 },
+        duration: 700,
+        maxZoom: 4.9
+      }
+    );
+  };
+  useEffect(() => {
+    if (!mapLoaded || showFallback) return;
+    fitMapToApjSites(activeSiteId);
+  }, [mapLoaded, activeSiteId, filtered, showFallback]);
   return (
     <div className="geo-map-wrap">
       <div className="geo-map-toolbar">
@@ -69,6 +131,7 @@ export default function GeoMap({
           ))}
         </div>
         <div className="geo-layer-toggle">
+          <button onClick={() => fitMapToApjSites()}>Focus APJ</button>
           <button className={mapLayer === "satellite" ? "active" : ""} onClick={() => onMapLayerChange("satellite")}>Satellite</button>
           <button className={mapLayer === "terrain" ? "active" : ""} onClick={() => onMapLayerChange("terrain")}>Topology</button>
         </div>
@@ -98,10 +161,17 @@ export default function GeoMap({
       ) : (
         <>
           <Map
+            ref={mapRef}
             mapLib={maplibregl}
-            initialViewState={{ longitude: 128, latitude: -20, zoom: 3 }}
+            initialViewState={{ longitude: 112, latitude: 2, zoom: 3.3 }}
+            maxBounds={APJ_BOUNDS}
+            minZoom={2.6}
+            maxZoom={7.5}
+            dragRotate={false}
+            touchPitch={false}
             mapStyle={style}
             reuseMaps
+            onLoad={() => setMapLoaded(true)}
             onError={() => setMapFatal(true)}
           >
             <NavigationControl position="bottom-right" visualizePitch />

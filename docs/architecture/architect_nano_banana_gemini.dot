@@ -1,0 +1,85 @@
+digraph architect_nano_banana_gemini {
+  rankdir=LR;
+  splines=ortho;
+  node [style="rounded,filled", fillcolor="#f0f8ff"];
+
+  subgraph cluster_title {
+    label = "OT PdM Intelligence | Architect View (Nano Banana via Gemini)";
+    style = "invis";
+  }
+
+  protocols [label="Protocols"];
+  simulator [label="Simulator"];
+  run_connector [label="run_connector.py"];
+  bronze [label="Bronze"];
+  silver [label="Silver"];
+  gold [label=<
+    <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0">
+      <TR>
+        <TD><IMG SRC="icons/databricks/lakehouse.png"/></TD>
+        <TD>Gold</TD>
+      </TR>
+    </TABLE>
+  >];
+  predictions [label="Predictions table"];
+  training [label="Training job"];
+  scoring [label="Scoring job"];
+  mlflow [label="MLflow registry"];
+  databricks_app [label=<
+    <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0">
+      <TR>
+        <TD><IMG SRC="icons/databricks/workspace.png"/></TD>
+        <TD>Databricks App</TD>
+      </TR>
+    </TABLE>
+  >];
+  react_ui [label="React UI"];
+  agent [label="Agent layer"];
+  lakebase [label="Lakebase"];
+  manuals [label="Manuals table"];
+  genie [label="Genie rooms"];
+  databricks_bundle [label="Databricks Bundle"];
+  dlt_pipeline [label="DLT pipeline"];
+  bootstrap [label="Bootstrap job"];
+
+  protocols -> run_connector;
+  simulator -> run_connector;
+  run_connector -> bronze;
+  bronze -> silver;
+  silver -> gold;
+  gold -> databricks_app;
+  gold -> training;
+  mlflow -> scoring;
+  scoring -> predictions;
+  predictions -> databricks_app;
+  databricks_app -> react_ui;
+  databricks_app -> agent;
+  lakebase -> agent;
+  manuals -> agent;
+  genie -> agent;
+  databricks_bundle -> dlt_pipeline;
+  databricks_bundle -> training;
+  databricks_bundle -> scoring;
+  databricks_bundle -> bootstrap;
+  databricks_bundle -> run_connector;
+
+  {rank=same; lakebase; manuals; genie}
+  {rank=same; protocols; simulator}
+
+  subgraph cluster_unity {
+    label=<
+      <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0">
+        <TR>
+          <TD><IMG SRC="icons/databricks/unity_catalog.png"/></TD>
+          <TD>Unity Catalog</TD>
+        </TR>
+      </TABLE>
+    >;
+    style = "invis";
+  }
+
+  cluster_unity -> bronze [style=dashed, lhead=cluster_unity, ltail=cluster_unity, constraint=false];
+  cluster_unity -> silver [style=dashed, lhead=cluster_unity, ltail=cluster_unity, constraint=false];
+  cluster_unity -> gold [style=dashed, lhead=cluster_unity, ltail=cluster_unity, constraint=false];
+  cluster_unity -> predictions [style=dashed, lhead=cluster_unity, ltail=cluster_unity, constraint=false];
+}

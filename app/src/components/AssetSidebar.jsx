@@ -1,4 +1,20 @@
-export default function AssetSidebar({ assets, activeAssetId, onAssetClick }) {
+function formatExposure(asset, fallbackCurrency = "") {
+  const exposure = Number(asset?.exposure_value || 0);
+  if (!Number.isFinite(exposure) || exposure <= 0) return "-";
+  const currency = String(asset?.financial?.currency || fallbackCurrency || "").toUpperCase();
+  if (!currency) return exposure.toLocaleString();
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 0,
+    }).format(exposure);
+  } catch {
+    return `${currency} ${Math.round(exposure).toLocaleString()}`;
+  }
+}
+
+export default function AssetSidebar({ assets, activeAssetId, onAssetClick, currency = "" }) {
   const total = Array.isArray(assets) ? assets.length : 0;
   const warningCount = (assets || []).filter((a) => String(a?.status || "").toLowerCase() === "warning").length;
   const criticalCount = (assets || []).filter((a) => String(a?.status || "").toLowerCase() === "critical").length;
@@ -21,7 +37,6 @@ export default function AssetSidebar({ assets, activeAssetId, onAssetClick }) {
         const status = String(asset?.status || "running").toLowerCase();
         const badge = status === "critical" ? "CRITICAL" : status === "warning" ? "WARNING" : "";
         const pct = Math.max(1, Math.min(99, Math.round((1 - Number(asset?.confidence || 0)) * 100)));
-        const exposure = Number(asset?.exposure_value || 0);
         return (
           <button
             key={asset.asset_id}
@@ -41,7 +56,7 @@ export default function AssetSidebar({ assets, activeAssetId, onAssetClick }) {
               <div className="geo-asset-metrics">
                 <span>ANOMALY {Number(asset?.anomaly_score || 0).toFixed(2)}</span>
                 <span>RUL {Number(asset?.rul_hours || 0).toFixed(1)}h</span>
-                <span>EXP {exposure ? exposure.toLocaleString() : "-"}</span>
+                <span>EXP {formatExposure(asset, currency)}</span>
               </div>
             </div>
           </button>

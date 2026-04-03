@@ -1,0 +1,125 @@
+digraph architect_nano_banana {
+  graph [
+    rankdir=LR,
+    splines=ortho,
+    nodesep=0.8,
+    ranksep=1.1,
+    pad=0.4,
+    bgcolor="white",
+    fontname="Helvetica-Bold",
+    fontsize=20,
+    label="OT PdM Intelligence | Architect View (Nano Banana)",
+    labelloc=t
+  ];
+
+  node [
+    shape=box,
+    style="rounded,filled",
+    fillcolor="#FFFBEB",
+    color="#FCD34D",
+    fontname="Helvetica",
+    fontsize=10,
+    margin="0.16,0.10"
+  ];
+
+  edge [
+    color="#6D28D9",
+    penwidth=1.4,
+    arrowsize=0.75,
+    fontname="Helvetica",
+    fontsize=9
+  ];
+
+  subgraph cluster_sources {
+    label="First-Mile OT Ingestion";
+    color="#FDBA74";
+    style="rounded,dashed";
+    ot_proto [label="Protocols\nOPC-UA | MQTT JSON\nSparkplug B | Modbus | CAN"];
+    ot_sim [label="Simulator Engine\nphysics + faults + SDT"];
+    connector [label="core/zerobus_ingest\nrun_connector.py"];
+    ot_proto -> connector;
+    ot_sim -> connector;
+  }
+
+  subgraph cluster_lakehouse {
+    label="Databricks Lakehouse";
+    color="#A78BFA";
+    style="rounded,dashed";
+
+    uc [label=<
+      <TABLE BORDER="0" CELLBORDER="0" CELLPADDING="2">
+        <TR><TD><IMG SRC="icons/databricks/unity_catalog.png"/></TD></TR>
+        <TR><TD>Unity Catalog</TD></TR>
+      </TABLE>
+    >, shape=none];
+
+    bronze [label="DLT Bronze\nsensor_readings\npi_tag_readings", fillcolor="#FEF2F2", color="#FCA5A5"];
+    silver [label="DLT Silver\nsensor_features\nasset_health_scores\not_pi_aligned", fillcolor="#EFF6FF", color="#93C5FD"];
+    gold [label="DLT Gold logical\nfeature_vectors\nmaintenance_alerts\nfinancial_impact_events", fillcolor="#ECFDF5", color="#86EFAC"];
+    pred [label="Scored predictions\n{catalog}.gold.pdm_predictions", fillcolor="#F3E8FF", color="#C4B5FD"];
+
+    bronze -> silver -> gold;
+    gold -> pred [label="batch_score append"];
+    uc -> bronze [dir=none, style=dashed, color="#A78BFA"];
+    uc -> silver [dir=none, style=dashed, color="#A78BFA"];
+    uc -> gold [dir=none, style=dashed, color="#A78BFA"];
+    uc -> pred [dir=none, style=dashed, color="#A78BFA"];
+  }
+
+  subgraph cluster_ml {
+    label="ML + MLOps";
+    color="#C4B5FD";
+    style="rounded,dashed";
+    train [label="Training Job\not_pdm_training_job\ncore/ml/train.py"];
+    score [label="Scoring Job\not_pdm_scoring_job\ncore/ml/batch_score.py"];
+    registry [label="MLflow (databricks-uc)\nmodels.{anomaly,rul}_<asset>\nalias: champion", fillcolor="#F5F3FF", color="#C4B5FD"];
+    train -> registry [label="register"];
+    registry -> score [label="load champion"];
+  }
+
+  subgraph cluster_apps {
+    label="Serving + Experiences";
+    color="#86EFAC";
+    style="rounded,dashed";
+    api [label=<
+      <TABLE BORDER="0" CELLBORDER="0" CELLPADDING="2">
+        <TR><TD><IMG SRC="icons/databricks/workspace.png"/></TD></TR>
+        <TR><TD>Databricks App / FastAPI</TD></TR>
+      </TABLE>
+    >, shape=none];
+    ui [label="React UI pages\nFleet | Drilldown | ISA-95 | Stream | Model | Simulator"];
+    agent [label="GenAI Agent Layer\nUCFunctionToolkit + Databricks Agents"];
+    rag [label="Manual reference chunks\n{catalog}.bronze.manual_reference_chunks"];
+    lakebase [label="Lakebase ops tables\nparts_inventory\nmaintenance_schedule\nwork_orders"];
+    genie [label="Genie rooms\nsetup_genie_rooms.py"];
+    api -> ui;
+    api -> agent;
+    api -> rag;
+    api -> lakebase;
+    api -> genie;
+  }
+
+  subgraph cluster_orch {
+    label="Bundle Orchestration";
+    color="#FCD34D";
+    style="rounded,dashed";
+    bundle [label="databricks.yml\nDAB targets + variables"];
+    dlt_job [label="ot_pdm_dlt_pipeline\ncontinuous"];
+    connector_job [label="ot_pdm_zerobus_connector_job"];
+    bootstrap [label="ot_pdm_workspace_bootstrap_job\nRUNME_BOOTSTRAP_ALL.py"];
+    bundle -> dlt_job;
+    bundle -> connector_job;
+    bundle -> train;
+    bundle -> score;
+    bundle -> bootstrap;
+  }
+
+  connector -> bronze [label="writes pravin_zerobus"];
+  dlt_job -> bronze [label="executes bronze/silver/gold code"];
+  gold -> train [label="feature_vectors"];
+  score -> pred [label="writes scored rows"];
+  pred -> api [label="predictions API"];
+  gold -> api [label="financial impact + alerts"];
+  lakebase -> agent [label="prescriptive context"];
+  rag -> agent [label="grounding snippets"];
+}

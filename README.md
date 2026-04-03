@@ -138,10 +138,10 @@ The app supports both currency adaptation and localization-aware presentation.
 
 ### Currency handling
 
-- Supported display currencies include `USD`, `AUD`, and `JPY` (plus automatic mode).
+- Supported display currencies include `USD`, `AUD`, `JPY`, `INR`, `SGD`, and `KRW` (plus automatic mode).
 - Backend computes native values and converts to selected display currency.
 - Financial cards and executive statements are rendered in selected currency format.
-- Industry assumptions are sector-specific (for example, automotive defaults to JPY, water and mining commonly to AUD, semiconductor often to USD).
+- Industry assumptions are sector-specific, and Geo now supports site-level native currency defaults.
 
 ### Localization behavior
 
@@ -152,9 +152,12 @@ The app supports both currency adaptation and localization-aware presentation.
 ### Geo intelligence currency behavior
 
 - Geo APIs (`/api/geo/sites`, `/api/geo/assets/{site_id}`) accept `currency` and return converted financial values in the selected display currency.
+- In `AUTO` mode, each Geo site uses its native currency (for example India sites use `INR`, ASEAN sites use `SGD`, and South Korea sites use `KRW`).
 - Geo asset list, site rollups, and drill-down financial cards update when the currency selector changes.
 - Geo Genie requests include selected currency context so monetary responses remain aligned with UI selection.
 - For `JPY`, Geo quick prompts, alert phrasing, and Genie guidance are localized to Japanese.
+- For `KRW`, Geo quick prompts, alert phrasing, and Genie guidance are localized to Korean.
+- Gold finance output (`gold.financial_impact_events`) now carries `site_id`/`area_id`/`unit_id` context for site-level finance slicing across India/ASEAN expansions.
 
 ## PI plus OT Integration
 

@@ -8,7 +8,7 @@ import GeoGeniePanel from "./components/GeoGeniePanel";
 import { useGeoData, useAssetData } from "./hooks/useGeoData";
 
 const INDUSTRIES = ["mining", "energy", "water", "automotive", "semiconductor"];
-const CURRENCIES = ["AUTO", "USD", "AUD", "JPY"];
+const CURRENCIES = ["AUTO", "USD", "AUD", "JPY", "INR", "SGD", "KRW"];
 const EMPTY_EXECUTIVE = {
   audience: "finance_executive",
   window: "last_30_days",
@@ -63,6 +63,13 @@ const JA_INDUSTRY_LABELS = {
   water: "水道",
   automotive: "自動車",
   semiconductor: "半導体"
+};
+const KO_INDUSTRY_LABELS = {
+  mining: "광업",
+  energy: "에너지",
+  water: "수자원",
+  automotive: "자동차",
+  semiconductor: "반도체"
 };
 const JA_UI = {
   Fleet: "フリート",
@@ -196,20 +203,60 @@ const JA_UI = {
   "ERP and work-order context": "ERP・作業指示コンテキスト",
   "EBIT impact trend (simulated)": "EBIT影響推移（シミュレーション）"
 };
+const KO_UI = {
+  Fleet: "플릿",
+  Asset: "자산",
+  "Hier.": "계층",
+  Stream: "스트림",
+  Model: "모델",
+  Sim: "시뮬레이터",
+  Finance: "재무",
+  Geo: "지리",
+  Currency: "통화",
+  "Maintenance Supervisor AI": "정비 슈퍼바이저 AI",
+  "Ask AI": "AI에 질문",
+  "Ask about this location and incident context...": "이 위치와 사고 맥락에 대해 질문...",
+  "Ask about risk, RUL, and next action...": "위험도, RUL, 다음 조치에 대해 질문...",
+  "Processing your request...": "요청 처리 중...",
+  "Processing...": "처리 중...",
+  "Sending...": "전송 중...",
+  "Finance Scenario Genie": "재무 시나리오 Genie",
+  "Ask financial what-if scenarios in predictive maintenance context": "예지정비 관점의 재무 What-if 시나리오 질문",
+  "Processing scenario...": "시나리오 처리 중...",
+  "Ask: If we defer maintenance by 2 weeks, what is EBIT impact?": "질문: 정비를 2주 연기하면 EBIT 영향은?",
+  Ask: "질문",
+  Confidence: "신뢰도",
+  Sources: "출처",
+  ME: "나",
+  AI: "AI",
+  healthy: "정상",
+  warning: "경고",
+  critical: "치명",
+};
 
-function localizeAlertText(text, isJapanese) {
-  if (!isJapanese) return text;
-  const immediate = String(text || "").match(/^(.+?) requires immediate intervention \((.+)\)$/);
-  if (immediate) return `${immediate[1]} は即時対応が必要です（${immediate[2]}）`;
-  const schedule = String(text || "").match(/^(.+?) should be scheduled this week \((.+)\)$/);
-  if (schedule) return `${schedule[1]} は今週中の対応推奨です（${schedule[2]}）`;
+function localizeAlertText(text, locale) {
+  if (locale === "ja") {
+    const immediate = String(text || "").match(/^(.+?) requires immediate intervention \((.+)\)$/);
+    if (immediate) return `${immediate[1]} は即時対応が必要です（${immediate[2]}）`;
+    const schedule = String(text || "").match(/^(.+?) should be scheduled this week \((.+)\)$/);
+    if (schedule) return `${schedule[1]} は今週中の対応推奨です（${schedule[2]}）`;
+    return text;
+  }
+  if (locale === "ko") {
+    const immediate = String(text || "").match(/^(.+?) requires immediate intervention \((.+)\)$/);
+    if (immediate) return `${immediate[1]} 즉시 조치가 필요합니다 (${immediate[2]})`;
+    const schedule = String(text || "").match(/^(.+?) should be scheduled this week \((.+)\)$/);
+    if (schedule) return `${schedule[1]} 이번 주 작업을 권장합니다 (${schedule[2]})`;
+    return text;
+  }
   return text;
 }
 
-function localizeStatusText(status, isJapanese) {
+function localizeStatusText(status, locale) {
   const s = String(status || "");
-  if (!isJapanese) return s;
-  return JA_UI[s] || s;
+  if (locale === "ja") return JA_UI[s] || s;
+  if (locale === "ko") return KO_UI[s] || s;
+  return s;
 }
 
 async function getJson(url, fallback) {
@@ -539,6 +586,7 @@ export default function App() {
   const [view, setView] = useState("operator");
   const [simTab, setSimTab] = useState("sim");
   const [assetSeverityFilter, setAssetSeverityFilter] = useState("all");
+  const [assetSiteFilter, setAssetSiteFilter] = useState("all");
 
   const [overview, setOverview] = useState(EMPTY_OVERVIEW);
   const [recActionPending, setRecActionPending] = useState({});
@@ -700,6 +748,7 @@ export default function App() {
     setGeoView("geo");
     setActiveSiteId(null);
     setActiveAssetId(null);
+    setAssetSiteFilter("all");
   }, [industry]);
 
   useEffect(() => {
@@ -721,13 +770,13 @@ export default function App() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [ov, h, sim] = await Promise.all([
-        getJson(`/api/ui/overview?industry=${industry}${currencyParam}`, EMPTY_OVERVIEW),
+      const [h, sim, template, roomCfg] = await Promise.all([
         getJson(`/api/ui/hierarchy?industry=${industry}`, null),
-        getJson(`/api/ui/simulator/state?industry=${industry}`, null)
+        getJson(`/api/ui/simulator/state?industry=${industry}`, null),
+        getJson(`/api/ui/config/template?industry=${industry}`, null),
+        getJson(`/api/ui/genie/rooms?industry=${industry}`, null)
       ]);
       if (cancelled) return;
-      setOverview(ov);
       setHierarchy(h);
       setHierSelection(h);
       setSimState((prev) => {
@@ -740,19 +789,7 @@ export default function App() {
           running: Boolean(prev?.running || next?.running)
         };
       });
-      setAgentMsgs((ov.messages || []).map((m) => ({ role: m.role, text: m.text, label: m.label || "AI" })));
-      setFinanceMsgs([{
-        role: "agent",
-        label: isJapanese ? "財務コマンドAI" : "Finance Command AI",
-        text: isJapanese
-          ? `${industryLabel(industry)}向けに、${(ov.executive || {}).currency || demoCurrency}で予知保全の財務シナリオに回答できます。`
-          : `I can answer financial predictive maintenance scenarios for ${industry} in ${(ov.executive || {}).currency || demoCurrency}.`
-      }]);
-      const defaultAsset = ov.assets?.[0]?.id || "";
-      setSelectedAssetId(defaultAsset);
-      const template = await getJson(`/api/ui/config/template?industry=${industry}`, null);
-      const roomCfg = await getJson(`/api/ui/genie/rooms?industry=${industry}`, null);
-      if (!cancelled && template) {
+      if (template) {
         setCfg(template);
         const tc = template.connector || {};
         const targetFqn = [tc.target_catalog || template.catalog || `pdm_${industry}`, tc.target_schema || "bronze", tc.target_table || "pravin_zerobus"].join(".");
@@ -767,31 +804,75 @@ export default function App() {
           target_fqn: targetFqn
         }));
       }
-      if (!cancelled && roomCfg) setGenieRooms(roomCfg);
+      if (roomCfg) setGenieRooms(roomCfg);
     })();
     return () => {
       cancelled = true;
     };
-  }, [industry, currencyParam]);
+  }, [industry]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const ov = await getJson(`/api/ui/overview?industry=${industry}${currencyParam}`, EMPTY_OVERVIEW);
+      if (cancelled) return;
+      setOverview(ov);
+      setAgentMsgs((ov.messages || []).map((m) => ({ role: m.role, text: m.text, label: m.label || "AI" })));
+      setFinanceMsgs([{
+        role: "agent",
+        label: locale === "ja" ? "財務コマンドAI" : locale === "ko" ? "재무 커맨드 AI" : "Finance Command AI",
+        text: locale === "ja"
+          ? `${industryLabel(industry)}向けに、${(ov.executive || {}).currency || demoCurrency}で予知保全の財務シナリオに回答できます。`
+          : locale === "ko"
+          ? `${industryLabel(industry)}에 대해 ${(ov.executive || {}).currency || demoCurrency} 기준의 예지정비 재무 시나리오를 답변할 수 있습니다.`
+          : `I can answer financial predictive maintenance scenarios for ${industry} in ${(ov.executive || {}).currency || demoCurrency}.`
+      }]);
+      if (!selectedAssetId) {
+        const defaultAsset = ov.assets?.[0]?.id || "";
+        setSelectedAssetId(defaultAsset);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [industry, currencyParam, demoCurrency, selectedAssetId]);
 
   useEffect(() => {
     if (!selectedAssetId) return;
     let cancelled = false;
     (async () => {
-      const [detail, modelData, advData] = await Promise.all([
-        getJson(`/api/ui/asset/${selectedAssetId}?industry=${industry}${currencyParam}`, null),
-        getJson(`/api/ui/model/${selectedAssetId}?industry=${industry}${currencyParam}`, null),
-        getJson(`/api/ui/advanced_pdm?asset_id=${encodeURIComponent(selectedAssetId)}&industry=${industry}${currencyParam}`, null)
-      ]);
+      const detail = await getJson(`/api/ui/asset/${selectedAssetId}?industry=${industry}${currencyParam}`, null);
       if (cancelled) return;
       setAssetDetail(detail);
-      setModel(modelData);
-      setAdvancedPdm(advData);
     })();
     return () => {
       cancelled = true;
     };
   }, [industry, selectedAssetId, currencyParam]);
+
+  useEffect(() => {
+    if (!selectedAssetId) return;
+    let cancelled = false;
+    (async () => {
+      const modelData = await getJson(`/api/ui/model/${selectedAssetId}?industry=${industry}`, null);
+      if (!cancelled) setModel(modelData);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [industry, selectedAssetId]);
+
+  useEffect(() => {
+    if (!selectedAssetId || page !== "p5") return;
+    let cancelled = false;
+    (async () => {
+      const advData = await getJson(`/api/ui/advanced_pdm?asset_id=${encodeURIComponent(selectedAssetId)}&industry=${industry}${currencyParam}`, null);
+      if (!cancelled) setAdvancedPdm(advData);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [industry, selectedAssetId, currencyParam, page]);
 
   useEffect(() => {
     if (page !== "p4") return undefined;
@@ -938,12 +1019,22 @@ export default function App() {
     [overview.assets, selectedAssetId]
   );
 
+  const assetSiteOptions = useMemo(() => {
+    const values = Array.from(
+      new Set((overview.assets || []).map((a) => String(a?.site || "").trim()).filter(Boolean))
+    );
+    return values.sort((a, b) => a.localeCompare(b));
+  }, [overview.assets]);
+
   const filteredAssets = useMemo(() => {
-    const assets = overview.assets || [];
+    let assets = overview.assets || [];
+    if (assetSiteFilter !== "all") {
+      assets = assets.filter((a) => String(a?.site || "").trim() === assetSiteFilter);
+    }
     if (assetSeverityFilter === "critical") return assets.filter((a) => a.status === "critical");
     if (assetSeverityFilter === "warning") return assets.filter((a) => a.status === "warning");
     return assets;
-  }, [overview.assets, assetSeverityFilter]);
+  }, [overview.assets, assetSeverityFilter, assetSiteFilter]);
   const mapLayout = useMemo(() => buildMapPinLayout(overview.assets || [], industry), [overview.assets, industry]);
   const mapPins = mapLayout.pins;
   const mapZoneChips = mapLayout.zoneChips;
@@ -1000,11 +1091,20 @@ export default function App() {
   const executive = overview.executive || EMPTY_EXECUTIVE;
   const execTips = executive.explainability || {};
   const effectiveUiCurrency = demoCurrency === "AUTO" ? (executive.currency || "USD") : demoCurrency;
-  const isJapanese = effectiveUiCurrency === "JPY";
-  const t = (text) => (isJapanese ? (JA_UI[text] || text) : text);
-  const dayUnit = isJapanese ? "日" : "days";
-  const shortDayUnit = isJapanese ? "日" : "d";
-  const industryLabel = (ind) => (isJapanese ? (JA_INDUSTRY_LABELS[ind] || ind) : (ind.charAt(0).toUpperCase() + ind.slice(1)));
+  const locale = effectiveUiCurrency === "JPY" ? "ja" : effectiveUiCurrency === "KRW" ? "ko" : "en";
+  const isJapanese = locale === "ja";
+  const t = (text) => (
+    locale === "ja" ? (JA_UI[text] || text)
+      : locale === "ko" ? (KO_UI[text] || text)
+      : text
+  );
+  const dayUnit = locale === "ja" ? "日" : locale === "ko" ? "일" : "days";
+  const shortDayUnit = locale === "ja" ? "日" : locale === "ko" ? "일" : "d";
+  const industryLabel = (ind) => (
+    locale === "ja" ? (JA_INDUSTRY_LABELS[ind] || ind)
+      : locale === "ko" ? (KO_INDUSTRY_LABELS[ind] || ind)
+      : (ind.charAt(0).toUpperCase() + ind.slice(1))
+  );
   const execScenario = useMemo(() => {
     const decisions = executive.decision_cockpit || [];
     const baseRisk = decisions.reduce((acc, d) => acc + Number(d.value_uplift || 0), 0);
@@ -1298,7 +1398,7 @@ export default function App() {
       }
       const answer = reply?.choices?.[0]?.message?.content || "No response.";
       const refs = Array.isArray(reply?.references) ? reply.references : [];
-      setFinanceMsgs((prev) => [...prev, { role: "agent", text: answer, label: isJapanese ? "財務コマンドAI" : "Finance Command AI", references: refs }]);
+      setFinanceMsgs((prev) => [...prev, { role: "agent", text: answer, label: locale === "ja" ? "財務コマンドAI" : locale === "ko" ? "재무 커맨드 AI" : "Finance Command AI", references: refs }]);
     } finally {
       setFinancePending(false);
     }
@@ -1675,7 +1775,7 @@ export default function App() {
           <span className="logo-text">Databricks</span>
         </div>
         <div className="topbar-div" />
-        <span className="app-name">{isJapanese ? "予知保全 オペレーション＆ビジネス価値ハブ" : "Predictive & Prescriptive Maintenance Hub"}</span>
+        <span className="app-name">{locale === "ja" ? "予知保全 オペレーション＆ビジネス価値ハブ" : locale === "ko" ? "예지·처방 정비 운영 및 비즈니스 가치 허브" : "Predictive & Prescriptive Maintenance Hub"}</span>
         <div className="ind-tabs">
           {INDUSTRIES.map((ind) => (
             <button key={ind} className={`itab ${industry === ind ? "active" : ""}`} onClick={() => setIndustry(ind)}>
@@ -1689,7 +1789,7 @@ export default function App() {
             {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
-        <span className="isa-badge">{isJapanese ? `ライブ ・ ${liveClock}` : `Live · ${liveClock}`}</span>
+        <span className="isa-badge">{locale === "ja" ? `ライブ ・ ${liveClock}` : locale === "ko" ? `실시간 · ${liveClock}` : `Live · ${liveClock}`}</span>
       </header>
 
       <div className="body-wrap">
@@ -1733,7 +1833,18 @@ export default function App() {
               <div className="asset-panel">
                 <div className="panel-hdr">
                   <span className="panel-title">{t("Live asset risk matrix")}</span>
-                  <div className="chips">
+                  <div className="chips" style={{ gap: 8 }}>
+                    <select
+                      className="risk-site-filter"
+                      value={assetSiteFilter}
+                      onChange={(e) => setAssetSiteFilter(e.target.value)}
+                      aria-label="Filter by site"
+                    >
+                      <option value="all">{t("All sites")}</option>
+                      {assetSiteOptions.map((site) => (
+                        <option key={site} value={site}>{site}</option>
+                      ))}
+                    </select>
                     <button className={`chip ${assetSeverityFilter === "all" ? "active" : ""}`} onClick={() => setAssetSeverityFilter("all")}>{t("All")}</button>
                     <button className={`chip ${assetSeverityFilter === "critical" ? "active" : ""}`} onClick={() => setAssetSeverityFilter("critical")}>{t("Critical")}</button>
                     <button className={`chip ${assetSeverityFilter === "warning" ? "active" : ""}`} onClick={() => setAssetSeverityFilter("warning")}>{t("Warning")}</button>
@@ -1758,7 +1869,7 @@ export default function App() {
                           <div className="atype">{a.type}</div>
                           <div className="acrumb">{a.crumb}</div>
                         </div>
-                        <span className={`sbadge ${a.status}`}>{localizeStatusText(a.status, isJapanese)}</span>
+                        <span className={`sbadge ${a.status}`}>{localizeStatusText(a.status, locale)}</span>
                       </div>
                       <div className="card-metrics">
                         <div className="cm"><div className="cml">{t("Anomaly")}</div><div className="cmv">{a.anomaly_score}</div></div>
@@ -1837,7 +1948,7 @@ export default function App() {
                   <div key={`${a.text}-${i}`} className={`arow ${a.severity}`} title={a.tooltip || ""}>
                     <div className={`apip ${a.severity}`} />
                     <span className="alert-text-wrap">
-                      <span className="atext">{localizeAlertText(a.text, isJapanese)}</span>
+                      <span className="atext">{localizeAlertText(a.text, locale)}</span>
                       <span
                         className="alert-tip"
                         title={a.tooltip || ""}
@@ -2137,7 +2248,7 @@ export default function App() {
                 <div className="p2-meta">
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <div className="p2-id">{assetDetail.id}</div>
-                    <span className={`sbadge ${assetDetail.status}`}>{localizeStatusText(assetDetail.status, isJapanese)}</span>
+                    <span className={`sbadge ${assetDetail.status}`}>{localizeStatusText(assetDetail.status, locale)}</span>
                   </div>
                   <div className="p2-type">{assetDetail.type}</div>
                   <div className="p2-crumb">{assetDetail.crumb}</div>
@@ -3166,7 +3277,7 @@ export default function App() {
                         {m.role === "agent" ? renderSimpleMarkdown(m.text) : m.text}
                         {m.role === "agent" && Array.isArray(m.references) && m.references.length > 0 && (
                           <div style={{ marginTop: 8, borderTop: "1px solid var(--border)", paddingTop: 6, fontSize: 11, color: "var(--muted)" }}>
-                            <div style={{ marginBottom: 4 }}>{isJapanese ? "参照ソース" : "Sources"}</div>
+                            <div style={{ marginBottom: 4 }}>{locale === "ja" ? "参照ソース" : locale === "ko" ? "출처" : "Sources"}</div>
                             {m.references.slice(0, 4).map((r, idx) => (
                               <div key={`fin-ref-${i}-${idx}`}>[{r.source}] {(Number(r.score || 0) * 100).toFixed(0)}%</div>
                             ))}
@@ -3179,7 +3290,7 @@ export default function App() {
                     <div className="msg">
                       <div className="av agent">AI</div>
                       <div className="bubble bubble-thinking">
-                        <div className="bubble-lbl">{isJapanese ? "財務コマンドAI" : "Finance Command AI"}</div>
+                        <div className="bubble-lbl">{locale === "ja" ? "財務コマンドAI" : locale === "ko" ? "재무 커맨드 AI" : "Finance Command AI"}</div>
                         <div className="thinking-row">
                           <span className="thinking-dot" />
                           <span className="thinking-dot" />
@@ -3234,11 +3345,13 @@ export default function App() {
                     <div className="geo-facility-hdr">
                       <button className="chip" onClick={() => { setGeoView("geo"); setActiveSiteId(null); setActiveAssetId(null); }}>Clear selection</button>
                       <div className="geo-facility-title">{activeGeoSite.customer} · {activeGeoSite.name}</div>
-                      <div className="geo-facility-sub">{activeGeoSite.industry} · {geoSchematic?.subtitle || ""} · Assets {geoAssets.length}</div>
+                      <div className="geo-facility-sub">
+                        {activeGeoSite.industry} · {geoSchematic?.subtitle || ""} · Assets {geoAssets.length} · Native {activeGeoSite.currency || "USD"}
+                      </div>
                     </div>
                     <div className="geo-facility-main">
                       <div className="geo-schematic-pane">
-                        {activeSiteId === "alinta-hsdale" ? (
+                        {String(activeGeoSite?.industry || "").toLowerCase() === "energy" ? (
                           <WindSchematic assets={geoAssets} activeAssetId={activeAssetId} onAssetClick={setActiveAssetId} />
                         ) : (
                           <PIDSchematic
@@ -3250,7 +3363,7 @@ export default function App() {
                           />
                         )}
                       </div>
-                      <AssetSidebar assets={geoAssets} activeAssetId={activeAssetId} onAssetClick={setActiveAssetId} />
+                      <AssetSidebar assets={geoAssets} activeAssetId={activeAssetId} onAssetClick={setActiveAssetId} currency={demoCurrency} />
                       {activeGeoAsset ? (
                         <GeoGeniePanel
                           asset={activeGeoAsset}

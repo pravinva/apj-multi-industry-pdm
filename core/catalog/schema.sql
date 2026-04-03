@@ -100,6 +100,9 @@ CREATE TABLE IF NOT EXISTS ${catalog_name}.gold.pdm_predictions (
 USING DELTA;
 
 CREATE TABLE IF NOT EXISTS ${catalog_name}.gold.financial_impact_events (
+  site_id                   STRING,
+  area_id                   STRING,
+  unit_id                   STRING,
   equipment_id              STRING NOT NULL,
   prediction_timestamp      TIMESTAMP NOT NULL,
   severity                  STRING,
@@ -124,6 +127,10 @@ CREATE TABLE IF NOT EXISTS ${catalog_name}.gold.financial_impact_events (
 USING DELTA;
 
 CREATE TABLE IF NOT EXISTS ${catalog_name}.lakebase.parts_inventory (
+  site_id        STRING,
+  area_id        STRING,
+  unit_id        STRING,
+  equipment_id   STRING,
   part_number    STRING NOT NULL,
   description    STRING,
   quantity       INT NOT NULL DEFAULT 0,
@@ -139,6 +146,9 @@ USING DELTA;
 
 CREATE TABLE IF NOT EXISTS ${catalog_name}.lakebase.work_orders (
   work_order_id    STRING NOT NULL,
+  site_id          STRING,
+  area_id          STRING,
+  unit_id          STRING,
   equipment_id     STRING NOT NULL,
   failure_mode     STRING,
   priority         STRING NOT NULL,
@@ -153,6 +163,9 @@ CREATE TABLE IF NOT EXISTS ${catalog_name}.lakebase.work_orders (
 USING DELTA;
 
 CREATE TABLE IF NOT EXISTS ${catalog_name}.lakebase.maintenance_schedule (
+  site_id                    STRING,
+  area_id                    STRING,
+  unit_id                    STRING,
   equipment_id               STRING NOT NULL,
   shift_label                STRING NOT NULL,
   shift_start                TIMESTAMP NOT NULL,

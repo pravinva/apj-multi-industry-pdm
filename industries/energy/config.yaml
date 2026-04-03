@@ -1,21 +1,30 @@
 industry: energy
-display_name: "Energy - Wind, BESS, Transformer"
+display_name: Energy - Wind, BESS, Transformer
 catalog: pdm_energy
-version: "1.0.0"
-
+version: 1.0.0
 accounts:
-  primary: "Alinta Energy"
-  references: ["AGL", "Origin"]
+  primary: Alinta Energy
+  references:
+  - AGL
+  - Origin
   pipeline_monthly: 1900000
-
 isa95_hierarchy:
   levels:
-    - { key: site, display: Site, example: NorthHub }
-    - { key: area, display: Area, example: Wind Farm }
-    - { key: unit, display: Unit, example: Generation }
-    - { key: equipment, display: Equipment, example: WT-004 }
-    - { key: component, display: Component, example: Gearbox }
-
+  - key: site
+    display: Site
+    example: NorthHub
+  - key: area
+    display: Area
+    example: Wind Farm
+  - key: unit
+    display: Unit
+    example: Generation
+  - key: equipment
+    display: Equipment
+    example: WT-004
+  - key: component
+    display: Component
+    example: Gearbox
 simulator:
   tick_interval_ms: 1000
   noise_factor: 0.02
@@ -26,58 +35,541 @@ simulator:
     epsilon_pct: 0.006
     heartbeat_ms: 20000
     tag_overrides:
-      gearbox_vibration: { epsilon_abs: 0.05, heartbeat_ms: 8000 }
-      nacelle_temp: { epsilon_abs: 0.4, heartbeat_ms: 15000 }
-      rotor_speed: { epsilon_abs: 0.08, heartbeat_ms: 10000 }
-      output_power: { epsilon_abs: 0.15, heartbeat_ms: 10000 }
-      cell_temp_max: { epsilon_abs: 0.25, heartbeat_ms: 12000 }
-      cell_voltage_min: { epsilon_abs: 0.01, heartbeat_ms: 10000 }
-      soc: { epsilon_abs: 0.3, heartbeat_ms: 20000 }
-      oil_temp: { epsilon_abs: 0.35, heartbeat_ms: 15000 }
-      hydrogen_ppm: { epsilon_abs: 2.5, heartbeat_ms: 20000 }
-      load_factor: { epsilon_abs: 0.6, heartbeat_ms: 12000 }
+      gearbox_vibration:
+        epsilon_abs: 0.05
+        heartbeat_ms: 8000
+      nacelle_temp:
+        epsilon_abs: 0.4
+        heartbeat_ms: 15000
+      rotor_speed:
+        epsilon_abs: 0.08
+        heartbeat_ms: 10000
+      output_power:
+        epsilon_abs: 0.15
+        heartbeat_ms: 10000
+      cell_temp_max:
+        epsilon_abs: 0.25
+        heartbeat_ms: 12000
+      cell_voltage_min:
+        epsilon_abs: 0.01
+        heartbeat_ms: 10000
+      soc:
+        epsilon_abs: 0.3
+        heartbeat_ms: 20000
+      oil_temp:
+        epsilon_abs: 0.35
+        heartbeat_ms: 15000
+      hydrogen_ppm:
+        epsilon_abs: 2.5
+        heartbeat_ms: 20000
+      load_factor:
+        epsilon_abs: 0.6
+        heartbeat_ms: 12000
   assets:
-    - { id: WT-004, type: wind_turbine, model: "Vestas V150", site: northhub, area: wind, unit: gen, inject_fault: gearbox_degradation, fault_severity: 0.91, fault_start_offset_hours: -8 }
-    - { id: BESS-01, type: bess, model: "Tesla Megapack", site: northhub, area: storage, unit: battery, inject_fault: thermal_runaway, fault_severity: 0.71, fault_start_offset_hours: -6 }
-    - { id: TX-07, type: transformer, model: "ABB 220kV", site: northhub, area: substation, unit: transmission, fault_severity: 0.0, fault_start_offset_hours: 0 }
-    - { id: WT-011, type: wind_turbine, model: "Vestas V150", site: northhub, area: wind, unit: gen, fault_severity: 0.0, fault_start_offset_hours: 0 }
-    - { id: WT-015, type: wind_turbine, model: "Vestas V150", site: northhub, area: wind, unit: gen, fault_severity: 0.0, fault_start_offset_hours: 0 }
-    - { id: WT-018, type: wind_turbine, model: "Vestas V150", site: northhub, area: wind, unit: gen, inject_fault: gearbox_degradation, fault_severity: 0.48, fault_start_offset_hours: -4 }
-    - { id: BESS-03, type: bess, model: "Tesla Megapack", site: northhub, area: storage, unit: battery, fault_severity: 0.0, fault_start_offset_hours: 0 }
-    - { id: BESS-04, type: bess, model: "Tesla Megapack", site: northhub, area: storage, unit: battery, fault_severity: 0.0, fault_start_offset_hours: 0 }
-    - { id: TX-11, type: transformer, model: "ABB 220kV", site: northhub, area: substation, unit: transmission, fault_severity: 0.0, fault_start_offset_hours: 0 }
-    - { id: TX-15, type: transformer, model: "ABB 220kV", site: northhub, area: substation, unit: transmission, inject_fault: transformer_thermal_failure, fault_severity: 0.52, fault_start_offset_hours: -2 }
-
+  - id: WT-004
+    type: wind_turbine
+    model: Vestas V150
+    site: northhub
+    area: wind
+    unit: gen
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: BESS-01
+    type: bess
+    model: Tesla Megapack
+    site: northhub
+    area: storage
+    unit: battery
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: TX-07
+    type: transformer
+    model: ABB 220kV
+    site: jeju_grid
+    area: substation
+    unit: transmission
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: WT-011
+    type: wind_turbine
+    model: Vestas V150
+    site: northhub
+    area: wind
+    unit: gen
+    fault_severity: 0.88
+    fault_start_offset_hours: -2
+    inject_fault: gearbox_degradation
+  - id: WT-015
+    type: wind_turbine
+    model: Vestas V150
+    site: gujarat_grid
+    area: wind
+    unit: gen
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: WT-018
+    type: wind_turbine
+    model: Vestas V150
+    site: gujarat_grid
+    area: wind
+    unit: gen
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: BESS-03
+    type: bess
+    model: Tesla Megapack
+    site: gujarat_grid
+    area: storage
+    unit: battery
+    fault_severity: 0.92
+    fault_start_offset_hours: -8
+    inject_fault: gearbox_degradation
+  - id: BESS-04
+    type: bess
+    model: Tesla Megapack
+    site: vietnam_delta
+    area: storage
+    unit: battery
+    fault_severity: 0.96
+    fault_start_offset_hours: -7
+    inject_fault: thermal_runaway
+  - id: TX-11
+    type: transformer
+    model: ABB 220kV
+    site: vietnam_delta
+    area: substation
+    unit: transmission
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: TX-15
+    type: transformer
+    model: ABB 220kV
+    site: vietnam_delta
+    area: substation
+    unit: transmission
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: WT-020
+    type: wind_turbine
+    model: Vestas V150
+    site: northhub
+    area: wind
+    unit: gen
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: BESS-05
+    type: bess
+    model: Tesla Megapack
+    site: gujarat_grid
+    area: storage
+    unit: battery
+    fault_severity: 0.92
+    fault_start_offset_hours: -8
+    inject_fault: gearbox_degradation
+  - id: TX-13
+    type: transformer
+    model: ABB 220kV
+    site: vietnam_delta
+    area: substation
+    unit: transmission
+    fault_severity: 0.94
+    fault_start_offset_hours: -3
+    inject_fault: transformer_thermal_failure
+  - id: WT-021
+    type: wind_turbine
+    model: Vestas V150
+    site: jeju_grid
+    area: wind
+    unit: gen
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: BESS-06
+    type: bess
+    model: Tesla Megapack
+    site: jeju_grid
+    area: storage
+    unit: battery
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: TX-17
+    type: transformer
+    model: ABB 220kV
+    site: jeju_grid
+    area: substation
+    unit: transmission
+    fault_severity: 0.9
+    fault_start_offset_hours: -2
+    inject_fault: transformer_thermal_failure
+  - id: WT-022
+    type: wind_turbine
+    model: Vestas V150
+    site: northhub
+    area: wind
+    unit: gen
+    fault_severity: 0.58
+    fault_start_offset_hours: -11
+    inject_fault: gearbox_degradation
+  - id: WT-024
+    type: wind_turbine
+    model: Vestas V150
+    site: northhub
+    area: wind
+    unit: gen
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: BESS-07
+    type: bess
+    model: Tesla Megapack
+    site: northhub
+    area: storage
+    unit: battery
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: BESS-08
+    type: bess
+    model: Tesla Megapack
+    site: northhub
+    area: storage
+    unit: battery
+    fault_severity: 0.96
+    fault_start_offset_hours: -6
+    inject_fault: thermal_runaway
+  - id: TX-19
+    type: transformer
+    model: ABB 220kV
+    site: northhub
+    area: substation
+    unit: transmission
+    fault_severity: 0.55
+    fault_start_offset_hours: -5
+    inject_fault: transformer_thermal_failure
+  - id: TX-21
+    type: transformer
+    model: ABB 220kV
+    site: northhub
+    area: substation
+    unit: transmission
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: WT-026
+    type: wind_turbine
+    model: Vestas V150
+    site: gujarat_grid
+    area: wind
+    unit: gen
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: WT-028
+    type: wind_turbine
+    model: Vestas V150
+    site: gujarat_grid
+    area: wind
+    unit: gen
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: BESS-09
+    type: bess
+    model: Tesla Megapack
+    site: gujarat_grid
+    area: storage
+    unit: battery
+    fault_severity: 0.92
+    fault_start_offset_hours: -8
+    inject_fault: gearbox_degradation
+  - id: BESS-10
+    type: bess
+    model: Tesla Megapack
+    site: gujarat_grid
+    area: storage
+    unit: battery
+    fault_severity: 0.62
+    fault_start_offset_hours: -6
+    inject_fault: gearbox_degradation
+  - id: TX-23
+    type: transformer
+    model: ABB 220kV
+    site: gujarat_grid
+    area: substation
+    unit: transmission
+    fault_severity: 0.62
+    fault_start_offset_hours: -6
+    inject_fault: gearbox_degradation
+  - id: TX-25
+    type: transformer
+    model: ABB 220kV
+    site: gujarat_grid
+    area: substation
+    unit: transmission
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: WT-030
+    type: wind_turbine
+    model: Vestas V150
+    site: vietnam_delta
+    area: wind
+    unit: gen
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: WT-032
+    type: wind_turbine
+    model: Vestas V150
+    site: vietnam_delta
+    area: wind
+    unit: gen
+    fault_severity: 0.88
+    fault_start_offset_hours: -10
+    inject_fault: gearbox_degradation
+  - id: BESS-11
+    type: bess
+    model: Tesla Megapack
+    site: vietnam_delta
+    area: storage
+    unit: battery
+    fault_severity: 0.54
+    fault_start_offset_hours: -5
+    inject_fault: thermal_runaway
+  - id: BESS-12
+    type: bess
+    model: Tesla Megapack
+    site: vietnam_delta
+    area: storage
+    unit: battery
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: TX-27
+    type: transformer
+    model: ABB 220kV
+    site: vietnam_delta
+    area: substation
+    unit: transmission
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: TX-29
+    type: transformer
+    model: ABB 220kV
+    site: vietnam_delta
+    area: substation
+    unit: transmission
+    fault_severity: 0.56
+    fault_start_offset_hours: -4
+    inject_fault: transformer_thermal_failure
+  - id: WT-034
+    type: wind_turbine
+    model: Vestas V150
+    site: jeju_grid
+    area: wind
+    unit: gen
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: WT-036
+    type: wind_turbine
+    model: Vestas V150
+    site: jeju_grid
+    area: wind
+    unit: gen
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: BESS-13
+    type: bess
+    model: Tesla Megapack
+    site: jeju_grid
+    area: storage
+    unit: battery
+    fault_severity: 0.92
+    fault_start_offset_hours: -9
+    inject_fault: thermal_runaway
+  - id: BESS-14
+    type: bess
+    model: Tesla Megapack
+    site: jeju_grid
+    area: storage
+    unit: battery
+    fault_severity: 0.58
+    fault_start_offset_hours: -2
+    inject_fault: thermal_runaway
+  - id: TX-31
+    type: transformer
+    model: ABB 220kV
+    site: jeju_grid
+    area: substation
+    unit: transmission
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: TX-33
+    type: transformer
+    model: ABB 220kV
+    site: jeju_grid
+    area: substation
+    unit: transmission
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
 sensors:
   wind_turbine:
-    - { name: gearbox_vibration, display: Gearbox Vibration, unit: mm/s, opc_ua_node: "ns=2;s=WT.Gearbox.Vib", normal_range: [1.1, 2.8], warning_threshold: 3.8, critical_threshold: 5.2, dir: 1, failure_mode: gearbox_degradation }
-    - { name: nacelle_temp, display: Nacelle Temp, unit: C, opc_ua_node: "ns=2;s=WT.Nacelle.Temp", normal_range: [18, 42], warning_threshold: 48, critical_threshold: 54, dir: 1, failure_mode: gearbox_degradation }
-    - { name: rotor_speed, display: Rotor Speed, unit: rpm, opc_ua_node: "ns=2;s=WT.Rotor.Speed", normal_range: [8, 14], warning_threshold: null, critical_threshold: null, dir: 1, failure_mode: null }
-    - { name: output_power, display: Output Power, unit: MW, opc_ua_node: "ns=2;s=WT.Power", normal_range: [1.6, 5.8], warning_threshold: null, critical_threshold: null, dir: 1, failure_mode: null }
+  - name: gearbox_vibration
+    display: Gearbox Vibration
+    unit: mm/s
+    opc_ua_node: ns=2;s=WT.Gearbox.Vib
+    normal_range:
+    - 1.1
+    - 2.8
+    warning_threshold: 3.8
+    critical_threshold: 5.2
+    dir: 1
+    failure_mode: gearbox_degradation
+  - name: nacelle_temp
+    display: Nacelle Temp
+    unit: C
+    opc_ua_node: ns=2;s=WT.Nacelle.Temp
+    normal_range:
+    - 18
+    - 42
+    warning_threshold: 48
+    critical_threshold: 54
+    dir: 1
+    failure_mode: gearbox_degradation
+  - name: rotor_speed
+    display: Rotor Speed
+    unit: rpm
+    opc_ua_node: ns=2;s=WT.Rotor.Speed
+    normal_range:
+    - 8
+    - 14
+    warning_threshold: null
+    critical_threshold: null
+    dir: 1
+    failure_mode: null
+  - name: output_power
+    display: Output Power
+    unit: MW
+    opc_ua_node: ns=2;s=WT.Power
+    normal_range:
+    - 1.6
+    - 5.8
+    warning_threshold: null
+    critical_threshold: null
+    dir: 1
+    failure_mode: null
   bess:
-    - { name: cell_temp_max, display: Cell Temp Max, unit: C, opc_ua_node: "ns=2;s=BESS.CellTempMax", normal_range: [18, 34], warning_threshold: 40, critical_threshold: 47, dir: 1, failure_mode: thermal_runaway }
-    - { name: cell_voltage_min, display: Cell Voltage Min, unit: V, opc_ua_node: "ns=2;s=BESS.CellVoltMin", normal_range: [3.2, 3.5], warning_threshold: 3.1, critical_threshold: 2.95, dir: -1, failure_mode: thermal_runaway }
-    - { name: soc, display: State of Charge, unit: pct, opc_ua_node: "ns=2;s=BESS.SOC", normal_range: [25, 90], warning_threshold: null, critical_threshold: null, dir: 1, failure_mode: null }
+  - name: cell_temp_max
+    display: Cell Temp Max
+    unit: C
+    opc_ua_node: ns=2;s=BESS.CellTempMax
+    normal_range:
+    - 18
+    - 34
+    warning_threshold: 40
+    critical_threshold: 47
+    dir: 1
+    failure_mode: thermal_runaway
+  - name: cell_voltage_min
+    display: Cell Voltage Min
+    unit: V
+    opc_ua_node: ns=2;s=BESS.CellVoltMin
+    normal_range:
+    - 3.2
+    - 3.5
+    warning_threshold: 3.1
+    critical_threshold: 2.95
+    dir: -1
+    failure_mode: thermal_runaway
+  - name: soc
+    display: State of Charge
+    unit: pct
+    opc_ua_node: ns=2;s=BESS.SOC
+    normal_range:
+    - 25
+    - 90
+    warning_threshold: null
+    critical_threshold: null
+    dir: 1
+    failure_mode: null
   transformer:
-    - { name: oil_temp, display: Oil Temp, unit: C, opc_ua_node: "ns=2;s=TX.OilTemp", normal_range: [45, 72], warning_threshold: 80, critical_threshold: 90, dir: 1, failure_mode: transformer_thermal_failure }
-    - { name: hydrogen_ppm, display: Hydrogen PPM, unit: ppm, opc_ua_node: "ns=2;s=TX.H2", normal_range: [20, 120], warning_threshold: 180, critical_threshold: 260, dir: 1, failure_mode: transformer_thermal_failure }
-    - { name: load_factor, display: Load Factor, unit: pct, opc_ua_node: "ns=2;s=TX.LoadFactor", normal_range: [40, 85], warning_threshold: 92, critical_threshold: 98, dir: 1, failure_mode: transformer_thermal_failure }
-
+  - name: oil_temp
+    display: Oil Temp
+    unit: C
+    opc_ua_node: ns=2;s=TX.OilTemp
+    normal_range:
+    - 45
+    - 72
+    warning_threshold: 80
+    critical_threshold: 90
+    dir: 1
+    failure_mode: transformer_thermal_failure
+  - name: hydrogen_ppm
+    display: Hydrogen PPM
+    unit: ppm
+    opc_ua_node: ns=2;s=TX.H2
+    normal_range:
+    - 20
+    - 120
+    warning_threshold: 180
+    critical_threshold: 260
+    dir: 1
+    failure_mode: transformer_thermal_failure
+  - name: load_factor
+    display: Load Factor
+    unit: pct
+    opc_ua_node: ns=2;s=TX.LoadFactor
+    normal_range:
+    - 40
+    - 85
+    warning_threshold: 92
+    critical_threshold: 98
+    dir: 1
+    failure_mode: transformer_thermal_failure
 failure_modes:
-  gearbox_degradation: { display: Gearbox Degradation, sensors: [gearbox_vibration, nacelle_temp], mtbf_hours: 3200, repair_time_hours: 10.0, cost_per_event: 28000, downtime_type: planned }
-  transformer_thermal_failure: { display: Transformer Thermal Failure, sensors: [oil_temp, hydrogen_ppm, load_factor], mtbf_hours: 4000, repair_time_hours: 14.0, cost_per_event: 80000, downtime_type: unplanned }
-  thermal_runaway: { display: Battery Thermal Runaway, sensors: [cell_temp_max, cell_voltage_min], mtbf_hours: 2600, repair_time_hours: 18.0, cost_per_event: 120000, downtime_type: unplanned }
-
+  gearbox_degradation:
+    display: Gearbox Degradation
+    sensors:
+    - gearbox_vibration
+    - nacelle_temp
+    mtbf_hours: 3200
+    repair_time_hours: 10.0
+    cost_per_event: 28000
+    downtime_type: planned
+  transformer_thermal_failure:
+    display: Transformer Thermal Failure
+    sensors:
+    - oil_temp
+    - hydrogen_ppm
+    - load_factor
+    mtbf_hours: 4000
+    repair_time_hours: 14.0
+    cost_per_event: 80000
+    downtime_type: unplanned
+  thermal_runaway:
+    display: Battery Thermal Runaway
+    sensors:
+    - cell_temp_max
+    - cell_voltage_min
+    mtbf_hours: 2600
+    repair_time_hours: 18.0
+    cost_per_event: 120000
+    downtime_type: unplanned
 features:
-  - { name: mean_15m, formula: mean, window: "15 minutes", apply_to: all }
-  - { name: stddev_15m, formula: stddev, window: "15 minutes", apply_to: all }
-  - { name: slope_1h, formula: slope, window: "1 hour", apply_to: all }
-  - { name: zscore_30d, formula: zscore, window: "30 days", apply_to: all }
-  - { name: cumsum_24h, formula: cumsum, window: "1 day", apply_to: all }
-
+- name: mean_15m
+  formula: mean
+  window: 15 minutes
+  apply_to: all
+- name: stddev_15m
+  formula: stddev
+  window: 15 minutes
+  apply_to: all
+- name: slope_1h
+  formula: slope
+  window: 1 hour
+  apply_to: all
+- name: zscore_30d
+  formula: zscore
+  window: 30 days
+  apply_to: all
+- name: cumsum_24h
+  formula: cumsum
+  window: 1 day
+  apply_to: all
 agent:
-  persona: "Grid reliability maintenance assistant"
-  system_prompt_file: "industries/energy/system_prompt.txt"
+  persona: Grid reliability maintenance assistant
+  system_prompt_file: industries/energy/system_prompt.txt
   terminology:
     asset: asset
     asset_plural: assets
@@ -87,10 +579,21 @@ agent:
     cost_currency: AUD
     cost_event_label: outage cost
     site_timezone: AEST
-
 dashboard:
   primary_kpi: fleet_health_score
   kpis:
-    - { label: Grid reliability, field: health_score_pct, format: percent_1dp, good_direction: up, good_threshold: 90 }
-    - { label: Critical assets, field: critical_assets, format: integer, good_direction: down, good_threshold: 1 }
-    - { label: Avoided outage cost, field: avoided_cost, format: currency, good_direction: up, good_threshold: 70000 }
+  - label: Grid reliability
+    field: health_score_pct
+    format: percent_1dp
+    good_direction: up
+    good_threshold: 90
+  - label: Critical assets
+    field: critical_assets
+    format: integer
+    good_direction: down
+    good_threshold: 1
+  - label: Avoided outage cost
+    field: avoided_cost
+    format: currency
+    good_direction: up
+    good_threshold: 70000

@@ -88,6 +88,26 @@ def _runtime_params() -> tuple[list[str], int, str, bool, bool, bool]:
 
 INDUSTRIES, HISTORY_DAYS, GRANT_PRINCIPAL, TRIGGER_JOBS, RESET_EXISTING, SEED_DEMO_PLANNING_CASE = _runtime_params()
 
+SITE_CURRENCY_OVERRIDES = {
+    "gangwon_mine": "KRW",
+    "seoul_hub": "KRW",
+    "ulsan_plant": "KRW",
+    "giheung_fab": "KRW",
+    "jeju_grid": "KRW",
+    "nagoya": "JPY",
+    "naka_fab": "JPY",
+    "odisha_hub": "INR",
+    "chennai_hub": "INR",
+    "pune_plant": "INR",
+    "bengaluru_fab": "INR",
+    "gujarat_grid": "INR",
+    "kalimantan_hub": "SGD",
+    "singapore_hub": "SGD",
+    "bangkok_plant": "SGD",
+    "penang_fab": "SGD",
+    "vietnam_delta": "SGD",
+}
+
 
 def _safe(v: str) -> str:
     return v.replace("`", "")
@@ -204,6 +224,36 @@ def _create_finance_table(catalog: str) -> None:
         ) USING DELTA
         """
     )
+    _run_sql(
+        f"""
+        CREATE TABLE IF NOT EXISTS {catalog}.finance.pm_site_financial_daily (
+          ds DATE,
+          industry STRING,
+          site_id STRING,
+          currency STRING,
+          avoided_cost DOUBLE,
+          intervention_cost DOUBLE,
+          net_benefit DOUBLE,
+          critical_assets INT,
+          warning_assets INT,
+          updated_at TIMESTAMP
+        ) USING DELTA
+        """
+    )
+
+
+def _ensure_lakebase_columns(catalog: str) -> None:
+    alter_stmts = [
+        f"ALTER TABLE {catalog}.lakebase.maintenance_schedule ADD COLUMNS (site_id STRING, area_id STRING, unit_id STRING)",
+        f"ALTER TABLE {catalog}.lakebase.parts_inventory ADD COLUMNS (site_id STRING, area_id STRING, unit_id STRING, equipment_id STRING)",
+        f"ALTER TABLE {catalog}.lakebase.work_orders ADD COLUMNS (site_id STRING, area_id STRING, unit_id STRING)",
+    ]
+    for stmt in alter_stmts:
+        try:
+            _run_sql(stmt)
+        except Exception:
+            # Ignore if columns already exist.
+            pass
 
 
 def _grant_access(catalog: str) -> None:
@@ -225,6 +275,7 @@ def _grant_access(catalog: str) -> None:
         "lakebase.maintenance_schedule",
         "bronze.asset_metadata",
         "finance.pm_financial_daily",
+        "finance.pm_site_financial_daily",
         "finance.pm_demo_planning_case",
         "finance.pm_bootstrap_runs",
     ]:
@@ -248,6 +299,7 @@ def _truncate_seed_targets(catalog: str) -> None:
         "lakebase.maintenance_schedule",
         "bronze.asset_metadata",
         "finance.pm_financial_daily",
+        "finance.pm_site_financial_daily",
         "finance.pm_demo_planning_case",
     ]:
         try:
@@ -266,6 +318,92 @@ def _seed_json_table(catalog: str, table: str, rows: list[dict[str, Any]]) -> No
     _run_sql(
         f"INSERT INTO {catalog}.{table} ({', '.join(cols)}) VALUES {', '.join(values)}"
     )
+
+
+def _site_currency(site_id: str, default_currency: str) -> str:
+    return SITE_CURRENCY_OVERRIDES.get(site_id, default_currency)
+
+
+def _build_parts_inventory(cfg: dict[str, Any]) -> list[dict[str, Any]]:
+    cur = str(cfg.get("agent", {}).get("terminology", {}).get("cost_currency", "USD"))
+    rows: list[dict[str, Any]] = []
+    for a in cfg.get("simulator", {}).get("assets", []):
+        aid = str(a.get("id", ""))
+        site_id = str(a.get("site", ""))
+        area_id = str(a.get("area", ""))
+        unit_id = str(a.get("unit", ""))
+        if not aid:
+            continue
+        site_cur = _site_currency(site_id, cur)
+        rows.append(
+            {
+                "site_id": site_id,
+                "area_id": area_id,
+                "unit_id": unit_id,
+                "equipment_id": aid,
+                "part_number": f"{aid}-KIT-A",
+                "description": f"{aid} maintenance kit",
+                "quantity": 2,
+                "location": area_id or "main",
+                "depot": site_id or "central",
+                "unit_cost": 1200.0,
+                "currency": site_cur,
+                "reorder_point": 1,
+                "lead_time_days": 7,
+                "last_updated": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+            }
+        )
+        rows.append(
+            {
+                "site_id": site_id,
+                "area_id": area_id,
+                "unit_id": unit_id,
+                "equipment_id": aid,
+                "part_number": f"{aid}-SPARE-B",
+                "description": f"{aid} critical spare",
+                "quantity": 1,
+                "location": area_id or "main",
+                "depot": site_id or "central",
+                "unit_cost": 2200.0,
+                "currency": site_cur,
+                "reorder_point": 1,
+                "lead_time_days": 14,
+                "last_updated": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+            }
+        )
+    return rows
+
+
+def _build_maintenance_schedule(cfg: dict[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    shifts = [("Day Shift", 8), ("Night Shift", 20)]
+    for i, a in enumerate(cfg.get("simulator", {}).get("assets", [])):
+        sev = float(a.get("fault_severity", 0.0) or 0.0)
+        shift_label, shift_hour = shifts[i % len(shifts)]
+        shift_start = now.replace(hour=shift_hour)
+        if shift_start < now:
+            shift_start = shift_start + timedelta(days=1)
+        shift_end = shift_start + timedelta(hours=12)
+        has_window = sev >= 0.5
+        window_start = shift_start + timedelta(hours=2) if has_window else None
+        window_end = (window_start + timedelta(hours=2)) if has_window else None
+        rows.append(
+            {
+                "site_id": str(a.get("site", "")),
+                "area_id": str(a.get("area", "")),
+                "unit_id": str(a.get("unit", "")),
+                "equipment_id": str(a.get("id", "")),
+                "shift_label": shift_label,
+                "shift_start": shift_start.strftime("%Y-%m-%d %H:%M:%S"),
+                "shift_end": shift_end.strftime("%Y-%m-%d %H:%M:%S"),
+                "planned_downtime_hours": 2.0 if has_window else 0.5,
+                "maintenance_window_start": window_start.strftime("%Y-%m-%d %H:%M:%S") if window_start else None,
+                "maintenance_window_end": window_end.strftime("%Y-%m-%d %H:%M:%S") if window_end else None,
+                "crew_available": True if has_window else (i % 3 != 0),
+            }
+        )
+    return rows
 
 
 def _seed_asset_metadata(industry: str, cfg: dict[str, Any]) -> None:
@@ -354,6 +492,51 @@ def _seed_finance(industry: str, cfg: dict[str, Any], days: int) -> None:
     catalog = cfg["catalog"]
     rows = _finance_rows(industry, days)
     _seed_json_table(catalog, "finance.pm_financial_daily", rows)
+
+
+def _seed_site_finance(industry: str, cfg: dict[str, Any], days: int) -> None:
+    catalog = cfg["catalog"]
+    profile = FINANCE_PROFILES.get(industry, FINANCE_PROFILES["mining"])
+    default_cur = str(profile["currency"])
+    assets = cfg.get("simulator", {}).get("assets", [])
+    site_stats: dict[str, dict[str, int]] = {}
+    for a in assets:
+        site = str(a.get("site", ""))
+        sev = float(a.get("fault_severity", 0.0) or 0.0)
+        s = site_stats.setdefault(site, {"critical": 0, "warning": 0, "total": 0})
+        s["total"] += 1
+        if sev >= 0.8:
+            s["critical"] += 1
+        elif sev >= 0.5:
+            s["warning"] += 1
+    end = datetime.now(timezone.utc).date()
+    start = end - timedelta(days=max(30, days))
+    rng = random.Random(f"{industry}:site-finance:v2")
+    rows: list[dict[str, Any]] = []
+    day = start
+    while day <= end:
+        for site_id, st in site_stats.items():
+            critical = st["critical"]
+            warning = st["warning"]
+            risk_weight = (critical * 1.0) + (warning * 0.45)
+            avoided = max(0.0, rng.uniform(900.0, 2200.0) * (1.0 + risk_weight))
+            intervention = max(0.0, avoided * rng.uniform(0.22, 0.45))
+            rows.append(
+                {
+                    "ds": day.isoformat(),
+                    "industry": industry,
+                    "site_id": site_id,
+                    "currency": _site_currency(site_id, default_cur),
+                    "avoided_cost": round(avoided, 2),
+                    "intervention_cost": round(intervention, 2),
+                    "net_benefit": round(avoided - intervention, 2),
+                    "critical_assets": critical,
+                    "warning_assets": warning,
+                    "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+                }
+            )
+        day += timedelta(days=1)
+    _seed_json_table(catalog, "finance.pm_site_financial_daily", rows)
 
 
 def _seed_demo_planning_case(industry: str, cfg: dict[str, Any]) -> None:
@@ -481,15 +664,17 @@ def bootstrap_industry(industry: str) -> None:
         _run_sql(f"CREATE SCHEMA IF NOT EXISTS {catalog}.{sch}")
 
     _render_schema_sql(catalog)
+    _ensure_lakebase_columns(catalog)
     _create_finance_table(catalog)
     if RESET_EXISTING:
         _truncate_seed_targets(catalog)
 
-    _seed_json_table(catalog, "lakebase.parts_inventory", _load_json(seed_root / "parts_inventory.json"))
-    _seed_json_table(catalog, "lakebase.maintenance_schedule", _load_json(seed_root / "maintenance_schedule.json"))
+    _seed_json_table(catalog, "lakebase.parts_inventory", _build_parts_inventory(cfg))
+    _seed_json_table(catalog, "lakebase.maintenance_schedule", _build_maintenance_schedule(cfg))
     _seed_asset_metadata(industry, cfg)
     _seed_feature_vectors(cfg)
     _seed_finance(industry, cfg, HISTORY_DAYS)
+    _seed_site_finance(industry, cfg, HISTORY_DAYS)
     if SEED_DEMO_PLANNING_CASE:
         _seed_demo_planning_case(industry, cfg)
     _grant_access(catalog)

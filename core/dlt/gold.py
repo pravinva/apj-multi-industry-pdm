@@ -6,6 +6,22 @@ INDUSTRY = spark.conf.get("industry", "mining")
 catalog = spark.conf.get("catalog_name", f"pdm_{INDUSTRY}")
 
 
+def _fqn_table_exists(fqn: str) -> bool:
+    parts = [p.strip() for p in (fqn or "").split(".") if p.strip()]
+    if len(parts) != 3:
+        return False
+    cat, schema, table = parts
+    try:
+        return (
+            spark.sql(f"SHOW TABLES IN `{cat}`.`{schema}` LIKE '{table}'")
+            .limit(1)
+            .count()
+            > 0
+        )
+    except Exception:
+        return False
+
+
 @dlt.table(
     name="feature_vectors",
     comment="Gold: fixed-schema feature vectors per asset per 15-min window",
@@ -66,7 +82,7 @@ def maintenance_alerts():
 )
 def financial_impact_events():
     predictions = dlt.read("pdm_predictions").where(F.col("anomaly_score").isNotNull())
-    data_source = (
+    latest_context = (
         dlt.read("ot_pi_aligned")
         .withColumn(
             "rn",
@@ -75,12 +91,12 @@ def financial_impact_events():
             ),
         )
         .where(F.col("rn") == 1)
-        .select("equipment_id", "data_source")
+        .select("equipment_id", "site_id", "area_id", "unit_id", "data_source")
     )
 
     # Join against planning windows when present.
     maint_fqn = f"{catalog}.lakebase.maintenance_schedule"
-    if spark.catalog.tableExists(maint_fqn):
+    if _fqn_table_exists(maint_fqn):
         maint = spark.table(maint_fqn).select(
             "equipment_id",
             "shift_label",
@@ -114,7 +130,7 @@ def financial_impact_events():
 
     base = (
         predictions.alias("p")
-        .join(data_source.alias("ds"), on="equipment_id", how="left")
+        .join(latest_context.alias("ctx"), on="equipment_id", how="left")
         .join(maint_ranked.alias("m"), on="equipment_id", how="left")
         .withColumn("anomaly_score", F.col("p.anomaly_score"))
         .withColumn("rul_hours", F.coalesce(F.col("p.rul_hours"), F.lit(24.0)))
@@ -160,9 +176,12 @@ def financial_impact_events():
         .withColumn("source_table", F.lit(f"{catalog}.gold.financial_impact_events"))
         .withColumn(
             "data_source",
-            F.coalesce(F.col("ds.data_source"), F.lit("UNKNOWN")),
+            F.coalesce(F.col("ctx.data_source"), F.lit("UNKNOWN")),
         )
         .select(
+            F.col("ctx.site_id").alias("site_id"),
+            F.col("ctx.area_id").alias("area_id"),
+            F.col("ctx.unit_id").alias("unit_id"),
             "equipment_id",
             F.col("prediction_timestamp").alias("prediction_timestamp"),
             "severity",

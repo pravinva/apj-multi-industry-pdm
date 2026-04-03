@@ -1,21 +1,30 @@
 industry: semiconductor
-display_name: "Semiconductor - Etch and Litho"
+display_name: Semiconductor - Etch and Litho
 catalog: pdm_semiconductor
-version: "1.0.0"
-
+version: 1.0.0
 accounts:
-  primary: "Renesas"
-  references: ["Kioxia", "Sony Semiconductor"]
+  primary: Renesas
+  references:
+  - Kioxia
+  - Sony Semiconductor
   pipeline_monthly: 2400000
-
 isa95_hierarchy:
   levels:
-    - { key: site, display: Fab, example: Naka }
-    - { key: area, display: Bay, example: Bay 3 }
-    - { key: unit, display: Tool Class, example: Etch }
-    - { key: equipment, display: Equipment, example: ET-04 }
-    - { key: component, display: Chamber, example: Chamber A }
-
+  - key: site
+    display: Fab
+    example: Naka
+  - key: area
+    display: Bay
+    example: Bay 3
+  - key: unit
+    display: Tool Class
+    example: Etch
+  - key: equipment
+    display: Equipment
+    example: ET-04
+  - key: component
+    display: Chamber
+    example: Chamber A
 simulator:
   tick_interval_ms: 700
   noise_factor: 0.015
@@ -26,58 +35,538 @@ simulator:
     epsilon_pct: 0.004
     heartbeat_ms: 8000
     tag_overrides:
-      particle_count: { epsilon_abs: 0.25, heartbeat_ms: 6000 }
-      chamber_pressure: { epsilon_abs: 0.6, heartbeat_ms: 8000 }
-      rf_power: { epsilon_abs: 8.0, heartbeat_ms: 8000 }
-      overlay_error_nm: { epsilon_abs: 0.04, heartbeat_ms: 5000 }
-      focus_drift_nm: { epsilon_abs: 0.03, heartbeat_ms: 5000 }
-      lens_temp: { epsilon_abs: 0.15, heartbeat_ms: 8000 }
-      pad_wear_index: { epsilon_abs: 0.01, heartbeat_ms: 10000 }
-      laser_power: { epsilon_abs: 0.6, heartbeat_ms: 8000 }
+      particle_count:
+        epsilon_abs: 0.25
+        heartbeat_ms: 6000
+      chamber_pressure:
+        epsilon_abs: 0.6
+        heartbeat_ms: 8000
+      rf_power:
+        epsilon_abs: 8.0
+        heartbeat_ms: 8000
+      overlay_error_nm:
+        epsilon_abs: 0.04
+        heartbeat_ms: 5000
+      focus_drift_nm:
+        epsilon_abs: 0.03
+        heartbeat_ms: 5000
+      lens_temp:
+        epsilon_abs: 0.15
+        heartbeat_ms: 8000
+      pad_wear_index:
+        epsilon_abs: 0.01
+        heartbeat_ms: 10000
+      laser_power:
+        epsilon_abs: 0.6
+        heartbeat_ms: 8000
   assets:
-    - { id: ET-04, type: etch_tool, model: "Lam Exelanx", site: naka_fab, area: bay_3, unit: etch, inject_fault: chamber_contamination, fault_severity: 0.91, fault_start_offset_hours: -5 }
-    - { id: LT-11, type: stepper, model: "ASML PAS 5500", site: naka_fab, area: bay_5, unit: lithography, inject_fault: overlay_drift, fault_severity: 0.68, fault_start_offset_hours: -8 }
-    - { id: CMP-07, type: cmp_tool, model: "Ebara Frex", site: naka_fab, area: bay_2, unit: polish, fault_severity: 0.0, fault_start_offset_hours: 0 }
-    - { id: IN-02, type: inspection_tool, model: "KLA 39xx", site: naka_fab, area: bay_6, unit: metrology, fault_severity: 0.0, fault_start_offset_hours: 0 }
-    - { id: ET-09, type: etch_tool, model: "Lam Exelanx", site: naka_fab, area: bay_4, unit: etch, fault_severity: 0.0, fault_start_offset_hours: 0 }
-    - { id: ET-13, type: etch_tool, model: "Lam Exelanx", site: naka_fab, area: bay_1, unit: etch, inject_fault: recipe_drift, fault_severity: 0.45, fault_start_offset_hours: -3 }
-    - { id: LT-18, type: stepper, model: "ASML PAS 5500", site: naka_fab, area: bay_7, unit: lithography, fault_severity: 0.0, fault_start_offset_hours: 0 }
-    - { id: LT-21, type: stepper, model: "ASML PAS 5500", site: naka_fab, area: bay_8, unit: lithography, fault_severity: 0.0, fault_start_offset_hours: 0 }
-    - { id: CMP-14, type: cmp_tool, model: "Ebara Frex", site: naka_fab, area: bay_2, unit: polish, fault_severity: 0.0, fault_start_offset_hours: 0 }
-    - { id: IN-10, type: inspection_tool, model: "KLA 39xx", site: naka_fab, area: bay_9, unit: metrology, fault_severity: 0.0, fault_start_offset_hours: 0 }
-
+  - id: ET-04
+    type: etch_tool
+    model: Lam Exelanx
+    site: naka_fab
+    area: bay_3
+    unit: etch
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: LT-11
+    type: stepper
+    model: ASML PAS 5500
+    site: naka_fab
+    area: bay_5
+    unit: lithography
+    fault_severity: 0.56
+    fault_start_offset_hours: -3
+    inject_fault: overlay_drift
+  - id: CMP-07
+    type: cmp_tool
+    model: Ebara Frex
+    site: naka_fab
+    area: bay_2
+    unit: polish
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: IN-02
+    type: inspection_tool
+    model: KLA 39xx
+    site: giheung_fab
+    area: bay_6
+    unit: metrology
+    fault_severity: 0.57
+    fault_start_offset_hours: -7
+    inject_fault: laser_degradation
+  - id: ET-09
+    type: etch_tool
+    model: Lam Exelanx
+    site: bengaluru_fab
+    area: bay_4
+    unit: etch
+    fault_severity: 0.92
+    fault_start_offset_hours: -8
+    inject_fault: chamber_contamination
+  - id: ET-13
+    type: etch_tool
+    model: Lam Exelanx
+    site: bengaluru_fab
+    area: bay_1
+    unit: etch
+    fault_severity: 0.92
+    fault_start_offset_hours: -8
+    inject_fault: chamber_contamination
+  - id: LT-18
+    type: stepper
+    model: ASML PAS 5500
+    site: bengaluru_fab
+    area: bay_7
+    unit: lithography
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: LT-21
+    type: stepper
+    model: ASML PAS 5500
+    site: penang_fab
+    area: bay_8
+    unit: lithography
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: CMP-14
+    type: cmp_tool
+    model: Ebara Frex
+    site: penang_fab
+    area: bay_2
+    unit: polish
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: IN-10
+    type: inspection_tool
+    model: KLA 39xx
+    site: penang_fab
+    area: bay_9
+    unit: metrology
+    fault_severity: 0.9
+    fault_start_offset_hours: -9
+    inject_fault: laser_degradation
+  - id: CMP-16
+    type: cmp_tool
+    model: Ebara Frex
+    site: naka_fab
+    area: bay_4
+    unit: polish
+    fault_severity: 0.51
+    fault_start_offset_hours: -12
+    inject_fault: pad_wear
+  - id: ET-15
+    type: etch_tool
+    model: Lam Exelanx
+    site: bengaluru_fab
+    area: bay_5
+    unit: etch
+    fault_severity: 0.62
+    fault_start_offset_hours: -6
+    inject_fault: chamber_contamination
+  - id: LT-26
+    type: stepper
+    model: ASML PAS 5500
+    site: penang_fab
+    area: bay_10
+    unit: lithography
+    fault_severity: 0.58
+    fault_start_offset_hours: -6
+    inject_fault: overlay_drift
+  - id: ET-17
+    type: etch_tool
+    model: Lam Exelanx
+    site: giheung_fab
+    area: bay_2
+    unit: etch
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: LT-24
+    type: stepper
+    model: ASML PAS 5500
+    site: giheung_fab
+    area: bay_7
+    unit: lithography
+    fault_severity: 0.94
+    fault_start_offset_hours: -5
+    inject_fault: focus_drift
+  - id: IN-12
+    type: inspection_tool
+    model: KLA 39xx
+    site: giheung_fab
+    area: bay_8
+    unit: metrology
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: ET-19
+    type: etch_tool
+    model: Lam Exelanx
+    site: naka_fab
+    area: bay_4
+    unit: etch
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: ET-21
+    type: etch_tool
+    model: Lam Exelanx
+    site: naka_fab
+    area: bay_5
+    unit: etch
+    fault_severity: 0.9
+    fault_start_offset_hours: -7
+    inject_fault: chamber_contamination
+  - id: LT-28
+    type: stepper
+    model: ASML PAS 5500
+    site: naka_fab
+    area: bay_6
+    unit: lithography
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: CMP-18
+    type: cmp_tool
+    model: Ebara Frex
+    site: naka_fab
+    area: bay_3
+    unit: polish
+    fault_severity: 0.93
+    fault_start_offset_hours: -9
+    inject_fault: pad_wear
+  - id: IN-14
+    type: inspection_tool
+    model: KLA 39xx
+    site: naka_fab
+    area: bay_9
+    unit: metrology
+    fault_severity: 0.86
+    fault_start_offset_hours: -11
+    inject_fault: laser_degradation
+  - id: CMP-20
+    type: cmp_tool
+    model: Ebara Frex
+    site: naka_fab
+    area: bay_10
+    unit: polish
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: ET-23
+    type: etch_tool
+    model: Lam Exelanx
+    site: bengaluru_fab
+    area: bay_3
+    unit: etch
+    fault_severity: 0.62
+    fault_start_offset_hours: -6
+    inject_fault: chamber_contamination
+  - id: ET-25
+    type: etch_tool
+    model: Lam Exelanx
+    site: bengaluru_fab
+    area: bay_6
+    unit: etch
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: LT-30
+    type: stepper
+    model: ASML PAS 5500
+    site: bengaluru_fab
+    area: bay_8
+    unit: lithography
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: CMP-22
+    type: cmp_tool
+    model: Ebara Frex
+    site: bengaluru_fab
+    area: bay_2
+    unit: polish
+    fault_severity: 0.92
+    fault_start_offset_hours: -8
+    inject_fault: chamber_contamination
+  - id: IN-16
+    type: inspection_tool
+    model: KLA 39xx
+    site: bengaluru_fab
+    area: bay_9
+    unit: metrology
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: LT-32
+    type: stepper
+    model: ASML PAS 5500
+    site: bengaluru_fab
+    area: bay_10
+    unit: lithography
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: ET-27
+    type: etch_tool
+    model: Lam Exelanx
+    site: penang_fab
+    area: bay_3
+    unit: etch
+    fault_severity: 0.93
+    fault_start_offset_hours: -4
+    inject_fault: chamber_contamination
+  - id: ET-29
+    type: etch_tool
+    model: Lam Exelanx
+    site: penang_fab
+    area: bay_4
+    unit: etch
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: LT-34
+    type: stepper
+    model: ASML PAS 5500
+    site: penang_fab
+    area: bay_11
+    unit: lithography
+    fault_severity: 0.54
+    fault_start_offset_hours: -12
+    inject_fault: focus_drift
+  - id: CMP-24
+    type: cmp_tool
+    model: Ebara Frex
+    site: penang_fab
+    area: bay_5
+    unit: polish
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: IN-18
+    type: inspection_tool
+    model: KLA 39xx
+    site: penang_fab
+    area: bay_10
+    unit: metrology
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: IN-20
+    type: inspection_tool
+    model: KLA 39xx
+    site: penang_fab
+    area: bay_12
+    unit: metrology
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: ET-31
+    type: etch_tool
+    model: Lam Exelanx
+    site: giheung_fab
+    area: bay_3
+    unit: etch
+    fault_severity: 0.89
+    fault_start_offset_hours: -8
+    inject_fault: chamber_contamination
+  - id: ET-33
+    type: etch_tool
+    model: Lam Exelanx
+    site: giheung_fab
+    area: bay_4
+    unit: etch
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: LT-36
+    type: stepper
+    model: ASML PAS 5500
+    site: giheung_fab
+    area: bay_9
+    unit: lithography
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: CMP-26
+    type: cmp_tool
+    model: Ebara Frex
+    site: giheung_fab
+    area: bay_5
+    unit: polish
+    fault_severity: 0.0
+    fault_start_offset_hours: 0
+  - id: IN-22
+    type: inspection_tool
+    model: KLA 39xx
+    site: giheung_fab
+    area: bay_10
+    unit: metrology
+    fault_severity: 0.91
+    fault_start_offset_hours: -14
+    inject_fault: laser_degradation
+  - id: CMP-28
+    type: cmp_tool
+    model: Ebara Frex
+    site: giheung_fab
+    area: bay_11
+    unit: polish
+    fault_severity: 0.54
+    fault_start_offset_hours: -2
+    inject_fault: pad_wear
 sensors:
   etch_tool:
-    - { name: particle_count, display: Particle Count, unit: "/cm2", opc_ua_node: "ns=2;s=Etch.ParticleCount", normal_range: [2, 8], warning_threshold: 15, critical_threshold: 25, dir: 1, failure_mode: chamber_contamination }
-    - { name: chamber_pressure, display: Chamber Pressure, unit: mTorr, opc_ua_node: "ns=2;s=Etch.ChamberPressure", normal_range: [35, 55], warning_threshold: 62, critical_threshold: 70, dir: 1, failure_mode: chamber_contamination }
-    - { name: rf_power, display: RF Power, unit: W, opc_ua_node: "ns=2;s=Etch.RFPower", normal_range: [600, 920], warning_threshold: 980, critical_threshold: 1100, dir: 1, failure_mode: recipe_drift }
+  - name: particle_count
+    display: Particle Count
+    unit: /cm2
+    opc_ua_node: ns=2;s=Etch.ParticleCount
+    normal_range:
+    - 2
+    - 8
+    warning_threshold: 15
+    critical_threshold: 25
+    dir: 1
+    failure_mode: chamber_contamination
+  - name: chamber_pressure
+    display: Chamber Pressure
+    unit: mTorr
+    opc_ua_node: ns=2;s=Etch.ChamberPressure
+    normal_range:
+    - 35
+    - 55
+    warning_threshold: 62
+    critical_threshold: 70
+    dir: 1
+    failure_mode: chamber_contamination
+  - name: rf_power
+    display: RF Power
+    unit: W
+    opc_ua_node: ns=2;s=Etch.RFPower
+    normal_range:
+    - 600
+    - 920
+    warning_threshold: 980
+    critical_threshold: 1100
+    dir: 1
+    failure_mode: recipe_drift
   stepper:
-    - { name: overlay_error_nm, display: Overlay Error, unit: nm, opc_ua_node: "ns=2;s=Stepper.Overlay", normal_range: [1.2, 2.4], warning_threshold: 3.0, critical_threshold: 3.8, dir: 1, failure_mode: overlay_drift }
-    - { name: focus_drift_nm, display: Focus Drift, unit: nm, opc_ua_node: "ns=2;s=Stepper.FocusDrift", normal_range: [0.6, 1.8], warning_threshold: 2.3, critical_threshold: 2.9, dir: 1, failure_mode: focus_drift }
-    - { name: lens_temp, display: Lens Temp, unit: C, opc_ua_node: "ns=2;s=Stepper.LensTemp", normal_range: [19, 24], warning_threshold: 26, critical_threshold: 28, dir: 1, failure_mode: overlay_drift }
+  - name: overlay_error_nm
+    display: Overlay Error
+    unit: nm
+    opc_ua_node: ns=2;s=Stepper.Overlay
+    normal_range:
+    - 1.2
+    - 2.4
+    warning_threshold: 3.0
+    critical_threshold: 3.8
+    dir: 1
+    failure_mode: overlay_drift
+  - name: focus_drift_nm
+    display: Focus Drift
+    unit: nm
+    opc_ua_node: ns=2;s=Stepper.FocusDrift
+    normal_range:
+    - 0.6
+    - 1.8
+    warning_threshold: 2.3
+    critical_threshold: 2.9
+    dir: 1
+    failure_mode: focus_drift
+  - name: lens_temp
+    display: Lens Temp
+    unit: C
+    opc_ua_node: ns=2;s=Stepper.LensTemp
+    normal_range:
+    - 19
+    - 24
+    warning_threshold: 26
+    critical_threshold: 28
+    dir: 1
+    failure_mode: overlay_drift
   cmp_tool:
-    - { name: pad_wear_index, display: Pad Wear Index, unit: idx, opc_ua_node: "ns=2;s=CMP.PadWear", normal_range: [0.1, 0.35], warning_threshold: 0.5, critical_threshold: 0.7, dir: 1, failure_mode: pad_wear }
+  - name: pad_wear_index
+    display: Pad Wear Index
+    unit: idx
+    opc_ua_node: ns=2;s=CMP.PadWear
+    normal_range:
+    - 0.1
+    - 0.35
+    warning_threshold: 0.5
+    critical_threshold: 0.7
+    dir: 1
+    failure_mode: pad_wear
   inspection_tool:
-    - { name: laser_power, display: Laser Power, unit: mW, opc_ua_node: "ns=2;s=Inspect.LaserPower", normal_range: [75, 95], warning_threshold: 70, critical_threshold: 60, dir: -1, failure_mode: laser_degradation }
-
+  - name: laser_power
+    display: Laser Power
+    unit: mW
+    opc_ua_node: ns=2;s=Inspect.LaserPower
+    normal_range:
+    - 75
+    - 95
+    warning_threshold: 70
+    critical_threshold: 60
+    dir: -1
+    failure_mode: laser_degradation
 failure_modes:
-  chamber_contamination: { display: Chamber Contamination, sensors: [particle_count, chamber_pressure], mtbf_hours: 1300, repair_time_hours: 7.5, cost_per_event: 120000, downtime_type: unplanned }
-  overlay_drift: { display: Overlay Drift, sensors: [overlay_error_nm, lens_temp], mtbf_hours: 1600, repair_time_hours: 5.0, cost_per_event: 90000, downtime_type: planned }
-  focus_drift: { display: Focus Drift, sensors: [focus_drift_nm], mtbf_hours: 1700, repair_time_hours: 4.5, cost_per_event: 70000, downtime_type: planned }
-  recipe_drift: { display: Recipe Drift, sensors: [rf_power], mtbf_hours: 1400, repair_time_hours: 3.0, cost_per_event: 60000, downtime_type: planned }
-  pad_wear: { display: Pad Wear, sensors: [pad_wear_index], mtbf_hours: 1100, repair_time_hours: 2.0, cost_per_event: 30000, downtime_type: planned }
-  laser_degradation: { display: Laser Degradation, sensors: [laser_power], mtbf_hours: 2000, repair_time_hours: 6.0, cost_per_event: 50000, downtime_type: planned }
-
+  chamber_contamination:
+    display: Chamber Contamination
+    sensors:
+    - particle_count
+    - chamber_pressure
+    mtbf_hours: 1300
+    repair_time_hours: 7.5
+    cost_per_event: 120000
+    downtime_type: unplanned
+  overlay_drift:
+    display: Overlay Drift
+    sensors:
+    - overlay_error_nm
+    - lens_temp
+    mtbf_hours: 1600
+    repair_time_hours: 5.0
+    cost_per_event: 90000
+    downtime_type: planned
+  focus_drift:
+    display: Focus Drift
+    sensors:
+    - focus_drift_nm
+    mtbf_hours: 1700
+    repair_time_hours: 4.5
+    cost_per_event: 70000
+    downtime_type: planned
+  recipe_drift:
+    display: Recipe Drift
+    sensors:
+    - rf_power
+    mtbf_hours: 1400
+    repair_time_hours: 3.0
+    cost_per_event: 60000
+    downtime_type: planned
+  pad_wear:
+    display: Pad Wear
+    sensors:
+    - pad_wear_index
+    mtbf_hours: 1100
+    repair_time_hours: 2.0
+    cost_per_event: 30000
+    downtime_type: planned
+  laser_degradation:
+    display: Laser Degradation
+    sensors:
+    - laser_power
+    mtbf_hours: 2000
+    repair_time_hours: 6.0
+    cost_per_event: 50000
+    downtime_type: planned
 features:
-  - { name: mean_15m, formula: mean, window: "15 minutes", apply_to: all }
-  - { name: stddev_15m, formula: stddev, window: "15 minutes", apply_to: all }
-  - { name: slope_1h, formula: slope, window: "1 hour", apply_to: all }
-  - { name: zscore_30d, formula: zscore, window: "30 days", apply_to: all }
-  - { name: cumsum_24h, formula: cumsum, window: "1 day", apply_to: all }
-
+- name: mean_15m
+  formula: mean
+  window: 15 minutes
+  apply_to: all
+- name: stddev_15m
+  formula: stddev
+  window: 15 minutes
+  apply_to: all
+- name: slope_1h
+  formula: slope
+  window: 1 hour
+  apply_to: all
+- name: zscore_30d
+  formula: zscore
+  window: 30 days
+  apply_to: all
+- name: cumsum_24h
+  formula: cumsum
+  window: 1 day
+  apply_to: all
 agent:
-  persona: "Fab maintenance copilot"
-  system_prompt_file: "industries/semiconductor/system_prompt.txt"
+  persona: Fab maintenance copilot
+  system_prompt_file: industries/semiconductor/system_prompt.txt
   terminology:
     asset: tool
     asset_plural: tools
@@ -87,10 +576,21 @@ agent:
     cost_currency: USD
     cost_event_label: lot exposure cost
     site_timezone: JST
-
 dashboard:
   primary_kpi: fab_availability
   kpis:
-    - { label: Fab availability, field: health_score_pct, format: percent_1dp, good_direction: up, good_threshold: 93 }
-    - { label: Critical tools, field: critical_assets, format: integer, good_direction: down, good_threshold: 1 }
-    - { label: Avoided lot loss, field: avoided_cost, format: currency, good_direction: up, good_threshold: 120000 }
+  - label: Fab availability
+    field: health_score_pct
+    format: percent_1dp
+    good_direction: up
+    good_threshold: 93
+  - label: Critical tools
+    field: critical_assets
+    format: integer
+    good_direction: down
+    good_threshold: 1
+  - label: Avoided lot loss
+    field: avoided_cost
+    format: currency
+    good_direction: up
+    good_threshold: 120000
