@@ -1150,6 +1150,16 @@ export default function App() {
     () => new Date().toLocaleString(),
     [industry, effectiveUiCurrency, executive.ebit_saved_fmt, executive.roi_pct, executive.payback_days]
   );
+  const executiveValueStatement = useMemo(() => {
+    const ebitFmt = executive.ebit_saved_fmt || EMPTY_EXECUTIVE.ebit_saved_fmt;
+    if (effectiveUiCurrency === "JPY") {
+      return `処方保全により、EBIT上振れ効果は${ebitFmt}です。`;
+    }
+    if (effectiveUiCurrency === "KRW") {
+      return `처방 정비를 통해 EBIT 상향 효과 ${ebitFmt}를 확보했습니다.`;
+    }
+    return executive.value_statement || EMPTY_EXECUTIVE.value_statement;
+  }, [effectiveUiCurrency, executive.ebit_saved_fmt, executive.value_statement]);
 
   const sdtWindowInsights = useMemo(() => {
     const summary = sdtReport.summary || [];
@@ -2036,7 +2046,7 @@ export default function App() {
                 <div className="exec-hero-eyebrow">{t("Executive briefing value statement")}</div>
                 <div className="exec-board-hero">
                   <div className="exec-board-left">
-                    <div className="exec-hero-title">{executive.value_statement || EMPTY_EXECUTIVE.value_statement}</div>
+                    <div className="exec-hero-title">{executiveValueStatement}</div>
                     <div className="exec-hero-sub">
                       {t("Board-ready financial operating view")} - {industryLabel(industry)}.
                     </div>
