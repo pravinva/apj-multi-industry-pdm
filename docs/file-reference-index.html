@@ -379,6 +379,24 @@
             document.getElementById('searchInput').value = '';
             searchFiles();
         }
+
+        function normalizeRepoLinks() {
+            const repoBase = 'https://github.com/pravinva/apj-multi-industry-pdm/blob/main/';
+            document.querySelectorAll('a.file-link').forEach(link => {
+                const href = link.getAttribute('href') || '';
+                if (!href.startsWith('../')) {
+                    return;
+                }
+                const normalized = href.replace(/^\.\.\//, '');
+                link.setAttribute('href', repoBase + normalized);
+                link.setAttribute('target', '_blank');
+                link.setAttribute('rel', 'noopener noreferrer');
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            normalizeRepoLinks();
+        });
     </script>
 </head>
 <body>
