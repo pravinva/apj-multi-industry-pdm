@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>APJ Multi-Industry Predictive Maintenance - Technical Overview for SAs</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #1a1a1a;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        header .subtitle {
+            font-size: 1.2em;
+            color: #ff6b6b;
+            font-weight: 600;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        h2 {
+            color: #667eea;
+            font-size: 2em;
+            margin: 30px 0 20px 0;
+            padding-bottom: 10px;
+            border-bottom: 3px solid #667eea;
+        }
+
+        h3 {
+            color: #764ba2;
+            font-size: 1.5em;
+            margin: 25px 0 15px 0;
+        }
+
+        h4 {
+            color: #444;
+            font-size: 1.2em;
+            margin: 20px 0 10px 0;
+        }
+
+        .highlight-box {
+            background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 6px;
+        }
+
+        .tech-stack {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .tech-card {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .tech-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+            border-color: #667eea;
+        }
+
+        .tech-card h4 {
+            color: #667eea;
+            margin-top: 0;
+            font-size: 1.3em;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        .code-block {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 20px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            line-height: 1.5;
+        }
+
+        .code-block .comment {
+            color: #6272a4;
+        }
+
+        .code-block .command {
+            color: #50fa7b;
+        }
+
+        .metric-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .metric-box {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .metric-box.blue {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .metric-box.green {
+            background: linear-gradient(135deg, #56ab2f 0%, #a8e063 100%);
+        }
+
+        .metric-box .number {
+            font-size: 2.5em;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+
+        .metric-box .label {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+
+        .flow-diagram {
+            background: #f8f9fa;
+            padding: 30px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .flow-step {
+            display: inline-block;
+            background: white;
+            border: 2px solid #667eea;
+            border-radius: 6px;
+            padding: 15px 25px;
+            margin: 10px;
+            font-weight: 600;
+            color: #667eea;
+        }
+
+        .arrow {
+            display: inline-block;
+            color: #764ba2;
+            font-size: 1.5em;
+            margin: 0 10px;
+        }
+
+        ul, ol {
+            margin: 15px 0 15px 30px;
+        }
+
+        li {
+            margin: 8px 0;
+        }
+
+        .deployment-section {
+            background: #fff9e6;
+            border: 2px solid #ffd700;
+            border-radius: 8px;
+            padding: 25px;
+            margin: 25px 0;
+        }
+
+        .deployment-section h3 {
+            color: #d4a700;
+            margin-top: 0;
+        }
+
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+
+            .container {
+                box-shadow: none;
+            }
+
+            .tech-card:hover {
+                transform: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>APJ Multi-Industry Predictive Maintenance Platform</h1>
+            <div class="subtitle">Technical Overview for Solution Architects</div>
+        </header>
+
+        <div class="content">
+            <div class="highlight-box">
+                <h3>Executive Summary</h3>
+                <p><strong>This is a production-ready, config-driven industrial maintenance intelligence platform that demonstrates both predictive and prescriptive maintenance capabilities across five critical APJ industries.</strong> Built on Databricks Lakehouse, it showcases the full spectrum of Data Intelligence Platform capabilities—from OT/IoT ingestion via Zerobus, through medallion architecture with Delta Live Tables, to ML-powered predictions with MLflow, operational decision persistence in Lakebase, and natural language interaction through Genie.</p>
+            </div>
+
+            <div class="metric-grid">
+                <div class="metric-box">
+                    <div class="number">5</div>
+                    <div class="label">Industries Covered</div>
+                </div>
+                <div class="metric-box blue">
+                    <div class="number">20</div>
+                    <div class="label">APJ Sites</div>
+                </div>
+                <div class="metric-box green">
+                    <div class="number">5</div>
+                    <div class="label">Native Currencies</div>
+                </div>
+                <div class="metric-box">
+                    <div class="number">7</div>
+                    <div class="label">Core Technologies</div>
+                </div>
+            </div>
+
+            <h2>Industry Coverage & Anchor Accounts</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Industry</th>
+                        <th>Anchor Account</th>
+                        <th>Use Case Context</th>
+                        <th>Asset Types</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Mining</strong></td>
+                        <td>Rio Tinto</td>
+                        <td>Haul fleet and conveyor reliability</td>
+                        <td>Cat 793F trucks, conveyors, crushers</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Energy</strong></td>
+                        <td>Alinta Energy</td>
+                        <td>Wind, BESS, transformer availability</td>
+                        <td>Wind turbines, battery systems, transformers</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Water</strong></td>
+                        <td>Sydney Water</td>
+                        <td>Pumping and leak-risk operations</td>
+                        <td>Centrifugal pumps, valve systems</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Automotive</strong></td>
+                        <td>Toyota</td>
+                        <td>Press and weld line stop-risk reduction</td>
+                        <td>Hydraulic presses, robotic welders</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Semiconductor</strong></td>
+                        <td>Renesas</td>
+                        <td>Etch and lithography yield protection</td>
+                        <td>Etch chambers, lithography steppers</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2>APJ Regional Coverage (20 Sites)</h2>
+
+            <p>Each industry skin includes <strong>four strategically located APJ sites</strong> with site-specific currency and localization, making this demo reusable across the entire APJ region:</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Country/Region</th>
+                        <th>Sites per Industry</th>
+                        <th>Native Currency</th>
+                        <th>Language Support</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Australia</strong></td>
+                        <td>5 (Rio Pilbara, Sydney Water, Alinta Hornsdale, etc.)</td>
+                        <td>AUD</td>
+                        <td>English</td>
+                    </tr>
+                    <tr>
+                        <td><strong>India</strong></td>
+                        <td>5 (Tata Odisha, Chennai Water, Mahindra Pune, etc.)</td>
+                        <td>INR</td>
+                        <td>English</td>
+                    </tr>
+                    <tr>
+                        <td><strong>ASEAN</strong></td>
+                        <td>5 (PETRONAS, PUB Singapore, VinFast, Infineon, etc.)</td>
+                        <td>SGD</td>
+                        <td>English</td>
+                    </tr>
+                    <tr>
+                        <td><strong>South Korea</strong></td>
+                        <td>3 (POSCO, Seoul Water, Hyundai Ulsan, KEPCO, Samsung)</td>
+                        <td>KRW</td>
+                        <td>Korean + English</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Japan</strong></td>
+                        <td>2 (Toyota Motomachi, Renesas Naka)</td>
+                        <td>JPY</td>
+                        <td>Japanese + English</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2>Databricks Technology Stack</h2>
+
+            <div class="tech-stack">
+                <div class="tech-card">
+                    <h4>Zerobus</h4>
+                    <p><strong>First-mile OT connectivity</strong></p>
+                    <p>Real-time ingestion from industrial protocols (OPC-UA, Modbus, MQTT). Simulator fallback for demo environments. Swinging Door Trending (SDT) compression reduces data volume by 85-95% while preserving signal fidelity.</p>
+                </div>
+
+                <div class="tech-card">
+                    <h4>Delta Live Tables</h4>
+                    <p><strong>Declarative ETL pipeline</strong></p>
+                    <p>Three-tier medallion architecture:<br>
+                    • <strong>Bronze:</strong> Raw telemetry normalization<br>
+                    • <strong>Silver:</strong> Feature engineering, OT+PI alignment<br>
+                    • <strong>Gold:</strong> Prediction-ready vectors, financial events</p>
+                </div>
+
+                <div class="tech-card">
+                    <h4>MLflow</h4>
+                    <p><strong>ML lifecycle management</strong></p>
+                    <p>Per-asset anomaly detection (Isolation Forest) and RUL models. Automatic model registration, versioning, and champion/challenger tracking. Centralized experiment tracking at /Shared/ot-pdm-intelligence/{industry}.</p>
+                </div>
+
+                <div class="tech-card">
+                    <h4>Lakebase</h4>
+                    <p><strong>Operational OLTP layer</strong></p>
+                    <p>Persists operator decisions (Approve/Reject/Defer actions) with sub-second latency. Bridges analytical predictions in Delta Lake with real-time operational systems. Provides durable audit trail for compliance.</p>
+                </div>
+
+                <div class="tech-card">
+                    <h4>Genie</h4>
+                    <p><strong>Natural language AI agent</strong></p>
+                    <p>Industry-specific Genie rooms for each vertical. Context-aware queries with currency/language localization. Manual retrieval pattern for equipment documentation. Direct deep-linking from hierarchy maps.</p>
+                </div>
+
+                <div class="tech-card">
+                    <h4>Databricks Apps</h4>
+                    <p><strong>Interactive web application</strong></p>
+                    <p>FastAPI backend + React frontend deployed as serverless app. Real-time fleet monitoring, ISA-95 hierarchy navigation, factory map visualization, financial impact dashboards. Currency-aware rendering.</p>
+                </div>
+
+                <div class="tech-card">
+                    <h4>Asset Bundles</h4>
+                    <p><strong>Infrastructure-as-Code</strong></p>
+                    <p>Single databricks.yml defines all resources: DLT pipelines, ML training/scoring jobs, Zerobus connector, financial backfill, app deployment. Deploy any industry in under 5 minutes.</p>
+                </div>
+            </div>
+
+            <h2>Architecture & Data Flow</h2>
+
+            <div class="flow-diagram">
+                <div class="flow-step">OT/IoT Source<br>(Zerobus/Simulator)</div>
+                <span class="arrow">→</span>
+                <div class="flow-step">Bronze DLT<br>(Raw Landing)</div>
+                <span class="arrow">→</span>
+                <div class="flow-step">Silver DLT<br>(Features + Alignment)</div>
+                <span class="arrow">→</span>
+                <div class="flow-step">Gold DLT<br>(Predictions + Finance)</div>
+                <br>
+                <span class="arrow">↓</span>
+                <br>
+                <div class="flow-step">ML Training<br>(MLflow)</div>
+                <span class="arrow">→</span>
+                <div class="flow-step">Batch Scoring<br>(Every 2 hours)</div>
+                <span class="arrow">→</span>
+                <div class="flow-step">App UI<br>(FastAPI + React)</div>
+                <span class="arrow">→</span>
+                <div class="flow-step">Operator Actions<br>(Lakebase)</div>
+            </div>
+
+            <h3>Key Technical Patterns</h3>
+
+            <h4>1. OT + PI Data Alignment</h4>
+            <p>The platform integrates both OT (Operational Technology) streams and PI (OSIsoft/Aveva) historian data:</p>
+            <ul>
+                <li>OT rows land to Bronze from Zerobus connector or simulator</li>
+                <li>PI rows land to <code>bronze.pi_simulated_tags</code></li>
+                <li>Silver creates <code>ot_pi_aligned</code> table with time-proximity joins</li>
+                <li>Provenance tracking: <code>BOTH</code>, <code>OT_ONLY</code>, <code>PI_ONLY</code>, <code>UNKNOWN</code></li>
+                <li>Data source context flows through to UI and downstream analytics</li>
+            </ul>
+
+            <h4>2. Predictive + Prescriptive Intelligence</h4>
+            <p>Unlike pure predictive maintenance tools, this platform closes the execution gap:</p>
+            <ul>
+                <li><strong>Predictive:</strong> Anomaly scores, RUL estimates, health degradation trends</li>
+                <li><strong>Prescriptive:</strong> Recommended intervention windows, cost-benefit analysis, expected failure cost vs. planned maintenance cost, actionable work orders</li>
+                <li>Gold table <code>financial_impact_events</code> merges predictions with operational planning inputs</li>
+                <li>Finance dashboard shows avoided costs, ROI projections, and business impact in native or selected currency</li>
+            </ul>
+
+            <h4>3. Currency & Localization</h4>
+            <p>Full multi-currency and multi-language support for APJ deployment:</p>
+            <ul>
+                <li><strong>Supported currencies:</strong> USD, AUD, JPY, INR, SGD, KRW, plus AUTO mode (site-native)</li>
+                <li><strong>Language behavior:</strong>
+                    <ul>
+                        <li>JPY → Japanese UI text and Genie prompts</li>
+                        <li>KRW → Korean UI text and Genie prompts</li>
+                        <li>Other currencies → English with currency conversion</li>
+                    </ul>
+                </li>
+                <li>Backend computes native financial values and converts to selected display currency</li>
+                <li>Geo APIs accept currency parameter and return localized financial data</li>
+                <li>Executive financial cards render in appropriate currency format with locale-specific number formatting</li>
+            </ul>
+
+            <h4>4. Manual Retrieval Pattern (RAG-lite)</h4>
+            <p>Lightweight grounded retrieval for equipment documentation:</p>
+            <ul>
+                <li>Manual ingestion from <code>industries/{skin}/manuals</code> directory and UI uploads</li>
+                <li>Text extraction for markdown, text, and PDF files</li>
+                <li>Chunk storage in <code>bronze.manual_reference_chunks</code> per industry</li>
+                <li>Prompt-time ranking by token overlap and cosine similarity</li>
+                <li>Source citations in Genie responses for traceability and trust</li>
+            </ul>
+
+            <h4>5. Swinging Door Trending (SDT) Compression</h4>
+            <p>Production-grade telemetry compression at simulator/connector stage:</p>
+            <ul>
+                <li>Industry-standard SDT algorithm with configurable epsilon (absolute and percentage)</li>
+                <li>Tag-specific overrides for precision-critical sensors (e.g., vibration: 0.06 abs tolerance)</li>
+                <li>Heartbeat mechanism ensures maximum gap between transmissions</li>
+                <li>Typical compression: 85-95% reduction in row count while preserving anomaly detection accuracy</li>
+                <li>Reduces network bandwidth, storage costs, and downstream processing load</li>
+            </ul>
+
+            <h2>Quick Deployment Guide</h2>
+
+            <div class="deployment-section">
+                <h3>Deploy a New Industry in Under 5 Minutes</h3>
+
+                <h4>Step 1: Validate Bundle</h4>
+                <div class="code-block">
+<span class="comment"># Validate configuration before deployment</span>
+<span class="command">databricks bundle validate --target dev -p DEFAULT</span>
+                </div>
+
+                <h4>Step 2: Deploy Infrastructure</h4>
+                <div class="code-block">
+<span class="comment"># Deploy specific industry (mining, energy, water, automotive, semiconductor)</span>
+<span class="command">databricks bundle deploy --target dev -p DEFAULT --var industry=mining</span>
+
+<span class="comment"># Or deploy all industries</span>
+<span class="command">databricks bundle deploy --target dev -p DEFAULT</span>
+                </div>
+
+                <h4>Step 3: Bootstrap Data & Jobs</h4>
+                <div class="code-block">
+<span class="comment"># Run the bootstrap notebook in Databricks workspace:</span>
+<span class="command">RUNME_BOOTSTRAP_ALL.py</span>
+
+<span class="comment"># This provisions all configured industries:
+# - Catalog and schema creation
+# - Core DDL (tables, views)
+# - Seed data and planning cases
+# - Finance history backfill (730 days default)
+# - Permissions grants
+# - Optional: trigger ML training and scoring jobs</span>
+                </div>
+
+                <h4>Step 4: Verify & Launch</h4>
+                <div class="code-block">
+<span class="comment"># Verify data landed in Bronze/Silver/Gold tables</span>
+<span class="command">SELECT * FROM pdm_mining.bronze.sensor_readings LIMIT 10;</span>
+
+<span class="comment"># Open app endpoint from Databricks Apps console</span>
+<span class="command">https://&lt;workspace&gt;.cloud.databricks.com/serving-endpoints/ot-pdm-app</span>
+                </div>
+            </div>
+
+            <h3>Configuration-Driven Reusability</h3>
+
+            <p>The platform's config-driven architecture makes it <strong>trivially reusable for SA teams across APJ</strong>:</p>
+
+            <ul>
+                <li><strong>Industry skins:</strong> Each industry has a <code>config.yaml</code> defining assets, hierarchy, anchor accounts, and simulator parameters</li>
+                <li><strong>Site expansion:</strong> Add new sites by extending the sites array with site_id, name, country, currency</li>
+                <li><strong>Asset templates:</strong> Define asset types once, instantiate across sites with fault profiles</li>
+                <li><strong>Deployment matrix:</strong> <code>industries/deployment_matrix.yaml</code> enforces resource consistency (jobs, pipelines) across all verticals</li>
+                <li><strong>Reconciliation tooling:</strong> <code>tools/reconcile_industry_matrix.py</code> audits and auto-corrects resource drift</li>
+            </ul>
+
+            <h2>Demo Scenarios for Customer Meetings</h2>
+
+            <h3>Scenario 1: Real-Time Fleet Monitoring (Operations Persona)</h3>
+            <ul>
+                <li>Show live asset health across 20 APJ sites with Geo hierarchy navigation</li>
+                <li>Drill down to specific asset telemetry and anomaly scores</li>
+                <li>Demonstrate factory map mode with physical layout and live status pins</li>
+                <li>Click "Investigate in Genie" to handoff asset context to AI agent</li>
+                <li>Switch currency selector to show localized financial impact (e.g., INR for India sites)</li>
+            </ul>
+
+            <h3>Scenario 2: Predictive Maintenance with ROI (Manager Persona)</h3>
+            <ul>
+                <li>Navigate to Model page to show anomaly detection and RUL predictions</li>
+                <li>Highlight specific assets approaching failure threshold</li>
+                <li>Show financial impact: expected failure cost vs. planned intervention cost</li>
+                <li>Demonstrate avoided cost calculations (prescriptive value)</li>
+                <li>Generate work order recommendation with intervention window</li>
+            </ul>
+
+            <h3>Scenario 3: Natural Language Analytics (Executive Persona)</h3>
+            <ul>
+                <li>Open Genie room for the active industry</li>
+                <li>Ask: "What are the top 3 highest-risk assets across all sites?"</li>
+                <li>Ask: "Show me total avoided costs for the last 30 days in AUD"</li>
+                <li>Switch to JPY currency and observe Japanese-localized Genie responses</li>
+                <li>Upload equipment manual PDF and ask: "What is the recommended bearing replacement procedure?"</li>
+            </ul>
+
+            <h3>Scenario 4: OT Connectivity & Data Pipeline (IT/Architect Persona)</h3>
+            <ul>
+                <li>Show Zerobus connector configuration and protocol support</li>
+                <li>Demonstrate SDT compression metrics (85-95% reduction)</li>
+                <li>Navigate through DLT pipeline DAG (Bronze → Silver → Gold)</li>
+                <li>Show OT+PI alignment table and data provenance tracking</li>
+                <li>Highlight MLflow experiment tracking and model versioning</li>
+                <li>Show Lakebase action persistence and audit trail</li>
+            </ul>
+
+            <h2>Reusability Across APJ Field Teams</h2>
+
+            <div class="highlight-box">
+                <h3>Why This Demo is Perfect for APJ SAs</h3>
+                <ul>
+                    <li><strong>Multi-industry coverage:</strong> One codebase covers 5 major verticals—mining, energy, water, automotive, semiconductor. No need to maintain separate demos.</li>
+                    <li><strong>Geo-distributed sites:</strong> 20 pre-configured APJ sites across Australia, India, ASEAN, Korea, Japan. Demo using local anchor accounts for credibility.</li>
+                    <li><strong>Currency & language localization:</strong> Native support for AUD, INR, SGD, KRW, JPY with automatic UI and Genie localization. Works out-of-the-box for local execs.</li>
+                    <li><strong>Fast deployment:</strong> Deploy new industry in under 5 minutes with Databricks Asset Bundles. No manual infrastructure setup.</li>
+                    <li><strong>SFDC-aligned:</strong> Anchor accounts match real APJ opportunities (Rio Tinto, Alinta, Sydney Water, Toyota, Renesas). Pipeline context is built-in.</li>
+                    <li><strong>Full stack demonstration:</strong> Shows complete Databricks platform: Zerobus, DLT, MLflow, Lakebase, Genie, Databricks Apps. Not just a partial POC.</li>
+                    <li><strong>Production-grade patterns:</strong> SDT compression, OT+PI alignment, medallion architecture, model lifecycle management, operational decision persistence—all enterprise-ready.</li>
+                </ul>
+            </div>
+
+            <h2>Technical Differentiation</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Capability</th>
+                        <th>Traditional PdM Solutions</th>
+                        <th>This Platform</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Data Integration</strong></td>
+                        <td>Manual ETL, limited protocol support</td>
+                        <td>Zerobus native OT connectivity (OPC-UA, Modbus, MQTT) with SDT compression</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Architecture</strong></td>
+                        <td>Proprietary data silos, rigid schemas</td>
+                        <td>Open Delta Lake medallion, config-driven extensibility</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Intelligence</strong></td>
+                        <td>Predictive only (what will fail)</td>
+                        <td>Predictive + Prescriptive (what to do, when, at what cost)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>ML Lifecycle</strong></td>
+                        <td>Manual model management, version chaos</td>
+                        <td>MLflow automatic versioning, champion/challenger, A/B testing</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Operational Integration</strong></td>
+                        <td>Read-only analytics, no feedback loop</td>
+                        <td>Lakebase for operator decisions, Zerobus writeback, full closed-loop</td>
+                    </tr>
+                    <tr>
+                        <td><strong>User Experience</strong></td>
+                        <td>SQL dashboards for analysts only</td>
+                        <td>Genie natural language for executives, interactive React app for ops</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Global Deployment</strong></td>
+                        <td>English-only, single currency</td>
+                        <td>Multi-language, multi-currency, site-aware localization</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2>Resources & Next Steps</h2>
+
+            <div class="tech-stack">
+                <div class="tech-card">
+                    <h4>Documentation</h4>
+                    <p>Complete README with architecture diagrams, deployment guides, and API documentation available in repo root.</p>
+                </div>
+
+                <div class="tech-card">
+                    <h4>Video Walkthrough</h4>
+                    <p>Record a 10-minute Loom showing end-to-end flow from deployment to Genie interaction for SA enablement.</p>
+                </div>
+
+                <div class="tech-card">
+                    <h4>Customization Guide</h4>
+                    <p>Step-by-step instructions for adding new industries, sites, asset types, and custom financial models.</p>
+                </div>
+
+                <div class="tech-card">
+                    <h4>Support Channel</h4>
+                    <p>APJ Field Engineering Slack channel for questions, demo requests, and feature suggestions.</p>
+                </div>
+            </div>
+
+            <div class="highlight-box" style="margin-top: 40px; background: linear-gradient(135deg, #56ab2f15 0%, #a8e06315 100%); border-left-color: #56ab2f;">
+                <h3>Ready to Deploy?</h3>
+                <p><strong>Start your demo environment in under 10 minutes:</strong></p>
+                <ol>
+                    <li>Clone the repo to Databricks workspace</li>
+                    <li>Run <code>databricks bundle deploy --var industry=mining</code></li>
+                    <li>Execute <code>RUNME_BOOTSTRAP_ALL.py</code> notebook</li>
+                    <li>Open the app from Databricks Apps console</li>
+                    <li>Schedule your first customer demo!</li>
+                </ol>
+                <p style="margin-top: 20px; font-size: 0.95em; color: #666;">
+                    <strong>Questions?</strong> Reach out to the APJ Field Engineering leadership team or consult the deployment matrix reconciliation guide for troubleshooting.
+                </p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

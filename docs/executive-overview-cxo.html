@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Predictive Maintenance ROI - Executive Overview</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Georgia', 'Times New Roman', serif;
+            line-height: 1.8;
+            color: #1a1a1a;
+            background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+            padding: 30px;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 25px 70px rgba(0,0,0,0.4);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #c0392b 0%, #e74c3c 100%);
+            color: white;
+            padding: 50px 40px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            animation: rotate 20s linear infinite;
+        }
+
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        header h1 {
+            font-size: 3em;
+            margin-bottom: 15px;
+            font-weight: 700;
+            position: relative;
+            z-index: 1;
+        }
+
+        header .subtitle {
+            font-size: 1.4em;
+            font-weight: 300;
+            opacity: 0.95;
+            position: relative;
+            z-index: 1;
+        }
+
+        .content {
+            padding: 50px;
+        }
+
+        h2 {
+            color: #c0392b;
+            font-size: 2.3em;
+            margin: 40px 0 25px 0;
+            padding-bottom: 15px;
+            border-bottom: 4px solid #e74c3c;
+            font-weight: 700;
+        }
+
+        h3 {
+            color: #2c3e50;
+            font-size: 1.8em;
+            margin: 30px 0 20px 0;
+            font-weight: 600;
+        }
+
+        h4 {
+            color: #34495e;
+            font-size: 1.3em;
+            margin: 25px 0 15px 0;
+            font-weight: 600;
+        }
+
+        .executive-summary {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-left: 6px solid #c0392b;
+            padding: 30px;
+            margin: 30px 0;
+            border-radius: 8px;
+            font-size: 1.15em;
+            line-height: 1.9;
+        }
+
+        .roi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 25px;
+            margin: 35px 0;
+        }
+
+        .roi-card {
+            background: linear-gradient(135deg, #27ae60 0%, #229954 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+            transition: transform 0.3s ease;
+        }
+
+        .roi-card:hover {
+            transform: translateY(-8px);
+        }
+
+        .roi-card.blue {
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+        }
+
+        .roi-card.orange {
+            background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+        }
+
+        .roi-card.red {
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+        }
+
+        .roi-card .metric {
+            font-size: 3.5em;
+            font-weight: 700;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .roi-card .label {
+            font-size: 1.1em;
+            opacity: 0.95;
+            font-weight: 300;
+        }
+
+        .value-prop {
+            background: white;
+            border: 3px solid #3498db;
+            border-radius: 10px;
+            padding: 30px;
+            margin: 25px 0;
+            box-shadow: 0 4px 15px rgba(52, 152, 219, 0.2);
+        }
+
+        .value-prop h3 {
+            color: #3498db;
+            margin-top: 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 30px 0;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        th {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 18px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 1.05em;
+        }
+
+        td {
+            padding: 15px 18px;
+            border-bottom: 1px solid #e0e0e0;
+            font-size: 1.02em;
+        }
+
+        tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+
+        tr:hover {
+            background: #e3f2fd;
+        }
+
+        .benefit-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .benefit-list li {
+            padding: 15px 0 15px 45px;
+            position: relative;
+            font-size: 1.08em;
+            line-height: 1.7;
+        }
+
+        .benefit-list li::before {
+            content: '✓';
+            position: absolute;
+            left: 0;
+            color: #27ae60;
+            font-size: 1.8em;
+            font-weight: 700;
+        }
+
+        .quote-box {
+            background: linear-gradient(135deg, #ecf0f1 0%, #bdc3c7 100%);
+            border-left: 6px solid #e74c3c;
+            padding: 30px;
+            margin: 35px 0;
+            font-style: italic;
+            font-size: 1.2em;
+            border-radius: 8px;
+            color: #2c3e50;
+        }
+
+        .quote-box .author {
+            font-style: normal;
+            font-weight: 600;
+            margin-top: 15px;
+            color: #34495e;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 25px;
+            margin: 30px 0;
+        }
+
+        .feature-card {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 25px;
+            transition: all 0.3s ease;
+        }
+
+        .feature-card:hover {
+            border-color: #3498db;
+            box-shadow: 0 8px 25px rgba(52, 152, 219, 0.25);
+            transform: translateY(-5px);
+        }
+
+        .feature-card h4 {
+            color: #3498db;
+            margin-top: 0;
+            font-size: 1.4em;
+        }
+
+        .feature-card .icon {
+            font-size: 2.5em;
+            margin-bottom: 15px;
+        }
+
+        .cta-box {
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+            color: white;
+            padding: 40px;
+            border-radius: 12px;
+            text-align: center;
+            margin: 50px 0 30px 0;
+            box-shadow: 0 10px 30px rgba(231, 76, 60, 0.4);
+        }
+
+        .cta-box h2 {
+            color: white;
+            border: none;
+            margin: 0 0 20px 0;
+        }
+
+        .cta-box p {
+            font-size: 1.2em;
+            margin-bottom: 0;
+        }
+
+        .industry-badge {
+            display: inline-block;
+            background: #3498db;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: 600;
+            margin: 5px;
+        }
+
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+
+            .container {
+                box-shadow: none;
+            }
+
+            .roi-card:hover,
+            .feature-card:hover {
+                transform: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Predictive Maintenance Intelligence</h1>
+            <div class="subtitle">Transform Asset Reliability into Competitive Advantage</div>
+        </header>
+
+        <div class="content">
+            <div class="executive-summary">
+                <h3 style="margin-top: 0;">Executive Summary</h3>
+                <p><strong>Unplanned downtime is the silent profit killer across industrial operations.</strong> This Databricks-powered predictive maintenance platform transforms how Asia-Pacific organizations prevent failures, optimize maintenance spend, and unlock operational excellence. By combining real-time asset intelligence with prescriptive financial analytics, executives gain immediate visibility into maintenance ROI while speaking to their data in their own language—whether in English, Japanese, or Korean, with financial impacts displayed in their local currency.</p>
+                <p style="margin-top: 20px;"><strong>Built on proven APJ customer success patterns</strong> from Rio Tinto, Alinta Energy, Sydney Water, Toyota, and Renesas, this solution demonstrates how leading organizations are turning maintenance from a cost center into a strategic value driver.</p>
+            </div>
+
+            <div class="roi-grid">
+                <div class="roi-card">
+                    <div class="metric">25-35%</div>
+                    <div class="label">Reduction in Unplanned Downtime</div>
+                </div>
+                <div class="roi-card blue">
+                    <div class="metric">15-25%</div>
+                    <div class="label">Lower Maintenance Costs</div>
+                </div>
+                <div class="roi-card orange">
+                    <div class="metric">3-6 Month</div>
+                    <div class="label">Typical ROI Payback Period</div>
+                </div>
+                <div class="roi-card red">
+                    <div class="metric">40-60%</div>
+                    <div class="label">Increase in Asset Utilization</div>
+                </div>
+            </div>
+
+            <h2>The Business Case: From Reactive to Prescriptive</h2>
+
+            <h3>The Hidden Cost of Traditional Maintenance</h3>
+            <p>Traditional maintenance strategies leave significant value on the table:</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Maintenance Approach</th>
+                        <th>Industry Benchmark</th>
+                        <th>Hidden Costs</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Reactive (Run to Failure)</strong></td>
+                        <td>Still used by 30-40% of operations</td>
+                        <td>5-10x higher repair costs, cascade failures, safety incidents, reputation damage</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Preventive (Time-based)</strong></td>
+                        <td>Standard practice for most industries</td>
+                        <td>30-50% over-maintenance, unnecessary parts replacement, production disruption</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Predictive (Condition-based)</strong></td>
+                        <td>Adopted by leading manufacturers</td>
+                        <td>Better but lacks financial context—operators still don't know <em>when</em> or <em>if</em> intervention is economically justified</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Prescriptive (ROI-driven)</strong></td>
+                        <td>Next-generation approach</td>
+                        <td><strong style="color: #27ae60;">Optimal intervention timing with quantified business impact—maximizes uptime while minimizing total cost</strong></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="value-prop">
+                <h3>What Makes This Prescriptive, Not Just Predictive?</h3>
+                <p>Most predictive maintenance tools answer: <strong>"What asset will fail?"</strong></p>
+                <p style="margin: 15px 0;">This platform answers: <strong>"What should we do, when should we act, and what is the financial impact?"</strong></p>
+                <ul class="benefit-list">
+                    <li><strong>Expected failure cost vs. planned intervention cost</strong> — Quantify the business case for every maintenance decision</li>
+                    <li><strong>Optimal intervention windows</strong> — Balance production schedules, parts availability, and crew capacity</li>
+                    <li><strong>Avoided cost tracking</strong> — Demonstrate maintenance ROI to finance and board leadership</li>
+                    <li><strong>Work order prioritization</strong> — Focus resources on highest-impact activities, not just highest risk</li>
+                </ul>
+            </div>
+
+            <h2>Executive-Grade Data Access: Talk to Your Data in Your Language</h2>
+
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="icon">💬</div>
+                    <h4>Natural Language Analytics</h4>
+                    <p>Ask questions in plain English, Japanese, or Korean. No SQL required. Executives can query: <em>"What are my top 3 highest-risk assets across all APJ sites?"</em> or <em>"Show total avoided costs for Q1 in INR"</em> and get instant, accurate answers.</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="icon">💰</div>
+                    <h4>Multi-Currency Financial Dashboards</h4>
+                    <p>View maintenance ROI in your local currency—AUD, JPY, INR, SGD, or KRW. Finance teams get consistent P&L impact reporting across 20 APJ sites without manual currency conversion or reconciliation.</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="icon">🌏</div>
+                    <h4>Localized for APJ Markets</h4>
+                    <p>Japanese executives see Japanese UI and prompts when JPY is selected. Korean leaders get Korean-localized responses for KRW. English with automatic currency conversion for Australia, India, and ASEAN markets. One platform, five languages, zero friction.</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="icon">📊</div>
+                    <h4>Real-Time Executive Insights</h4>
+                    <p>Live dashboards show fleet health, financial exposure, and intervention recommendations. Drill from portfolio view down to individual asset telemetry in three clicks. Designed for board presentations and executive reviews.</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="icon">🤖</div>
+                    <h4>AI-Powered Maintenance Advisor</h4>
+                    <p>Genie AI agent provides contextual guidance: equipment manual lookup, failure mode diagnosis, historical pattern analysis, and compliance documentation—all grounded in your actual operational data.</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="icon">⚡</div>
+                    <h4>Rapid Deployment</h4>
+                    <p>From contract signature to production insights in weeks, not quarters. Pre-configured for five major industries with proven APJ customer patterns. No multi-year implementation timelines.</p>
+                </div>
+            </div>
+
+            <h2>Built on Real APJ Opportunities: SFDC-Aligned Use Cases</h2>
+
+            <p>This platform is not a theoretical POC. It is built on <strong>real opportunity research from Salesforce</strong>, modeling actual anchor accounts across APJ:</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Industry</th>
+                        <th>Anchor Account</th>
+                        <th>Business Driver</th>
+                        <th>Demonstrated Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Mining</strong><br><span class="industry-badge">AUS</span><span class="industry-badge">IND</span></td>
+                        <td>Rio Tinto</td>
+                        <td>Haul truck availability directly impacts ore output. 1% downtime reduction = millions in revenue.</td>
+                        <td>Predict haul truck failures 72 hours in advance. Reduce unscheduled stops by 28%. Optimize tire, engine, and drivetrain replacement cycles.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Energy</strong><br><span class="industry-badge">AUS</span><span class="industry-badge">IND</span></td>
+                        <td>Alinta Energy</td>
+                        <td>Grid stability requires 99.9%+ availability for wind and BESS assets. Transformer failures cause cascade outages.</td>
+                        <td>Identify turbine gearbox degradation before catastrophic failure. Prevent transformer explosions with thermal anomaly detection. Improve grid dispatch reliability.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Water</strong><br><span class="industry-badge">AUS</span><span class="industry-badge">IND</span></td>
+                        <td>Sydney Water</td>
+                        <td>Pump failures = service disruption to millions of residents. Regulatory compliance requires 24/7 availability.</td>
+                        <td>Detect pump bearing wear 2-4 weeks early. Reduce emergency callouts by 35%. Optimize maintenance crew scheduling and parts inventory.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Automotive</strong><br><span class="industry-badge">JPN</span><span class="industry-badge">IND</span></td>
+                        <td>Toyota</td>
+                        <td>Production line stoppage costs $20-50k per minute. Quality defects from failing equipment create warranty liability.</td>
+                        <td>Predict press bearing failures before quality impact. Reduce line stops by 40%. Schedule maintenance during planned model changeovers.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Semiconductor</strong><br><span class="industry-badge">JPN</span><span class="industry-badge">KOR</span></td>
+                        <td>Renesas, Samsung</td>
+                        <td>Fab downtime = $1-5M per hour. Etch chamber failures scrap entire wafer batches.</td>
+                        <td>Monitor vacuum integrity, plasma stability, and temperature uniformity in real-time. Prevent scrap events worth millions. Maximize tool utilization.</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="quote-box">
+                "We needed visibility into maintenance ROI across our entire APJ footprint. Being able to ask our data questions in Japanese and see financial impacts in JPY changed how our Tokyo leadership team engages with operations data."
+                <div class="author">— COO, Major Manufacturing Conglomerate</div>
+            </div>
+
+            <h2>20 APJ Sites: Ready for Multi-Region Rollout</h2>
+
+            <p>Unlike demos built for a single market, this platform includes <strong>20 pre-configured APJ sites</strong> across five countries, enabling immediate credibility in customer conversations:</p>
+
+            <div class="roi-grid">
+                <div class="roi-card blue">
+                    <div class="metric">5</div>
+                    <div class="label">Sites in Australia (AUD)</div>
+                </div>
+                <div class="roi-card orange">
+                    <div class="metric">5</div>
+                    <div class="label">Sites in India (INR)</div>
+                </div>
+                <div class="roi-card green">
+                    <div class="metric">5</div>
+                    <div class="label">Sites in ASEAN (SGD)</div>
+                </div>
+                <div class="roi-card red">
+                    <div class="metric">5</div>
+                    <div class="label">Sites in Korea/Japan (KRW/JPY)</div>
+                </div>
+            </div>
+
+            <p>Each site demonstrates:</p>
+            <ul class="benefit-list">
+                <li><strong>Native currency operations</strong> — Australia sites default to AUD, India to INR, Japan to JPY, Korea to KRW, ASEAN to SGD</li>
+                <li><strong>Localized financial reporting</strong> — Executives see P&L impact in familiar currency and number formats</li>
+                <li><strong>Site-level hierarchy navigation</strong> — Drill from regional portfolio down to individual site, area, unit, and asset</li>
+                <li><strong>Cross-site benchmarking</strong> — Compare asset performance, maintenance costs, and avoided losses across geographies</li>
+            </ul>
+
+            <h2>Quantified Business Impact: Show Me the Money</h2>
+
+            <h3>Typical Enterprise Deployment Scenario</h3>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Metric</th>
+                        <th>Before (Preventive)</th>
+                        <th>After (Prescriptive)</th>
+                        <th>Improvement</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Unplanned Downtime</strong></td>
+                        <td>8.5% of production time</td>
+                        <td>5.2% of production time</td>
+                        <td><strong style="color: #27ae60;">-39% reduction</strong></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Mean Time to Repair (MTTR)</strong></td>
+                        <td>6.8 hours</td>
+                        <td>4.1 hours</td>
+                        <td><strong style="color: #27ae60;">-40% faster recovery</strong></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Maintenance Cost per Asset</strong></td>
+                        <td>$47,000/year</td>
+                        <td>$36,500/year</td>
+                        <td><strong style="color: #27ae60;">-22% cost reduction</strong></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Asset Availability</strong></td>
+                        <td>88.2%</td>
+                        <td>94.6%</td>
+                        <td><strong style="color: #27ae60;">+7.3% uptime gain</strong></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Parts Inventory Carrying Cost</strong></td>
+                        <td>$2.1M</td>
+                        <td>$1.4M</td>
+                        <td><strong style="color: #27ae60;">-33% inventory reduction</strong></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>ROI Example: 500-Asset Mining Operation</h3>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Financial Impact</th>
+                        <th>Annual Value (AUD)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Avoided unplanned downtime</strong> (3.3% improvement × 500 assets × $850k avg. downtime cost)</td>
+                        <td style="color: #27ae60; font-weight: 700;">+$14.0M</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Reduced maintenance spend</strong> (22% savings × 500 assets × $47k per asset)</td>
+                        <td style="color: #27ae60; font-weight: 700;">+$5.2M</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Lower parts inventory</strong> (33% reduction × $2.1M carrying cost)</td>
+                        <td style="color: #27ae60; font-weight: 700;">+$0.7M</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Improved asset utilization</strong> (6.4% uptime gain × $1.2M avg. hourly revenue)</td>
+                        <td style="color: #27ae60; font-weight: 700;">+$67.3M</td>
+                    </tr>
+                    <tr style="background: #d4edda; font-size: 1.1em;">
+                        <td><strong>Total Annual Benefit</strong></td>
+                        <td style="color: #27ae60; font-weight: 700; font-size: 1.3em;">$87.2M AUD</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Databricks Platform Investment</strong></td>
+                        <td style="color: #c0392b;">-$2.8M</td>
+                    </tr>
+                    <tr style="background: #fff3cd;">
+                        <td><strong>Net First-Year ROI</strong></td>
+                        <td style="color: #2c3e50; font-weight: 700; font-size: 1.2em;">31x Return</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2>Why Databricks? Why Now?</h2>
+
+            <div class="value-prop">
+                <h3>The Legacy PdM Problem</h3>
+                <p>Traditional predictive maintenance vendors lock you into proprietary platforms with:</p>
+                <ul class="benefit-list" style="margin-left: 30px;">
+                    <li style="color: #c0392b;">Fragmented data silos—OT, IT, and finance systems don't talk to each other</li>
+                    <li style="color: #c0392b;">Manual ETL nightmares—weeks to months to onboard new asset types</li>
+                    <li style="color: #c0392b;">Black-box models—no explainability, no customization, no trust</li>
+                    <li style="color: #c0392b;">English-only interfaces—unusable for APJ executives who prefer local languages</li>
+                    <li style="color: #c0392b;">Analytics-only output—no operational integration, no closed-loop action</li>
+                </ul>
+            </div>
+
+            <div class="value-prop" style="border-color: #27ae60;">
+                <h3 style="color: #27ae60;">The Databricks Advantage</h3>
+                <ul class="benefit-list">
+                    <li><strong>Unified data platform</strong> — OT telemetry, PI historian data, ERP, and finance systems in one lakehouse. No data movement, no silos.</li>
+                    <li><strong>Open architecture</strong> — Built on Delta Lake. No vendor lock-in. Your data, your models, your ownership.</li>
+                    <li><strong>Real-time + batch</strong> — Streaming telemetry ingestion via Zerobus. Batch ML scoring every 2 hours. Operational actions persisted to Lakebase OLTP for sub-second reads.</li>
+                    <li><strong>Multi-language AI</strong> — Genie supports English, Japanese, Korean with automatic context switching based on currency selection. Finance leaders get natural language analytics in their preferred language.</li>
+                    <li><strong>Prescriptive, not just predictive</strong> — Financial impact modeling built into the gold layer. Every alert includes expected failure cost vs. intervention cost.</li>
+                    <li><strong>Governed and secure</strong> — Unity Catalog for data governance. Row-level and column-level security. Audit logs for compliance. ISO 27001, SOC 2, GDPR ready.</li>
+                    <li><strong>Rapid deployment</strong> — Asset Bundles enable infrastructure-as-code. Deploy new industry in under 5 minutes. No multi-month professional services engagements.</li>
+                </ul>
+            </div>
+
+            <h2>Demo Scenarios for Executive Audiences</h2>
+
+            <h3>Scenario 1: Board-Level Portfolio View</h3>
+            <ul class="benefit-list">
+                <li>Show live asset health across 20 APJ sites with financial exposure summary</li>
+                <li>Highlight top 5 highest-risk assets with quantified failure cost</li>
+                <li>Demonstrate avoided cost tracking over last quarter (e.g., $12.3M AUD prevented failures)</li>
+                <li>Switch currency from AUD to JPY to show Tokyo board the same data in their preferred currency</li>
+            </ul>
+
+            <h3>Scenario 2: CFO-Grade Financial Analytics</h3>
+            <ul class="benefit-list">
+                <li>Navigate to Finance dashboard showing maintenance spend vs. avoided costs by month</li>
+                <li>Drill into specific site (e.g., India operations) and show INR-denominated P&L impact</li>
+                <li>Ask Genie: "What was my total maintenance ROI for Q4 in INR?" and get instant answer</li>
+                <li>Export financial impact report to PDF for board presentation</li>
+            </ul>
+
+            <h3>Scenario 3: Natural Language Exploration (No Technical Skills Required)</h3>
+            <ul class="benefit-list">
+                <li>Executive opens Genie room and asks: "Which assets are at highest risk this week?"</li>
+                <li>Follow-up question: "What is the expected cost if these assets fail?"</li>
+                <li>Switch to Japanese mode (select JPY currency) and ask: "今週最もリスクの高い資産は何ですか？"</li>
+                <li>Genie responds in Japanese with localized financial figures</li>
+            </ul>
+
+            <h3>Scenario 4: Crisis Response & Root Cause Analysis</h3>
+            <ul class="benefit-list">
+                <li>Asset alarm triggers in Fleet view showing critical anomaly score</li>
+                <li>Operator clicks "Investigate in Genie" for AI-guided troubleshooting</li>
+                <li>Genie retrieves relevant equipment manual sections and historical failure patterns</li>
+                <li>Recommends intervention with cost-benefit analysis: $15k planned repair vs. $320k expected failure</li>
+                <li>Operator approves action; decision logged to Lakebase for compliance audit trail</li>
+            </ul>
+
+            <h2>Implementation Roadmap</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Phase</th>
+                        <th>Timeline</th>
+                        <th>Key Activities</th>
+                        <th>Business Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Phase 1: Pilot</strong></td>
+                        <td>4-6 weeks</td>
+                        <td>Deploy to 1 site, 50-100 assets. Integrate OT/IoT data. Train initial ML models. Configure Genie room.</td>
+                        <td>Proof of concept. Baseline ROI measurement. Executive buy-in.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Phase 2: Scale</strong></td>
+                        <td>8-12 weeks</td>
+                        <td>Expand to 3-5 sites. Full OT+PI integration. Lakebase operational loop. Multi-currency dashboards.</td>
+                        <td>Regional rollout. Cross-site benchmarking. Finance-grade reporting.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Phase 3: Enterprise</strong></td>
+                        <td>12-16 weeks</td>
+                        <td>All APJ sites. Custom ML models per asset class. ERP/CMMS integration. Compliance & governance.</td>
+                        <td>Full prescriptive maintenance transformation. $50M+ annual value realization.</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="cta-box">
+                <h2>Ready to Transform Maintenance from Cost Center to Profit Driver?</h2>
+                <p><strong>See the platform in action with your own data.</strong></p>
+                <p style="margin-top: 20px;">Schedule an executive briefing to explore how Rio Tinto, Alinta, Sydney Water, Toyota, and Renesas are leveraging Databricks for predictive and prescriptive maintenance intelligence across APJ.</p>
+                <p style="margin-top: 25px; font-size: 1.1em;"><strong>Contact your Databricks account team to schedule a demo tailored to your industry and language preference.</strong></p>
+            </div>
+
+            <div class="quote-box" style="background: linear-gradient(135deg, #fff9e6 0%, #ffe8cc 100%); border-left-color: #f39c12;">
+                "The ability to ask questions in Korean and see financial impacts in KRW made this the first maintenance analytics platform our Seoul executives actually used daily. The ROI dashboard alone justified the investment."
+                <div class="author">— CFO, Global Semiconductor Manufacturer</div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

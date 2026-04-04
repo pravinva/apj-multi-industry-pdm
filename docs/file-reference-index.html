@@ -1,0 +1,1133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Reference Index - APJ PdM Platform</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@300;400;500;600;700&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            line-height: 1.6;
+            color: #1b2431;
+            background: linear-gradient(135deg, #f0f2f5 0%, #e2e8f0 100%);
+            padding: 20px;
+        }
+
+        h1, h2, h3, h4 {
+            font-family: 'Barlow', sans-serif;
+            font-weight: 600;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(27, 36, 49, 0.15);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #1b2431 0%, #334155 100%);
+            color: white;
+            padding: 50px 60px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -10%;
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(255,255,255,0.05) 0%, transparent 70%);
+            border-radius: 50%;
+        }
+
+        header h1 {
+            font-size: 3em;
+            margin-bottom: 15px;
+            font-weight: 700;
+            position: relative;
+            z-index: 1;
+        }
+
+        header .subtitle {
+            font-size: 1.3em;
+            font-weight: 300;
+            opacity: 0.95;
+            position: relative;
+            z-index: 1;
+        }
+
+        .content {
+            padding: 60px;
+        }
+
+        .intro-box {
+            background: linear-gradient(135deg, #f0f2f5 0%, #e2e8f0 100%);
+            border-left: 5px solid #ff3621;
+            padding: 30px;
+            margin: 0 0 40px 0;
+            border-radius: 8px;
+        }
+
+        .intro-box p {
+            font-size: 1.05em;
+            line-height: 1.8;
+        }
+
+        .stats-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+
+        .stat-item {
+            background: linear-gradient(135deg, #ff3621 0%, #dc2626 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(255, 54, 33, 0.25);
+        }
+
+        .stat-item .number {
+            font-size: 2.5em;
+            font-weight: 700;
+            font-family: 'Barlow', sans-serif;
+        }
+
+        .stat-item .label {
+            font-size: 0.9em;
+            opacity: 0.9;
+            margin-top: 5px;
+        }
+
+        .search-box {
+            margin: 30px 0;
+            position: sticky;
+            top: 20px;
+            z-index: 100;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(27, 36, 49, 0.2);
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 15px 20px;
+            font-size: 1.1em;
+            border: 2px solid #1b2431;
+            border-radius: 8px;
+            font-family: 'Roboto', sans-serif;
+            transition: all 0.3s ease;
+        }
+
+        .search-box input:focus {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(255, 54, 33, 0.2);
+            border-color: #ff3621;
+        }
+
+        h2 {
+            color: #1b2431;
+            font-size: 2.2em;
+            margin: 50px 0 25px 0;
+            padding-bottom: 15px;
+            border-bottom: 4px solid #ff3621;
+            font-weight: 700;
+        }
+
+        .section-description {
+            background: #F5F5F5;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            font-size: 1.05em;
+            color: #555;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 25px 0;
+            box-shadow: 0 4px 15px rgba(27, 36, 49, 0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        th {
+            background: linear-gradient(135deg, #1b2431 0%, #334155 100%);
+            color: white;
+            padding: 16px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 1.05em;
+            font-family: 'Barlow', sans-serif;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        td {
+            padding: 14px 16px;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 0.98em;
+            vertical-align: top;
+        }
+
+        tr:hover {
+            background: #F5F5F5;
+        }
+
+        tr:nth-child(even) {
+            background: #FAFAFA;
+        }
+
+        tr:nth-child(even):hover {
+            background: #F5F5F5;
+        }
+
+        .file-link {
+            font-family: 'Courier New', monospace;
+            background: #1B3139;
+            color: #00E676;
+            padding: 4px 10px;
+            border-radius: 4px;
+            text-decoration: none;
+            font-size: 0.9em;
+            display: inline-block;
+            transition: all 0.3s ease;
+            word-break: break-all;
+        }
+
+        .file-link:hover {
+            background: #ff3621;
+            color: white;
+            transform: translateX(5px);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: 600;
+            margin: 2px;
+            white-space: nowrap;
+        }
+
+        .badge-dlt {
+            background: #1976D2;
+            color: white;
+        }
+
+        .badge-ml {
+            background: #FF6F00;
+            color: white;
+        }
+
+        .badge-app {
+            background: #1976D2;
+            color: white;
+        }
+
+        .badge-job {
+            background: #388E3C;
+            color: white;
+        }
+
+        .badge-config {
+            background: #7B1FA2;
+            color: white;
+        }
+
+        .badge-tool {
+            background: #F57C00;
+            color: white;
+        }
+
+        .badge-integration {
+            background: #C62828;
+            color: white;
+        }
+
+        .badge-test {
+            background: #5E35B1;
+            color: white;
+        }
+
+        .badge-python {
+            background: #3776AB;
+            color: white;
+        }
+
+        .badge-react {
+            background: #61DAFB;
+            color: #1B3139;
+        }
+
+        .badge-sql {
+            background: #CC2927;
+            color: white;
+        }
+
+        .badge-yaml {
+            background: #CB171E;
+            color: white;
+        }
+
+        .loc-count {
+            color: #888;
+            font-size: 0.9em;
+            font-style: italic;
+        }
+
+        .toc-nav {
+            background: white;
+            border: 2px solid #1b2431;
+            border-radius: 10px;
+            padding: 25px;
+            margin: 30px 0;
+        }
+
+        .toc-nav h3 {
+            color: #1b2431;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+
+        .toc-nav ul {
+            list-style: none;
+            padding: 0;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 10px;
+        }
+
+        .toc-nav li a {
+            color: #1B3139;
+            text-decoration: none;
+            padding: 10px 15px;
+            display: block;
+            border-radius: 6px;
+            transition: all 0.3s ease;
+            border-left: 3px solid transparent;
+        }
+
+        .toc-nav li a:hover {
+            background: #f0f2f5;
+            border-left-color: #ff3621;
+            padding-left: 25px;
+        }
+
+        .file-count {
+            background: #FFF8E1;
+            border-left: 4px solid #FFA000;
+            padding: 15px 20px;
+            margin: 15px 0;
+            border-radius: 6px;
+            font-weight: 600;
+            color: #F57C00;
+        }
+
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+
+            .container {
+                box-shadow: none;
+            }
+
+            .search-box {
+                display: none;
+            }
+        }
+    </style>
+    <script>
+        function searchFiles() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const tables = document.querySelectorAll('table tbody tr');
+
+            tables.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                if (text.includes(searchTerm)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        }
+
+        function clearSearch() {
+            document.getElementById('searchInput').value = '';
+            searchFiles();
+        }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Complete File Reference Index</h1>
+            <div class="subtitle">APJ Multi-Industry Predictive Maintenance Platform</div>
+        </header>
+
+        <div class="content">
+            <div class="intro-box">
+                <p><strong>This document provides a comprehensive, clickable reference to every source file in the platform.</strong> Use the search box below to quickly locate specific files, or browse by category. All file paths are clickable links for easy navigation.</p>
+            </div>
+
+            <div class="stats-bar">
+                <div class="stat-item">
+                    <div class="number">100+</div>
+                    <div class="label">Total Files</div>
+                </div>
+                <div class="stat-item">
+                    <div class="number">25+</div>
+                    <div class="label">Python Modules</div>
+                </div>
+                <div class="stat-item">
+                    <div class="number">9</div>
+                    <div class="label">React Components</div>
+                </div>
+                <div class="stat-item">
+                    <div class="number">15+</div>
+                    <div class="label">Config Files</div>
+                </div>
+                <div class="stat-item">
+                    <div class="number">10+</div>
+                    <div class="label">Test Suites</div>
+                </div>
+            </div>
+
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="Search for files, modules, or keywords..." onkeyup="searchFiles()">
+            </div>
+
+            <div class="toc-nav">
+                <h3>Quick Navigation</h3>
+                <ul>
+                    <li><a href="#dlt-pipelines">DLT Pipelines (3 files)</a></li>
+                    <li><a href="#ml-modules">ML Modules (7 files)</a></li>
+                    <li><a href="#app-backend">App Backend (1 file)</a></li>
+                    <li><a href="#app-frontend">App Frontend (9 files)</a></li>
+                    <li><a href="#jobs-workflows">Jobs & Workflows (1 file)</a></li>
+                    <li><a href="#simulator">Simulator (5 files)</a></li>
+                    <li><a href="#zerobus">Zerobus OT (3 files)</a></li>
+                    <li><a href="#agent-genie">Agent & Genie (4 files)</a></li>
+                    <li><a href="#config-files">Configuration (15+ files)</a></li>
+                    <li><a href="#tools-utilities">Tools & Utilities (6 files)</a></li>
+                    <li><a href="#deployment">Deployment (3 files)</a></li>
+                    <li><a href="#tests">Test Suites (10 files)</a></li>
+                </ul>
+            </div>
+
+            <h2 id="dlt-pipelines">DLT Pipelines (Medallion Architecture)</h2>
+
+            <div class="section-description">
+                Delta Live Tables pipeline modules implementing Bronze, Silver, and Gold layers with declarative ETL transformations.
+            </div>
+
+            <div class="file-count">3 Pipeline Files</div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 35%;">File Path</th>
+                        <th style="width: 15%;">Type</th>
+                        <th style="width: 50%;">Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><a href="../core/dlt/bronze.py" class="file-link">core/dlt/bronze.py</a></td>
+                        <td><span class="badge badge-dlt">DLT Bronze</span> <span class="badge badge-python">Python</span></td>
+                        <td>Raw telemetry ingestion from Zerobus and PI simulator. Normalizes sensor_readings and pi_simulated_tags. Enforces quality constraints (GOOD, UNCERTAIN, BAD).</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../core/dlt/silver.py" class="file-link">core/dlt/silver.py</a></td>
+                        <td><span class="badge badge-dlt">DLT Silver</span> <span class="badge badge-python">Python</span></td>
+                        <td>Feature engineering with 15m/1h/30d time windows. OT+PI alignment with provenance tracking (BOTH, OT_ONLY, PI_ONLY). Quality-weighted aggregations.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../core/dlt/gold.py" class="file-link">core/dlt/gold.py</a></td>
+                        <td><span class="badge badge-dlt">DLT Gold</span> <span class="badge badge-python">Python</span></td>
+                        <td>ML-ready feature vectors. Prediction enrichment with financial context. Generates pdm_predictions and financial_impact_events tables.</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2 id="ml-modules">Machine Learning Modules</h2>
+
+            <div class="section-description">
+                MLflow-managed model lifecycle with per-asset anomaly detection, RUL prediction, feature engineering, and batch scoring.
+            </div>
+
+            <div class="file-count">7 ML Files</div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 35%;">File Path</th>
+                        <th style="width: 15%;">Type</th>
+                        <th style="width: 50%;">Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><a href="../core/ml/train.py" class="file-link">core/ml/train.py</a></td>
+                        <td><span class="badge badge-ml">ML Training</span> <span class="badge badge-python">Python</span></td>
+                        <td>Per-industry model training orchestration. Trains anomaly and RUL models for each asset. MLflow experiment tracking at /Shared/ot-pdm-intelligence/{industry}.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../core/ml/batch_score.py" class="file-link">core/ml/batch_score.py</a></td>
+                        <td><span class="badge badge-ml">ML Scoring</span> <span class="badge badge-python">Python</span></td>
+                        <td>Batch prediction pipeline (scheduled every 2 hours). Resolves champion models and writes predictions to Gold tables.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../core/ml/anomaly_model.py" class="file-link">core/ml/anomaly_model.py</a></td>
+                        <td><span class="badge badge-ml">ML Model</span> <span class="badge badge-python">Python</span></td>
+                        <td>Isolation Forest for unsupervised anomaly detection. OTPdMAnomalyModel class with fit(), score(), log_to_mlflow() methods.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../core/ml/rul_model.py" class="file-link">core/ml/rul_model.py</a></td>
+                        <td><span class="badge badge-ml">ML Model</span> <span class="badge badge-python">Python</span></td>
+                        <td>Random Forest Regressor for remaining useful life prediction. OTPdMRULModel with evaluate(), predict() methods.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../core/ml/features.py" class="file-link">core/ml/features.py</a></td>
+                        <td><span class="badge badge-ml">Features</span> <span class="badge badge-python">Python</span></td>
+                        <td>Feature matrix construction from Silver tables. get_feature_matrix() pivots sensor features for ML training.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../core/ml/feature_importance.py" class="file-link">core/ml/feature_importance.py</a></td>
+                        <td><span class="badge badge-ml">Analysis</span> <span class="badge badge-python">Python</span></td>
+                        <td>SHAP and permutation importance analysis. Ranks sensor contribution to anomaly scores.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../core/ml/evaluate.py" class="file-link">core/ml/evaluate.py</a></td>
+                        <td><span class="badge badge-ml">Evaluation</span> <span class="badge badge-python">Python</span></td>
+                        <td>Model evaluation metrics: RMSE, R², MAE for RUL models. Precision/recall for anomaly detection.</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2 id="app-backend">Application Backend (FastAPI)</h2>
+
+            <div class="section-description">
+                FastAPI server providing REST APIs for UI, SQL orchestration, currency conversion, and Lakebase integration.
+            </div>
+
+            <div class="file-count">1 Backend File (~6000 lines, 231KB)</div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 35%;">File Path</th>
+                        <th style="width: 15%;">Type</th>
+                        <th style="width: 50%;">Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><a href="../app/server.py" class="file-link">app/server.py</a></td>
+                        <td><span class="badge badge-app">Backend</span> <span class="badge badge-python">Python</span></td>
+                        <td>Main FastAPI application server. Handles all API routes: /api/overview, /api/asset/{id}, /api/geo/*, /api/model/*, /api/finance/*, /api/simulator/*, /api/genie/*. Currency conversion, Genie integration, operator action persistence to Lakebase.</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Key API Endpoints in server.py</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 30%;">Endpoint</th>
+                        <th style="width: 10%;">Method</th>
+                        <th style="width: 60%;">Purpose</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>/api/overview</code></td>
+                        <td>GET</td>
+                        <td>Fleet-level health summary with financial exposure by industry/site</td>
+                    </tr>
+                    <tr>
+                        <td><code>/api/asset/{id}</code></td>
+                        <td>GET</td>
+                        <td>Asset-level telemetry, predictions, and financial context</td>
+                    </tr>
+                    <tr>
+                        <td><code>/api/geo/sites</code></td>
+                        <td>GET</td>
+                        <td>ISA-95 hierarchy navigation with currency-aware rollups</td>
+                    </tr>
+                    <tr>
+                        <td><code>/api/geo/assets/{site_id}</code></td>
+                        <td>GET</td>
+                        <td>Site-level asset list with health and financial metrics</td>
+                    </tr>
+                    <tr>
+                        <td><code>/api/model/predictions</code></td>
+                        <td>GET</td>
+                        <td>Recent ML predictions with model metadata</td>
+                    </tr>
+                    <tr>
+                        <td><code>/api/finance/summary</code></td>
+                        <td>GET</td>
+                        <td>Executive finance dashboard with avoided costs and ROI</td>
+                    </tr>
+                    <tr>
+                        <td><code>/api/simulator/inject</code></td>
+                        <td>POST</td>
+                        <td>Fault injection for demo scenarios (non-blocking)</td>
+                    </tr>
+                    <tr>
+                        <td><code>/api/ui/recommendation/action</code></td>
+                        <td>POST</td>
+                        <td>Operator decision capture (Approve/Reject/Defer) to Lakebase</td>
+                    </tr>
+                    <tr>
+                        <td><code>/api/genie/query</code></td>
+                        <td>POST</td>
+                        <td>Natural language query to industry-specific Genie room</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2 id="app-frontend">Application Frontend (React + Vite)</h2>
+
+            <div class="section-description">
+                React components for interactive dashboards, ISA-95 hierarchy navigation, factory maps, and Genie integration.
+            </div>
+
+            <div class="file-count">9 React Component Files</div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 35%;">File Path</th>
+                        <th style="width: 15%;">Type</th>
+                        <th style="width: 50%;">Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><a href="../app/src/App.jsx" class="file-link">app/src/App.jsx</a></td>
+                        <td><span class="badge badge-app">Main App</span> <span class="badge badge-react">React</span></td>
+                        <td>Main application shell with routing, industry/currency selectors, page navigation (Fleet, Drilldown, ISA-95, Stream, Model, Simulator).</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../app/src/components/GeoMap.jsx" class="file-link">app/src/components/GeoMap.jsx</a></td>
+                        <td><span class="badge badge-app">Component</span> <span class="badge badge-react">React</span></td>
+                        <td>ISA-95 hierarchy tree navigation with collapsible nodes (site → area → unit → equipment → component). Factory map mode with textured layout.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../app/src/components/GeoStatusBar.jsx" class="file-link">app/src/components/GeoStatusBar.jsx</a></td>
+                        <td><span class="badge badge-app">Component</span> <span class="badge badge-react">React</span></td>
+                        <td>Real-time status bar with site filter, risk counts (CRITICAL, HIGH, MEDIUM, LOW), and financial summary display.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../app/src/components/GeoGeniePanel.jsx" class="file-link">app/src/components/GeoGeniePanel.jsx</a></td>
+                        <td><span class="badge badge-app">Component</span> <span class="badge badge-react">React</span></td>
+                        <td>Natural language query interface with currency-aware prompts. Genie room deep-linking and "Investigate in Genie" functionality.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../app/src/components/AssetSidebar.jsx" class="file-link">app/src/components/AssetSidebar.jsx</a></td>
+                        <td><span class="badge badge-app">Component</span> <span class="badge badge-react">React</span></td>
+                        <td>Asset detail panel with telemetry charts, predictions, maintenance recommendations, and action buttons (Approve/Reject/Defer).</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../app/src/components/PIDSchematic.jsx" class="file-link">app/src/components/PIDSchematic.jsx</a></td>
+                        <td><span class="badge badge-app">Component</span> <span class="badge badge-react">React</span></td>
+                        <td>P&ID diagram for water/energy industries with live sensor overlays. Visual representation of pump systems and flow networks.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../app/src/components/WindSchematic.jsx" class="file-link">app/src/components/WindSchematic.jsx</a></td>
+                        <td><span class="badge badge-app">Component</span> <span class="badge badge-react">React</span></td>
+                        <td>Wind turbine schematic for energy industry with component health visualization (blade, gearbox, generator, tower).</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../app/src/components/Sparkline.jsx" class="file-link">app/src/components/Sparkline.jsx</a></td>
+                        <td><span class="badge badge-app">Component</span> <span class="badge badge-react">React</span></td>
+                        <td>Inline time-series charts for trend visualization in tables and cards. Renders mini charts using Canvas API.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../app/src/hooks/useGeoData.js" class="file-link">app/src/hooks/useGeoData.js</a></td>
+                        <td><span class="badge badge-app">Hook</span> <span class="badge badge-react">React</span></td>
+                        <td>Custom React hook for fetching and caching Geo hierarchy data. Handles currency conversion and site filtering.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../app/src/main.jsx" class="file-link">app/src/main.jsx</a></td>
+                        <td><span class="badge badge-app">Entry</span> <span class="badge badge-react">React</span></td>
+                        <td>Application entry point. React 18 root render with StrictMode.</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2 id="jobs-workflows">Jobs & Workflows</h2>
+
+            <div class="section-description">
+                Databricks Asset Bundle definition with all jobs, DLT pipelines, and app deployment configuration.
+            </div>
+
+            <div class="file-count">1 Bundle File</div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 35%;">File Path</th>
+                        <th style="width: 15%;">Type</th>
+                        <th style="width: 50%;">Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><a href="../databricks.yml" class="file-link">databricks.yml</a></td>
+                        <td><span class="badge badge-config">Bundle</span> <span class="badge badge-yaml">YAML</span></td>
+                        <td>Infrastructure-as-code bundle definition. Defines 5 jobs: training (daily 02:00), scoring (every 2h), zerobus-connector (on-demand), financial-backfill (daily 01:15), workspace-bootstrap (on-demand). DLT pipeline: ot-pdm-dlt-{industry} (continuous mode).</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Jobs Defined in databricks.yml</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 30%;">Job Name</th>
+                        <th style="width: 15%;">Schedule</th>
+                        <th style="width: 55%;">Entry Point & Purpose</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>ot-pdm-training-{industry}</code></td>
+                        <td>Daily 02:00 UTC</td>
+                        <td><a href="../core/ml/train.py" class="file-link">core/ml/train.py</a> - Train anomaly and RUL models per asset</td>
+                    </tr>
+                    <tr>
+                        <td><code>ot-pdm-scoring-{industry}</code></td>
+                        <td>Every 2 hours</td>
+                        <td><a href="../core/ml/batch_score.py" class="file-link">core/ml/batch_score.py</a> - Batch prediction using champion models</td>
+                    </tr>
+                    <tr>
+                        <td><code>ot-pdm-zerobus-connector-{industry}</code></td>
+                        <td>On-demand</td>
+                        <td><a href="../core/zerobus_ingest/run_connector.py" class="file-link">core/zerobus_ingest/run_connector.py</a> - Real-time OT/IoT ingestion</td>
+                    </tr>
+                    <tr>
+                        <td><code>ot-pdm-financial-backfill-{industry}</code></td>
+                        <td>Daily 01:15 UTC</td>
+                        <td><a href="../core/finance/generate_financials.py" class="file-link">core/finance/generate_financials.py</a> - Generate 730-day financial history</td>
+                    </tr>
+                    <tr>
+                        <td><code>ot-pdm-workspace-bootstrap</code></td>
+                        <td>On-demand</td>
+                        <td><a href="../RUNME_BOOTSTRAP_ALL.py" class="file-link">RUNME_BOOTSTRAP_ALL.py</a> - Bootstrap all industries (catalogs, schemas, grants)</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2 id="simulator">Simulator Components</h2>
+
+            <div class="section-description">
+                Deterministic telemetry generation with physics-based models, fault injection, and SDT compression.
+            </div>
+
+            <div class="file-count">5 Simulator Files</div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 35%;">File Path</th>
+                        <th style="width: 15%;">Type</th>
+                        <th style="width: 50%;">Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><a href="../core/simulator/engine.py" class="file-link">core/simulator/engine.py</a></td>
+                        <td><span class="badge badge-integration">Simulator</span> <span class="badge badge-python">Python</span></td>
+                        <td>Deterministic telemetry generation with configurable tick intervals (800ms default). Generates sensor readings for all configured assets.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../core/simulator/physics.py" class="file-link">core/simulator/physics.py</a></td>
+                        <td><span class="badge badge-integration">Simulator</span> <span class="badge badge-python">Python</span></td>
+                        <td>Industry-specific physics models: bearing wear (mining), thermal dynamics (energy), hydraulic pressure (water), press force (automotive).</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../core/simulator/semiconductor_physics.py" class="file-link">core/simulator/semiconductor_physics.py</a></td>
+                        <td><span class="badge badge-integration">Simulator</span> <span class="badge badge-python">Python</span></td>
+                        <td>Fab-specific physics: plasma stability, vacuum integrity, etch rate drift, temperature uniformity. Chamber degradation modeling.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../core/simulator/fault_injection.py" class="file-link">core/simulator/fault_injection.py</a></td>
+                        <td><span class="badge badge-integration">Simulator</span> <span class="badge badge-python">Python</span></td>
+                        <td>Configurable fault scenarios with gradual degradation and cascade failures. Supports drift, spike, oscillation, and step-change faults.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../core/simulator/sdt.py" class="file-link">core/simulator/sdt.py</a></td>
+                        <td><span class="badge badge-integration">Simulator</span> <span class="badge badge-python">Python</span></td>
+                        <td>Swinging Door Trending algorithm for data compression (85-95% reduction). Tag-specific epsilon configuration and heartbeat mechanism.</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2 id="zerobus">Zerobus OT Connectivity</h2>
+
+            <div class="section-description">
+                First-mile OT/IoT connectivity supporting OPC-UA, Modbus, and MQTT protocols.
+            </div>
+
+            <div class="file-count">3 Zerobus Files</div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 35%;">File Path</th>
+                        <th style="width: 15%;">Type</th>
+                        <th style="width: 50%;">Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><a href="../core/zerobus_ingest/connector.py" class="file-link">core/zerobus_ingest/connector.py</a></td>
+                        <td><span class="badge badge-integration">Zerobus</span> <span class="badge badge-python">Python</span></td>
+                        <td>Main Zerobus connector implementation for OPC-UA, Modbus, MQTT protocols. Handles protocol negotiation, retry logic, and Delta Lake writes.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../core/zerobus_ingest/run_connector.py" class="file-link">core/zerobus_ingest/run_connector.py</a></td>
+                        <td><span class="badge badge-integration">Zerobus</span> <span class="badge badge-python">Python</span></td>
+                        <td>Job entry point for Zerobus ingestion. Loads industry config, initializes connector, handles errors and monitoring.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../core/zerobus_ingest/defaults.yaml" class="file-link">core/zerobus_ingest/defaults.yaml</a></td>
+                        <td><span class="badge badge-config">Config</span> <span class="badge badge-yaml">YAML</span></td>
+                        <td>Default protocol configurations and retry policies. Timeout settings, buffer sizes, and connection pooling parameters.</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2 id="agent-genie">Agent & Genie Integration</h2>
+
+            <div class="section-description">
+                AI agent orchestration with manual retrieval (RAG-lite), industry-specific personas, and Genie room management.
+            </div>
+
+            <div class="file-count">5 Agent/Genie Files</div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 35%;">File Path</th>
+                        <th style="width: 15%;">Type</th>
+                        <th style="width: 50%;">Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><a href="../core/agent/agent.py" class="file-link">core/agent/agent.py</a></td>
+                        <td><span class="badge badge-integration">Agent</span> <span class="badge badge-python">Python</span></td>
+                        <td>AI agent orchestration with manual retrieval and context management. Queries equipment documentation and provides grounded responses.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../core/agent/personas.py" class="file-link">core/agent/personas.py</a></td>
+                        <td><span class="badge badge-integration">Agent</span> <span class="badge badge-python">Python</span></td>
+                        <td>Industry-specific agent personalities and prompt templates. Defines maintenance supervisor personas for mining, energy, water, automotive, semiconductor.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../core/agent/tools.py" class="file-link">core/agent/tools.py</a></td>
+                        <td><span class="badge badge-integration">Agent</span> <span class="badge badge-python">Python</span></td>
+                        <td>Tool definitions for SQL queries, manual lookup, equipment diagnostics. Provides agent with access to Delta tables and documentation.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../core/agent/evaluate.py" class="file-link">core/agent/evaluate.py</a></td>
+                        <td><span class="badge badge-integration">Agent</span> <span class="badge badge-python">Python</span></td>
+                        <td>Accuracy and response quality metrics for agent performance tuning. Evaluates grounding accuracy and citation quality.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../core/genie/setup.py" class="file-link">core/genie/setup.py</a></td>
+                        <td><span class="badge badge-integration">Genie</span> <span class="badge badge-python">Python</span></td>
+                        <td>Programmatic Genie room creation with industry-specific instructions. Generates room IDs and writes to app/genie_rooms.json.</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2 id="config-files">Configuration Files</h2>
+
+            <div class="section-description">
+                Industry configs, deployment matrix, DDL schemas, and app deployment specifications.
+            </div>
+
+            <div class="file-count">15+ Configuration Files</div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 35%;">File Path</th>
+                        <th style="width: 15%;">Type</th>
+                        <th style="width: 50%;">Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><a href="../core/catalog/schema.sql" class="file-link">core/catalog/schema.sql</a></td>
+                        <td><span class="badge badge-config">DDL</span> <span class="badge badge-sql">SQL</span></td>
+                        <td>DDL for all Bronze, Silver, Gold, Lakebase tables. Defines sensor_readings, ot_pi_aligned, pdm_predictions, financial_impact_events, parts_inventory, work_orders, maintenance_schedule.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../app/app.yaml" class="file-link">app/app.yaml</a></td>
+                        <td><span class="badge badge-config">App</span> <span class="badge badge-yaml">YAML</span></td>
+                        <td>Databricks Apps deployment spec. Command, env vars (OT_PDM_WAREHOUSE_ID, scoring job IDs per industry), resource limits.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../industries/deployment_matrix.yaml" class="file-link">industries/deployment_matrix.yaml</a></td>
+                        <td><span class="badge badge-config">Matrix</span> <span class="badge badge-yaml">YAML</span></td>
+                        <td>Resource consistency matrix across all industries. Ensures all 5 industries have required jobs (training, scoring, zerobus-connector, financial-backfill) and DLT pipeline.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../industries/mining/config.yaml" class="file-link">industries/mining/config.yaml</a></td>
+                        <td><span class="badge badge-config">Industry</span> <span class="badge badge-yaml">YAML</span></td>
+                        <td>Mining industry config: Rio Tinto anchor account, Cat 793F trucks, conveyors. ISA-95 hierarchy, SDT compression settings, fault injection profiles, 4 APJ sites (Pilbara, Odisha, Kalimantan, Gangwon).</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../industries/energy/config.yaml" class="file-link">industries/energy/config.yaml</a></td>
+                        <td><span class="badge badge-config">Industry</span> <span class="badge badge-yaml">YAML</span></td>
+                        <td>Energy industry config: Alinta anchor account, wind turbines, BESS, transformers. Grid stability parameters, 4 APJ sites (Hornsdale, Gujarat, Johor, Jeju).</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../industries/water/config.yaml" class="file-link">industries/water/config.yaml</a></td>
+                        <td><span class="badge badge-config">Industry</span> <span class="badge badge-yaml">YAML</span></td>
+                        <td>Water industry config: Sydney Water anchor account, centrifugal pumps, valve systems. Leak detection thresholds, 4 APJ sites (Sydney, Chennai, Singapore, Seoul).</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../industries/automotive/config.yaml" class="file-link">industries/automotive/config.yaml</a></td>
+                        <td><span class="badge badge-config">Industry</span> <span class="badge badge-yaml">YAML</span></td>
+                        <td>Automotive industry config: Toyota anchor account, hydraulic presses, robotic welders. Production line stop-risk, 4 APJ sites (Motomachi, Pune, Thailand, Ulsan).</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../industries/semiconductor/config.yaml" class="file-link">industries/semiconductor/config.yaml</a></td>
+                        <td><span class="badge badge-config">Industry</span> <span class="badge badge-yaml">YAML</span></td>
+                        <td>Semiconductor industry config: Renesas anchor account, etch chambers, lithography steppers. Yield protection physics, 4 APJ sites (Naka, Bengaluru, Penang, Giheung).</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../app/genie_rooms.json" class="file-link">app/genie_rooms.json</a></td>
+                        <td><span class="badge badge-config">Genie</span> <span class="badge badge-yaml">JSON</span></td>
+                        <td>Genie room IDs mapped to industries. Generated by core/genie/setup.py. Used by backend for Genie deep-linking.</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2 id="tools-utilities">Tools & Utilities</h2>
+
+            <div class="section-description">
+                Supporting scripts for bootstrapping, reconciliation, testing, and operational management.
+            </div>
+
+            <div class="file-count">6 Tool Files</div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 35%;">File Path</th>
+                        <th style="width: 15%;">Type</th>
+                        <th style="width: 50%;">Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><a href="../tools/bootstrap_all_industries.py" class="file-link">tools/bootstrap_all_industries.py</a></td>
+                        <td><span class="badge badge-tool">Bootstrap</span> <span class="badge badge-python">Python</span></td>
+                        <td>Provisions all configured industries: catalogs, schemas, seed data, grants. Supports widgets: industries_csv, history_days, grant_principal, trigger_jobs, reset_existing.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../tools/reconcile_industry_matrix.py" class="file-link">tools/reconcile_industry_matrix.py</a></td>
+                        <td><span class="badge badge-tool">Reconcile</span> <span class="badge badge-python">Python</span></td>
+                        <td>Audits and auto-corrects resource drift against deployment_matrix.yaml. Ensures all industries have required jobs and pipelines. Dry-run and --apply modes.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../tools/setup_genie_rooms.py" class="file-link">tools/setup_genie_rooms.py</a></td>
+                        <td><span class="badge badge-tool">Genie</span> <span class="badge badge-python">Python</span></td>
+                        <td>Creates industry-specific Genie rooms with maintenance supervisor personas. Writes room IDs to app/genie_rooms.json for backend integration.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../tools/sdt_compression_report.py" class="file-link">tools/sdt_compression_report.py</a></td>
+                        <td><span class="badge badge-tool">Analysis</span> <span class="badge badge-python">Python</span></td>
+                        <td>Analyzes Swinging Door Trending compression ratios and quality impact. Generates markdown reports in docs/sdt-compression/ with charts.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../tools/train_and_score_from_feature_vectors.py" class="file-link">tools/train_and_score_from_feature_vectors.py</a></td>
+                        <td><span class="badge badge-tool">ML Util</span> <span class="badge badge-python">Python</span></td>
+                        <td>Offline ML experimentation using pre-computed feature vectors from lakebase.asset_feature_vectors. Useful for rapid model iteration.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../tools/zerobus_easy_start.py" class="file-link">tools/zerobus_easy_start.py</a></td>
+                        <td><span class="badge badge-tool">Setup</span> <span class="badge badge-python">Python</span></td>
+                        <td>Quick-start wizard for Zerobus connector configuration. Interactive CLI for protocol selection, endpoint config, and credential setup.</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2 id="deployment">Deployment & Bootstrap</h2>
+
+            <div class="section-description">
+                Infrastructure-as-code, bootstrap notebooks, and configuration loader.
+            </div>
+
+            <div class="file-count">3 Deployment Files</div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 35%;">File Path</th>
+                        <th style="width: 15%;">Type</th>
+                        <th style="width: 50%;">Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><a href="../databricks.yml" class="file-link">databricks.yml</a></td>
+                        <td><span class="badge badge-config">Bundle</span> <span class="badge badge-yaml">YAML</span></td>
+                        <td>Main bundle definition (also listed in Jobs section). Single source of truth for all resources: jobs, pipelines, variables, targets.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../RUNME_BOOTSTRAP_ALL.py" class="file-link">RUNME_BOOTSTRAP_ALL.py</a></td>
+                        <td><span class="badge badge-tool">Bootstrap</span> <span class="badge badge-python">Python</span></td>
+                        <td>One-run workspace bootstrap notebook for all industries. Provisions catalogs, schemas, applies DDL, loads seed data, grants permissions, triggers jobs.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../core/config/loader.py" class="file-link">core/config/loader.py</a></td>
+                        <td><span class="badge badge-config">Loader</span> <span class="badge badge-python">Python</span></td>
+                        <td>Centralized YAML config loading with inheritance and validation. load_config(industry, config_root) resolves and merges industry configs.</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2 id="tests">Test Suites</h2>
+
+            <div class="section-description">
+                Unit and integration tests for DLT, ML, simulator, agent, and API components.
+            </div>
+
+            <div class="file-count">10 Test Files</div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 35%;">File Path</th>
+                        <th style="width: 15%;">Type</th>
+                        <th style="width: 50%;">Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><a href="../tests/test_bronze.py" class="file-link">tests/test_bronze.py</a></td>
+                        <td><span class="badge badge-test">Test</span> <span class="badge badge-python">Python</span></td>
+                        <td>Bronze DLT pipeline tests. Validates schema enforcement, quality constraint handling, and data normalization logic.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../tests/test_features.py" class="file-link">tests/test_features.py</a></td>
+                        <td><span class="badge badge-test">Test</span> <span class="badge badge-python">Python</span></td>
+                        <td>Feature engineering tests. Verifies window aggregations, z-score calculations, and quality-weighted mean/stddev.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../tests/test_ml.py" class="file-link">tests/test_ml.py</a></td>
+                        <td><span class="badge badge-test">Test</span> <span class="badge badge-python">Python</span></td>
+                        <td>ML model tests. Validates anomaly detection accuracy, RUL prediction RMSE, and MLflow logging.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../tests/test_simulator.py" class="file-link">tests/test_simulator.py</a></td>
+                        <td><span class="badge badge-test">Test</span> <span class="badge badge-python">Python</span></td>
+                        <td>Simulator tests. Checks physics model outputs, deterministic telemetry generation, and fault injection behavior.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../tests/test_sdt.py" class="file-link">tests/test_sdt.py</a></td>
+                        <td><span class="badge badge-test">Test</span> <span class="badge badge-python">Python</span></td>
+                        <td>SDT compression tests. Verifies compression ratio (target 85-95%), signal fidelity preservation, and heartbeat mechanism.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../tests/test_semiconductor.py" class="file-link">tests/test_semiconductor.py</a></td>
+                        <td><span class="badge badge-test">Test</span> <span class="badge badge-python">Python</span></td>
+                        <td>Semiconductor physics tests. Validates plasma stability models, vacuum integrity simulations, and etch rate drift.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../tests/test_zerobus_connector.py" class="file-link">tests/test_zerobus_connector.py</a></td>
+                        <td><span class="badge badge-test">Test</span> <span class="badge badge-python">Python</span></td>
+                        <td>Zerobus connector tests. Mocks OPC-UA/Modbus/MQTT protocols, verifies retry logic, and Delta Lake write paths.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../tests/test_agent.py" class="file-link">tests/test_agent.py</a></td>
+                        <td><span class="badge badge-test">Test</span> <span class="badge badge-python">Python</span></td>
+                        <td>Agent tests. Validates manual retrieval accuracy, citation quality, and persona prompt rendering.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../tests/test_app_api.py" class="file-link">tests/test_app_api.py</a></td>
+                        <td><span class="badge badge-test">Test</span> <span class="badge badge-python">Python</span></td>
+                        <td>FastAPI tests. HTTP client tests for all API endpoints, currency conversion, and JSON schema validation.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../tests/integration/test_full_stack.py" class="file-link">tests/integration/test_full_stack.py</a></td>
+                        <td><span class="badge badge-test">Integration</span> <span class="badge badge-python">Python</span></td>
+                        <td>End-to-end integration test. Simulates telemetry → DLT → ML → API flow for complete stack validation.</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2>Additional Support Files</h2>
+
+            <div class="section-description">
+                Feature engineering, finance generation, and shared utilities.
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 35%;">File Path</th>
+                        <th style="width: 15%;">Type</th>
+                        <th style="width: 50%;">Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><a href="../core/features/engineering.py" class="file-link">core/features/engineering.py</a></td>
+                        <td><span class="badge badge-ml">Features</span> <span class="badge badge-python">Python</span></td>
+                        <td>Shared feature computation logic: rolling stats, FFT transforms, percentile bands. Used by both DLT Silver and ML training.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../core/finance/generate_financials.py" class="file-link">core/finance/generate_financials.py</a></td>
+                        <td><span class="badge badge-job">Finance</span> <span class="badge badge-python">Python</span></td>
+                        <td>Historical financial data synthesis for executive dashboards. Generates 730 days of maintenance costs, avoided costs, and ROI projections by site/industry.</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="intro-box" style="margin-top: 50px;">
+                <h3 style="color: #1b2431; margin-bottom: 15px;">Navigation Tips</h3>
+                <ul style="margin-left: 20px; line-height: 2;">
+                    <li>Use the <strong>search box</strong> at the top to filter files by keyword (e.g., "anomaly", "genie", "config")</li>
+                    <li>Click any <strong>file path link</strong> to navigate directly to the source file</li>
+                    <li>All paths are relative to the repository root: <code>/Users/pravin.varma/Documents/Demo/apj-multi-industry-pdm/</code></li>
+                    <li><strong>Color-coded badges</strong> indicate file type: DLT (green), ML (orange), App (blue), Config (purple), Tool (orange), Test (purple)</li>
+                    <li>Tables are <strong>sortable and searchable</strong> for quick reference during development or customer demos</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

@@ -4,3 +4,19 @@ __pycache__/
 .DS_Store
 node_modules/
 app/.npmrc
+
+# App runtime directories
+app-deploy/
+app-runtime/
+app-runtime-min/
+app-runtime-package/
+app-runtime-package2/
+app/dist/
+app/.zerobus-configs/
+app/.zerobus-key
+
+# MLflow
+mlruns/
+
+# Databricks
+.databricks/
