@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>APJ Multi-Industry Predictive Maintenance - Technical Overview for SAs</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
     <style>
         * {
             margin: 0;
@@ -12,11 +15,15 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-family: 'Roboto', sans-serif;
             line-height: 1.6;
             color: #1a1a1a;
             background: linear-gradient(135deg, #1b2431 0%, #334155 100%);
             padding: 20px;
+        }
+
+        h1, h2, h3, h4 {
+            font-family: 'Barlow', sans-serif;
         }
 
         .container {
@@ -29,7 +36,7 @@
         }
 
         header {
-            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+            background: linear-gradient(135deg, #1b2431 0%, #334155 100%);
             color: white;
             padding: 40px;
             text-align: center;
@@ -43,7 +50,7 @@
 
         header .subtitle {
             font-size: 1.2em;
-            color: #ff6b6b;
+            color: #ff3621;
             font-weight: 600;
         }
 
@@ -499,6 +506,122 @@
                 <li>Typical compression: 85-95% reduction in row count while preserving anomaly detection accuracy</li>
                 <li>Reduces network bandwidth, storage costs, and downstream processing load</li>
             </ul>
+
+            <h2>UC Business Semantics Layer</h2>
+
+            <div class="highlight-box">
+                <h3>Semantic Contract Across Data, APIs, and UX</h3>
+                <p>The platform implements a <strong>Unity Catalog business semantics contract</strong> that standardizes how raw telemetry, model outputs, and finance events are translated into executive metrics. This keeps Genie responses and dashboard KPIs consistent for every industry and site.</p>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Semantic Category</th>
+                        <th>Canonical Meaning</th>
+                        <th>Primary Data Plane</th>
+                        <th>Surface Layer</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Risk Semantics</strong></td>
+                        <td>Severity and urgency derived from anomaly + RUL context</td>
+                        <td>Gold <code>pdm_predictions</code></td>
+                        <td>Fleet risk matrix, Geo cards, Genie answers</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Value Semantics</strong></td>
+                        <td>Expected failure economics vs intervention economics</td>
+                        <td>Gold <code>financial_impact_events</code></td>
+                        <td>Finance dashboard, recommendation banners</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Adoption Semantics</strong></td>
+                        <td>Prediction consumption and action conversion by site</td>
+                        <td>Finance daily rollups + Lakebase work orders</td>
+                        <td>Executive adoption insights, Genie ROI Q&A</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Governance Semantics</strong></td>
+                        <td>Lineage, ownership, and policy context for metrics</td>
+                        <td>Unity Catalog metadata + audit events</td>
+                        <td>Trust/compliance narrative for CXO and risk teams</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <ul>
+                <li><strong>API semantics:</strong> Finance and executive endpoints expose semantically normalized fields (for example, ROI, utilization, maturity) rather than raw-only counters.</li>
+                <li><strong>Genie semantics:</strong> Prompt context includes adoption/ROI semantics, enabling consistent executive answers without hardcoded responses.</li>
+                <li><strong>Localization semantics:</strong> Currency/language conversion preserves metric meaning while adapting format and language output.</li>
+            </ul>
+
+            <h3>Where UC Metrics Are Defined</h3>
+            <ul>
+                <li><strong>Primary computation:</strong> <code>app/server.py</code> in <code>_adoption_insights(...)</code>.</li>
+                <li><strong>Executive payload wiring:</strong> <code>app/server.py</code> in <code>_executive_value(...)</code>, where <code>adoption_insights</code> is attached to the executive response.</li>
+                <li><strong>Genie semantic grounding:</strong> <code>app/server.py</code> in <code>agent_finance_chat(...)</code>, where adoption metrics are injected into finance chat context.</li>
+                <li><strong>UI rendering:</strong> <code>app/src/App.jsx</code> in the executive finance view (Platform Adoption Insights card).</li>
+            </ul>
+
+            <h3>How UC Metrics Are Calculated</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Metric</th>
+                        <th>Calculation</th>
+                        <th>Primary Inputs</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>model_utilization_rate_pct</strong></td>
+                        <td><code>(total_actioned_assets / total_alerted_assets) * 100</code></td>
+                        <td>Actioned assets (recommendation actions or work-order proxy) and alerted assets from 30d events</td>
+                    </tr>
+                    <tr>
+                        <td><strong>genie_queries_30d</strong></td>
+                        <td>Per-site proxy: <code>alerted_assets*8 + actioned*12 + total_work_orders*2</code>, then summed across sites</td>
+                        <td><code>gold.financial_impact_events</code>, <code>lakebase.work_orders</code>, actioned asset sets</td>
+                    </tr>
+                    <tr>
+                        <td><strong>predictions_consumed_sites</strong></td>
+                        <td>Count of sites where <code>alerted_assets_30d &gt; 0</code></td>
+                        <td>Per-site maturity rows built in <code>_adoption_insights</code></td>
+                    </tr>
+                    <tr>
+                        <td><strong>cost_per_prediction</strong></td>
+                        <td><code>intervention_30d / event_count_30d</code></td>
+                        <td>Intervention totals and event volume from 30d site event aggregation (with finance fallback)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>avoided_cost_per_prediction</strong></td>
+                        <td><code>avoided_30d / event_count_30d</code></td>
+                        <td>Avoided-cost totals and event volume from 30d site event aggregation (with finance fallback)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>platform_roi_x</strong></td>
+                        <td><code>ebit_saved / (intervention_cost + platform_cost)</code></td>
+                        <td>Executive EBIT saved plus intervention/platform investment from executive value computation</td>
+                    </tr>
+                    <tr>
+                        <td><strong>mttr_improvement_pct</strong></td>
+                        <td>Proxy curve: <code>min(35, 6 + model_utilization_rate_pct*0.12)</code></td>
+                        <td>Global model utilization rate</td>
+                    </tr>
+                    <tr>
+                        <td><strong>failure_recurrence_reduction_pct</strong></td>
+                        <td>Proxy curve: <code>min(35, 8 + model_utilization_rate_pct*0.15)</code></td>
+                        <td>Global model utilization rate</td>
+                    </tr>
+                    <tr>
+                        <td><strong>site_maturity.maturity_score</strong></td>
+                        <td><code>0.55*action_rate + 0.25*prediction_coverage + 0.20*engagement_score</code>, bounded to 0-100</td>
+                        <td>Action rate, prediction coverage, and normalized engagement (<code>genie_queries_30d</code>)</td>
+                    </tr>
+                </tbody>
+            </table>
 
             <h2>Quick Deployment Guide</h2>
 

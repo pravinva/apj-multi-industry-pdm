@@ -436,6 +436,7 @@
             <div class="toc">
                 <h3>Table of Contents</h3>
                 <ul>
+                    <li><a href="#uc-semantics">0. UC Business Semantics Layer</a></li>
                     <li><a href="#dlt-pipelines">1. Delta Live Tables (DLT) Pipelines</a></li>
                     <li><a href="#tables">2. Delta Lake Tables Schema</a></li>
                     <li><a href="#ml-components">3. Machine Learning Components</a></li>
@@ -447,6 +448,108 @@
                     <li><a href="#integration">9. Integration Components</a></li>
                 </ul>
             </div>
+
+            <h2 id="uc-semantics">0. UC Business Semantics Layer</h2>
+
+            <div class="section-intro">
+                This layer standardizes business meaning across reliability, finance, and adoption KPIs so that dashboards and Genie responses stay consistent across industries, sites, and currencies.
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Semantic Artifact</th>
+                        <th>Definition</th>
+                        <th>Source Assets</th>
+                        <th>Consumption Surface</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Risk Event</strong></td>
+                        <td>Asset condition event combining anomaly severity and near-term RUL context</td>
+                        <td>Gold <code>pdm_predictions</code></td>
+                        <td>Fleet cards, Geo drilldown, model views</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Value Event</strong></td>
+                        <td>Economic impact record comparing expected failure cost and intervention cost</td>
+                        <td>Gold <code>financial_impact_events</code></td>
+                        <td>Finance dashboard, recommendation UX, Genie finance Q&A</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Adoption Insight</strong></td>
+                        <td>Platform utilization and decision conversion indicators (site and portfolio)</td>
+                        <td>Finance daily rollups + Lakebase <code>work_orders</code></td>
+                        <td>Executive overview adoption card, maturity ranking</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Governance Context</strong></td>
+                        <td>Data ownership, lineage, and policy context attached to KPIs</td>
+                        <td>Unity Catalog objects + access controls</td>
+                        <td>Audit/compliance narratives and trusted CXO reporting</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>UC Metrics Definition & Formula Map</h3>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Metric Key</th>
+                        <th>Defined In</th>
+                        <th>Formula</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>model_utilization_rate_pct</strong></td>
+                        <td><span class="code-path">app/server.py::_adoption_insights</span></td>
+                        <td><code>(total_actioned_assets / total_alerted_assets) * 100</code></td>
+                    </tr>
+                    <tr>
+                        <td><strong>genie_queries_30d</strong></td>
+                        <td><span class="code-path">app/server.py::_adoption_insights</span></td>
+                        <td>Per-site proxy <code>alerted*8 + actioned*12 + work_orders*2</code>, then portfolio sum</td>
+                    </tr>
+                    <tr>
+                        <td><strong>predictions_consumed_sites</strong></td>
+                        <td><span class="code-path">app/server.py::_adoption_insights</span></td>
+                        <td>Count of sites with <code>alerted_assets_30d &gt; 0</code></td>
+                    </tr>
+                    <tr>
+                        <td><strong>cost_per_prediction</strong></td>
+                        <td><span class="code-path">app/server.py::_adoption_insights</span></td>
+                        <td><code>intervention_30d / event_count_30d</code></td>
+                    </tr>
+                    <tr>
+                        <td><strong>avoided_cost_per_prediction</strong></td>
+                        <td><span class="code-path">app/server.py::_adoption_insights</span></td>
+                        <td><code>avoided_30d / event_count_30d</code></td>
+                    </tr>
+                    <tr>
+                        <td><strong>platform_roi_x</strong></td>
+                        <td><span class="code-path">app/server.py::_adoption_insights</span></td>
+                        <td><code>ebit_saved / (intervention_cost + platform_cost)</code></td>
+                    </tr>
+                    <tr>
+                        <td><strong>mttr_improvement_pct</strong></td>
+                        <td><span class="code-path">app/server.py::_adoption_insights</span></td>
+                        <td><code>min(35, 6 + action_rate_global*0.12)</code></td>
+                    </tr>
+                    <tr>
+                        <td><strong>failure_recurrence_reduction_pct</strong></td>
+                        <td><span class="code-path">app/server.py::_adoption_insights</span></td>
+                        <td><code>min(35, 8 + action_rate_global*0.15)</code></td>
+                    </tr>
+                    <tr>
+                        <td><strong>site_maturity[].maturity_score</strong></td>
+                        <td><span class="code-path">app/server.py::_adoption_insights</span></td>
+                        <td><code>0.55*action_rate + 0.25*prediction_coverage + 0.20*normalized_engagement</code></td>
+                    </tr>
+                </tbody>
+            </table>
 
             <h2 id="dlt-pipelines">1. Delta Live Tables (DLT) Pipelines</h2>
 
@@ -837,7 +940,7 @@
                     <tr>
                         <td><code>/api/finance/summary</code></td>
                         <td>GET</td>
-                        <td>Executive finance dashboard with avoided costs and ROI</td>
+                        <td>Executive finance dashboard with avoided costs, ROI, and adoption semantics</td>
                     </tr>
                     <tr>
                         <td><code>/api/simulator/inject</code></td>

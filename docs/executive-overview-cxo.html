@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Predictive Maintenance ROI - Executive Overview</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
     <style>
         * {
             margin: 0;
@@ -17,6 +20,10 @@
             color: #1a1a1a;
             background: linear-gradient(135deg, #1b2431 0%, #334155 100%);
             padding: 30px;
+        }
+
+        h1, h2, h3, h4 {
+            font-family: 'Barlow', sans-serif;
         }
 
         .container {
@@ -351,6 +358,64 @@
                 </div>
             </div>
 
+            <h2>UC Business Semantics for Executive Decisions</h2>
+
+            <div class="value-prop" style="border-color: #1b2431;">
+                <h3>From Raw Metrics to Board-Ready Meaning</h3>
+                <p>Unity Catalog governance is paired with a <strong>business semantics layer</strong> so every KPI has a consistent business definition across sites, industries, and currencies. This enables CXO teams to compare outcomes confidently across APJ without semantic drift.</p>
+                <ul class="benefit-list">
+                    <li><strong>Outcome semantics</strong> — Standard definitions for avoided cost, intervention cost, ROI multiple, MTTR improvement, and recurrence reduction</li>
+                    <li><strong>Adoption semantics</strong> — Standard definitions for model utilization, prediction consumption, actioned recommendations, and site maturity</li>
+                    <li><strong>Decision semantics</strong> — Explicit states for approved, deferred, rejected, and scheduled actions to distinguish intent from execution</li>
+                    <li><strong>Time semantics</strong> — Consistent 30-day activity windows and daily financial rollups for comparable trend analysis</li>
+                    <li><strong>Trust semantics</strong> — Governed lineage from telemetry to executive KPI with auditability for finance and compliance reviews</li>
+                </ul>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Semantic Domain</th>
+                        <th>Executive Question</th>
+                        <th>Example KPI in App</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Value Realization</strong></td>
+                        <td>Are we converting predictions into measurable business value?</td>
+                        <td>Avoided cost per prediction, platform ROI multiple</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Operational Adoption</strong></td>
+                        <td>Are teams actually using model outputs in daily decisions?</td>
+                        <td>Model utilization rate, prediction-consuming sites</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Decision Quality</strong></td>
+                        <td>Are actions timely and economically justified?</td>
+                        <td>Action rate by site, intervention vs. expected failure economics</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Reliability Outcomes</strong></td>
+                        <td>Are reliability outcomes improving where we act?</td>
+                        <td>MTTR improvement, recurrence reduction</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="value-prop">
+                <h3>Where These UC Metrics Come From</h3>
+                <p>UC business metrics are computed in <strong><code>app/server.py</code></strong> (function <code>_adoption_insights</code>), added to executive payloads in <code>_executive_value</code>, and rendered in the Executive Finance view in <strong><code>app/src/App.jsx</code></strong>.</p>
+                <p style="margin-top: 12px;">Key formulas include:</p>
+                <ul class="benefit-list">
+                    <li><strong>Model utilization rate</strong> = actioned assets / alerted assets (30d)</li>
+                    <li><strong>Platform ROI (x)</strong> = EBIT saved / (intervention cost + platform cost)</li>
+                    <li><strong>Cost per prediction</strong> = intervention spend (30d) / prediction event volume (30d)</li>
+                    <li><strong>Site maturity score</strong> = weighted blend of action rate, prediction coverage, and engagement proxy</li>
+                </ul>
+            </div>
+
             <h2>The Business Case: From Reactive to Prescriptive</h2>
 
             <h3>The Hidden Cost of Traditional Maintenance</h3>
@@ -404,37 +469,37 @@
 
             <div class="feature-grid">
                 <div class="feature-card">
-                    <div class="icon">💬</div>
+                    <div class="icon">AI</div>
                     <h4>Natural Language Analytics</h4>
                     <p>Ask questions in plain English, Japanese, or Korean. No SQL required. Executives can query: <em>"What are my top 3 highest-risk assets across all APJ sites?"</em> or <em>"Show total avoided costs for Q1 in INR"</em> and get instant, accurate answers.</p>
                 </div>
 
                 <div class="feature-card">
-                    <div class="icon">💰</div>
+                    <div class="icon">FX</div>
                     <h4>Multi-Currency Financial Dashboards</h4>
                     <p>View maintenance ROI in your local currency—AUD, JPY, INR, SGD, or KRW. Finance teams get consistent P&L impact reporting across 20 APJ sites without manual currency conversion or reconciliation.</p>
                 </div>
 
                 <div class="feature-card">
-                    <div class="icon">🌏</div>
+                    <div class="icon">APJ</div>
                     <h4>Localized for APJ Markets</h4>
                     <p>Japanese executives see Japanese UI and prompts when JPY is selected. Korean leaders get Korean-localized responses for KRW. English with automatic currency conversion for Australia, India, and ASEAN markets. One platform, five languages, zero friction.</p>
                 </div>
 
                 <div class="feature-card">
-                    <div class="icon">📊</div>
+                    <div class="icon">KPI</div>
                     <h4>Real-Time Executive Insights</h4>
                     <p>Live dashboards show fleet health, financial exposure, and intervention recommendations. Drill from portfolio view down to individual asset telemetry in three clicks. Designed for board presentations and executive reviews.</p>
                 </div>
 
                 <div class="feature-card">
-                    <div class="icon">🤖</div>
+                    <div class="icon">ML</div>
                     <h4>AI-Powered Maintenance Advisor</h4>
                     <p>Genie AI agent provides contextual guidance: equipment manual lookup, failure mode diagnosis, historical pattern analysis, and compliance documentation—all grounded in your actual operational data.</p>
                 </div>
 
                 <div class="feature-card">
-                    <div class="icon">⚡</div>
+                    <div class="icon">GO</div>
                     <h4>Rapid Deployment</h4>
                     <p>From contract signature to production insights in weeks, not quarters. Pre-configured for five major industries with proven APJ customer patterns. No multi-year implementation timelines.</p>
                 </div>

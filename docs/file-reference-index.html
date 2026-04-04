@@ -423,6 +423,7 @@
             <div class="toc-nav">
                 <h3>Quick Navigation</h3>
                 <ul>
+                    <li><a href="#uc-semantics">UC Business Semantics</a></li>
                     <li><a href="#dlt-pipelines">DLT Pipelines (3 files)</a></li>
                     <li><a href="#ml-modules">ML Modules (7 files)</a></li>
                     <li><a href="#app-backend">App Backend (1 file)</a></li>
@@ -437,6 +438,84 @@
                     <li><a href="#tests">Test Suites (10 files)</a></li>
                 </ul>
             </div>
+
+            <h2 id="uc-semantics">UC Business Semantics</h2>
+
+            <div class="section-description">
+                Files that define, compute, and surface Unity Catalog-aligned business semantics (adoption, ROI, actionability, and executive trust context).
+            </div>
+
+            <div class="file-count">4 Semantic Surface Files</div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 35%;">File Path</th>
+                        <th style="width: 15%;">Type</th>
+                        <th style="width: 50%;">Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><a href="../app/server.py" class="file-link">app/server.py</a></td>
+                        <td><span class="badge badge-app">Backend</span> <span class="badge badge-python">Python</span></td>
+                        <td>Defines and computes executive adoption semantics and prescriptive finance context, then injects them into finance and Genie payloads.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../app/src/App.jsx" class="file-link">app/src/App.jsx</a></td>
+                        <td><span class="badge badge-app">Frontend</span> <span class="badge badge-react">React</span></td>
+                        <td>Renders Platform Adoption Insights and site maturity views in executive finance experience.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../core/catalog/schema.sql" class="file-link">core/catalog/schema.sql</a></td>
+                        <td><span class="badge badge-config">DDL</span> <span class="badge badge-sql">SQL</span></td>
+                        <td>Defines governed data structures for prediction and financial event semantics used in executive KPIs.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="../core/finance/generate_financials.py" class="file-link">core/finance/generate_financials.py</a></td>
+                        <td><span class="badge badge-job">Finance</span> <span class="badge badge-python">Python</span></td>
+                        <td>Builds finance event histories and rollups that feed ROI and adoption business semantics.</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>UC Metric Calculation Crosswalk</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 25%;">Metric</th>
+                        <th style="width: 25%;">Definition Function</th>
+                        <th style="width: 25%;">Primary Source Tables</th>
+                        <th style="width: 25%;">Rendered In</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>model_utilization_rate_pct</code></td>
+                        <td><code>app/server.py::_adoption_insights</code></td>
+                        <td><code>gold.financial_impact_events</code>, <code>lakebase.work_orders</code></td>
+                        <td><code>app/src/App.jsx</code> (Platform Adoption Insights)</td>
+                    </tr>
+                    <tr>
+                        <td><code>platform_roi_x</code></td>
+                        <td><code>app/server.py::_adoption_insights</code></td>
+                        <td>Executive EBIT inputs + intervention/platform cost</td>
+                        <td><code>app/src/App.jsx</code>, finance Genie context</td>
+                    </tr>
+                    <tr>
+                        <td><code>cost_per_prediction</code>, <code>avoided_cost_per_prediction</code></td>
+                        <td><code>app/server.py::_adoption_insights</code></td>
+                        <td><code>gold.financial_impact_events</code> (30d), fallback <code>finance.pm_site_financial_daily</code></td>
+                        <td><code>app/src/App.jsx</code>, finance APIs</td>
+                    </tr>
+                    <tr>
+                        <td><code>site_maturity[]</code></td>
+                        <td><code>app/server.py::_adoption_insights</code></td>
+                        <td>Configured asset inventory + events + work orders + action logs/proxy</td>
+                        <td><code>app/src/App.jsx</code>, <code>agent_finance_chat</code> ranking context</td>
+                    </tr>
+                </tbody>
+            </table>
 
             <h2 id="dlt-pipelines">DLT Pipelines (Medallion Architecture)</h2>
 
