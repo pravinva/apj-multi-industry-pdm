@@ -416,6 +416,79 @@
                 </ul>
             </div>
 
+            <h3>Complete UC Metrics Glossary (Executive View)</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>UC Metric</th>
+                        <th>What It Means for Executives</th>
+                        <th>How It Is Calculated</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>model_utilization_rate_pct</strong></td>
+                        <td>How much of model-flagged risk is being acted on</td>
+                        <td>(Total actioned assets / total alerted assets) * 100 over the last 30 days</td>
+                    </tr>
+                    <tr>
+                        <td><strong>genie_queries_30d</strong></td>
+                        <td>Adoption proxy for business/operations engagement with AI insights</td>
+                        <td>Portfolio sum of per-site engagement proxy: alerted_assets*8 + actioned_assets*12 + total_work_orders*2</td>
+                    </tr>
+                    <tr>
+                        <td><strong>predictions_consumed_sites</strong></td>
+                        <td>How many sites are actively consuming prediction outputs</td>
+                        <td>Count of sites where alerted_assets_30d is greater than 0</td>
+                    </tr>
+                    <tr>
+                        <td><strong>total_sites</strong></td>
+                        <td>Total sites included in the adoption denominator</td>
+                        <td>Count of all sites represented in the adoption aggregation set</td>
+                    </tr>
+                    <tr>
+                        <td><strong>cost_per_prediction</strong></td>
+                        <td>Average intervention spend required per prediction event</td>
+                        <td>Intervention_cost_30d / prediction_event_count_30d</td>
+                    </tr>
+                    <tr>
+                        <td><strong>avoided_cost_per_prediction</strong></td>
+                        <td>Average value preserved per prediction event</td>
+                        <td>Avoided_cost_30d / prediction_event_count_30d</td>
+                    </tr>
+                    <tr>
+                        <td><strong>platform_roi_x</strong></td>
+                        <td>Return multiple on platform + intervention investment</td>
+                        <td>EBIT_saved / (intervention_cost + platform_cost)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>mttr_improvement_pct</strong></td>
+                        <td>Estimated MTTR improvement associated with execution quality</td>
+                        <td>Proxy curve: min(35, 6 + model_utilization_rate_pct*0.12)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>failure_recurrence_reduction_pct</strong></td>
+                        <td>Estimated repeat-failure reduction from better intervention execution</td>
+                        <td>Proxy curve: min(35, 8 + model_utilization_rate_pct*0.15)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>site_maturity[]</strong></td>
+                        <td>Per-site maturity ranking used for leadership prioritization</td>
+                        <td>Weighted score: 0.55*action_rate + 0.25*prediction_coverage + 0.20*engagement_score (0-100 bounded)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>data_mode</strong></td>
+                        <td>Transparency indicator for observed vs proxy-supported metrics</td>
+                        <td>Current value is observed_plus_proxy when direct logs are supplemented with operational proxies</td>
+                    </tr>
+                    <tr>
+                        <td><strong>summary_text</strong></td>
+                        <td>Auto-generated executive narrative for quick briefing context</td>
+                        <td>Template summary composed from prediction-consuming sites, utilization rate, and engagement volume</td>
+                    </tr>
+                </tbody>
+            </table>
+
             <h2>The Business Case: From Reactive to Prescriptive</h2>
 
             <h3>The Hidden Cost of Traditional Maintenance</h3>
