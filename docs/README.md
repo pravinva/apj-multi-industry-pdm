@@ -28,7 +28,7 @@ Professional technical documentation for the Databricks-powered predictive and p
   - Natural language analytics in English, Japanese, Korean
   - SFDC-aligned anchor accounts
 
-- **[Finance Genie Adoption/ROI Validation (10Q) PDF](finance_genie_adoption_10q_professional.pdf)**
+- **[Finance Genie Adoption/ROI Validation (10Q) HTML](finance_genie_adoption_10q.html)** ([PDF](finance_genie_adoption_10q_professional.pdf))
   - Cross-industry executive validation of platform adoption metrics
   - Model utilization, Genie usage, prediction coverage, and site maturity scoring
   - Cost per prediction, avoided cost per prediction, and platform ROI evidence
