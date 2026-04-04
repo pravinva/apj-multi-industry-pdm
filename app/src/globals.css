@@ -264,6 +264,18 @@ body,
   box-shadow: inset 0 0 0 1px rgba(255, 54, 33, 0.35);
 }
 
+.nav-doc-link {
+  margin-top: 8px;
+  border: 1px solid rgba(45, 212, 191, 0.6);
+  background: linear-gradient(160deg, rgba(45, 212, 191, 0.25) 0%, rgba(15, 118, 110, 0.45) 100%);
+  text-decoration: none;
+}
+
+.nav-doc-link:hover {
+  background: linear-gradient(160deg, rgba(45, 212, 191, 0.34) 0%, rgba(15, 118, 110, 0.62) 100%);
+  color: #fff;
+}
+
 .page {
   display: none;
   flex: 1;

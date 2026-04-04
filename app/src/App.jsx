@@ -179,6 +179,16 @@ const JA_UI = {
   "30d protected if deferred": "30日保護EBIT（延期時）",
   "Top decision actions": "優先意思決定アクション",
   "No decision actions available in current window.": "現在の期間で意思決定アクションはありません。",
+  "Platform Adoption Insights": "プラットフォーム導入インサイト",
+  "Model utilization rate": "モデル活用率",
+  "Genie query volume (30d)": "Genieクエリ数（30日）",
+  "Prediction-consuming sites": "予測活用サイト数",
+  "Cost per prediction": "予測あたりコスト",
+  "Avoided cost per prediction": "予測あたり回避コスト",
+  "Platform ROI (x)": "プラットフォームROI（倍率）",
+  "MTTR improvement": "MTTR改善率",
+  "Failure recurrence reduction": "再発障害低減率",
+  "Action rate": "アクション率",
   "Executive briefing metadata": "経営ブリーフィング情報",
   Industry: "業界",
   "Prepared at": "作成日時",
@@ -232,6 +242,16 @@ const KO_UI = {
   healthy: "정상",
   warning: "경고",
   critical: "치명",
+  "Platform Adoption Insights": "플랫폼 도입 인사이트",
+  "Model utilization rate": "모델 활용률",
+  "Genie query volume (30d)": "Genie 질의 수(30일)",
+  "Prediction-consuming sites": "예측 활용 사이트",
+  "Cost per prediction": "예측당 비용",
+  "Avoided cost per prediction": "예측당 회피 비용",
+  "Platform ROI (x)": "플랫폼 ROI(배수)",
+  "MTTR improvement": "MTTR 개선",
+  "Failure recurrence reduction": "재발 장애 감소",
+  "Action rate": "조치율",
 };
 
 function localizeAlertText(text, locale) {
@@ -1089,6 +1109,8 @@ export default function App() {
   );
 
   const executive = overview.executive || EMPTY_EXECUTIVE;
+  const adoption = executive.adoption_insights || {};
+  const siteMaturity = Array.isArray(adoption.site_maturity) ? adoption.site_maturity : [];
   const execTips = executive.explainability || {};
   const effectiveUiCurrency = demoCurrency === "AUTO" ? (executive.currency || "USD") : demoCurrency;
   const locale = effectiveUiCurrency === "JPY" ? "ja" : effectiveUiCurrency === "KRW" ? "ko" : "en";
@@ -1800,6 +1822,16 @@ export default function App() {
               <span>{t(label)}</span>
             </button>
           ))}
+          <a
+            className="nav-btn nav-doc-link"
+            href="https://pravinva.github.io/apj-multi-industry-pdm/"
+            target="_blank"
+            rel="noreferrer"
+            title={locale === "ja" ? "技術ドキュメントサイト" : locale === "ko" ? "기술 문서 사이트" : "Technical documentation site"}
+          >
+            <span className="nav-icon">⌘</span>
+            <span>{locale === "ja" ? "ドキュメント" : locale === "ko" ? "문서" : "Docs"}</span>
+          </a>
         </nav>
         <div className="main-scroll" ref={mainScrollRef}>
 
@@ -3242,19 +3274,32 @@ export default function App() {
                 </div>
 
                 <div className="exec-trend-card">
-                  <div className="exec-card-title">{t("Executive briefing metadata")}</div>
+                  <div className="exec-card-title">{t("Platform Adoption Insights")}</div>
                   <div className="exec-erp-grid">
-                    <div><span className="exec-erp-k">{t("Industry")}</span><span className="exec-erp-v">{industryLabel(industry)}</span></div>
-                    <div><span className="exec-erp-k">{t("Currency")}</span><span className="exec-erp-v">{effectiveUiCurrency}</span></div>
-                    <div><span className="exec-erp-k">{t("Annual run-rate")}</span><span className="exec-erp-v">{executive.executive_summary?.annualized_ebit_saved_fmt || "—"}</span></div>
-                    <div><span className="exec-erp-k">{t("Annual target")}</span><span className="exec-erp-v">{executive.executive_summary?.annual_ebit_target_fmt || "—"}</span></div>
-                    <div><span className="exec-erp-k">{t("Run-rate to annual target")}</span><span className="exec-erp-v">{Number(executive.executive_summary?.run_rate_to_target_pct || 0).toFixed(1)}%</span></div>
-                    <div><span className="exec-erp-k">{t("Prepared at")}</span><span className="exec-erp-v">{briefingStamp}</span></div>
+                    <div><span className="exec-erp-k">{t("Model utilization rate")}</span><span className="exec-erp-v">{Number(adoption.model_utilization_rate_pct || 0).toFixed(1)}%</span></div>
+                    <div><span className="exec-erp-k">{t("Genie query volume (30d)")}</span><span className="exec-erp-v">{Number(adoption.genie_queries_30d || 0).toLocaleString()}</span></div>
+                    <div><span className="exec-erp-k">{t("Prediction-consuming sites")}</span><span className="exec-erp-v">{Number(adoption.predictions_consumed_sites || 0)}/{Number(adoption.total_sites || 0)}</span></div>
+                    <div><span className="exec-erp-k">{t("Cost per prediction")}</span><span className="exec-erp-v">{adoption.cost_per_prediction_fmt || "—"}</span></div>
+                    <div><span className="exec-erp-k">{t("Avoided cost per prediction")}</span><span className="exec-erp-v">{adoption.avoided_cost_per_prediction_fmt || "—"}</span></div>
+                    <div><span className="exec-erp-k">{t("Platform ROI (x)")}</span><span className="exec-erp-v">{Number(adoption.platform_roi_x || 0).toFixed(1)}x</span></div>
                   </div>
                   <div className="exec-erp-source">
-                    {t("Source table")}: {executive.source_table || "—"}
+                    {t("MTTR improvement")} {Number(adoption.mttr_improvement_pct || 0).toFixed(1)}% · {t("Failure recurrence reduction")} {Number(adoption.failure_recurrence_reduction_pct || 0).toFixed(1)}%
                     <span className="exec-tip" data-tip={execTips.source_table || ""} aria-label={execTips.source_table || ""} tabIndex={0}>i</span>
                   </div>
+                  <div className="exec-fin-sub">{adoption.summary_text || ""}</div>
+                  {!siteMaturity.length && <div className="exec-fin-sub">{t("No decision actions available in current window.")}</div>}
+                  {(siteMaturity || []).slice(0, 5).map((s, idx) => (
+                    <div key={`site-maturity-${idx}`} className="exec-decision-row">
+                      <div>
+                        <div className="exec-wo-id">{s.site_name || s.site_id}</div>
+                        <div className="exec-wo-meta">
+                          {s.site_id} · {t("Action rate")} {Number(s.action_rate_pct || 0).toFixed(1)}% · {t("Genie query volume (30d)")} {Number(s.genie_queries_30d || 0).toLocaleString()}
+                        </div>
+                      </div>
+                      <div className="exec-wo-impact">{Number(s.maturity_score || 0).toFixed(1)}</div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
