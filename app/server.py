@@ -3215,11 +3215,18 @@ def _executive_value(industry: str, assets: list[dict[str, Any]], display_curren
         platform_cost=platform_cost,
     )
 
+    if currency == "JPY":
+        value_statement = f"処方保全により、EBIT上振れ効果は{_fmt_money(ebit_saved, currency)}です。"
+    elif currency == "KRW":
+        value_statement = f"처방 정비를 통해 EBIT 상향 효과 {_fmt_money(ebit_saved, currency)}를 확보했습니다."
+    else:
+        value_statement = f"Prescriptive maintenance unlocked EBIT upside of {_fmt_money(ebit_saved, currency)}."
+
     return {
         "audience": "finance_executive",
         "window": "last_30_days",
         "currency": currency,
-        "value_statement": f"Prescriptive maintenance unlocked EBIT upside of {_fmt_money(ebit_saved, currency)}.",
+        "value_statement": value_statement,
         "ebit_saved": round(ebit_saved, 2),
         "ebit_saved_fmt": _fmt_money(ebit_saved, currency),
         "net_benefit": round(net_benefit, 2),

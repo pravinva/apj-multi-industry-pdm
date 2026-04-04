@@ -252,6 +252,9 @@ const KO_UI = {
   "MTTR improvement": "MTTR 개선",
   "Failure recurrence reduction": "재발 장애 감소",
   "Action rate": "조치율",
+  "Executive briefing value statement": "경영진 브리핑 가치 요약",
+  "Board-ready financial operating view": "이사회 보고용 재무 운영 뷰",
+  "One-pane financial view for predictive maintenance value realization.": "예지정비 가치 실현을 위한 단일 화면 재무 뷰입니다.",
 };
 
 function localizeAlertText(text, locale) {
