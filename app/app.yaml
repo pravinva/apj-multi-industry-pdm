@@ -12,6 +12,29 @@ env:
     value: "pravin.varma@databricks.com"
   - name: OT_PDM_WAREHOUSE_ID
     value: "4b9b953939869799"
+  # ~15m demo: long-lived SQL cache for stable UC data; predictions + stream stay short (see server.py).
+  - name: OT_PDM_SQL_CACHE_TTL_S
+    value: "900"
+  - name: OT_PDM_PREDICTIONS_CACHE_TTL_S
+    value: "30"
+  - name: OT_PDM_STREAM_SQL_CACHE_TTL_S
+    value: "5"
+  - name: OT_PDM_UI_OVERVIEW_CACHE_TTL_S
+    value: "0"
+  - name: OT_PDM_UI_HIERARCHY_CACHE_TTL_S
+    value: "0"
+  - name: OT_PDM_UI_RESPONSE_CACHE_TTL_S
+    value: "900"
+  # Asset detail + Model tab UI cache; align with predictions (default: OT_PDM_PREDICTIONS_CACHE_TTL_S).
+  - name: OT_PDM_UI_ASSET_MODEL_CACHE_TTL_S
+    value: "30"
+  - name: OT_PDM_GEO_SITES_CACHE_TTL_S
+    value: "900"
+  - name: OT_PDM_SKIP_LIVE_SCORING_ON_READ
+    value: "true"
+  # Executive Finance work orders: auto = Lakebase ODS when seeded (SAP BDC demo), else synthetic.
+  - name: OT_PDM_EXECUTIVE_WO_SOURCE
+    value: "auto"
   - name: OT_PDM_SCORING_JOB_ID_MINING
     value: "946602210024255"
   - name: OT_PDM_SCORING_JOB_ID_ENERGY

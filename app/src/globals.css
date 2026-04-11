@@ -105,6 +105,18 @@ body,
   text-shadow: 0 1px 2px rgba(2, 6, 23, 0.35);
 }
 
+.topbar-load-status {
+  font-size: 11px;
+  font-weight: 600;
+  font-family: ui-monospace, monospace;
+  color: rgba(251, 191, 36, 0.95);
+  white-space: nowrap;
+  max-width: min(420px, 38vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 0 12px rgba(251, 191, 36, 0.35);
+}
+
 .topbar-div {
   width: 1px;
   height: 20px;
@@ -351,6 +363,16 @@ body,
   flex-direction: column;
   align-items: stretch;
   flex-shrink: 0;
+}
+
+.fleet-refresh-banner {
+  padding: 8px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #b45309;
+  background: linear-gradient(90deg, rgba(251, 191, 36, 0.18) 0%, rgba(253, 230, 138, 0.12) 100%);
+  border-bottom: 1px solid rgba(245, 158, 11, 0.35);
+  font-family: ui-sans-serif, system-ui, sans-serif;
 }
 
 .view-toggle-wrap {
@@ -1416,6 +1438,42 @@ body,
   margin-top: 8px;
   font-size: 11px;
   color: var(--muted);
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.exec-erp-ingest {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #ecfeff;
+  border: 1px solid #a5f3fc;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.exec-erp-ingest-label {
+  display: block;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+
+.exec-erp-ingest-val {
+  color: #0e7490;
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.exec-wo-bdc {
+  font-size: 10px;
+  color: var(--muted);
+  font-family: "IBM Plex Mono", monospace;
+  margin-top: 2px;
+}
+
+.exec-wo-src {
+  color: #0e7490;
   font-family: "IBM Plex Mono", monospace;
 }
 
@@ -3910,7 +3968,7 @@ body,
 }
 .geo-map-top {
   height: 380px;
-  flex: 0 0 380px;
+  flex: 0 0 auto;
   position: relative;
   border-bottom: 1px solid #e2e8f0;
 }
@@ -3929,6 +3987,28 @@ body,
     radial-gradient(circle at 88% 2%, rgba(37,99,235,0.12), transparent 36%),
     linear-gradient(180deg, #ffffff 0%, #f8fafc 52%, #f1f5f9 100%);
   overflow: visible;
+}
+.geo-map-splitter {
+  height: 10px;
+  cursor: row-resize;
+  border-top: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
+  position: relative;
+}
+.geo-map-splitter::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 52px;
+  height: 3px;
+  border-radius: 999px;
+  background: #94a3b8;
+}
+.geo-map-splitter.active {
+  background: linear-gradient(180deg, #e0e7ff 0%, #dbeafe 100%);
 }
 .geo-topbar {
   display: flex;

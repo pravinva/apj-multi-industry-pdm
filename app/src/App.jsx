@@ -31,6 +31,8 @@ const EMPTY_EXECUTIVE = {
     platform_cost_fmt: "USD 0"
   },
   erp: { plant_code: "", fiscal_period: "", cost_centers: [], work_centers: [], planner_group: "", reference_account: "" },
+  work_order_source: "synthetic_model",
+  erp_ingestion: null,
   value_bridge: [],
   ebit_trend: [],
   work_orders: [],
@@ -123,7 +125,6 @@ const JA_UI = {
   recent: "最近",
   "Industry Configuration": "業界設定",
   "Connector Setup": "コネクター設定",
-  "SDT Benchmark": "SDTベンチマーク",
   "Tick interval": "ティック間隔",
   "Noise factor": "ノイズ係数",
   "Start simulator": "シミュレーター開始",
@@ -603,6 +604,7 @@ function renderSimpleMarkdown(text) {
 export default function App() {
   const mainScrollRef = useRef(null);
   const mapDragRef = useRef(null);
+  const geoStackRef = useRef(null);
   const [industry, setIndustry] = useState("mining");
   const [demoCurrency, setDemoCurrency] = useState("AUTO");
   const [page, setPage] = useState("p1");
@@ -612,6 +614,7 @@ export default function App() {
   const [assetSiteFilter, setAssetSiteFilter] = useState("all");
 
   const [overview, setOverview] = useState(EMPTY_OVERVIEW);
+  const [overviewRefreshing, setOverviewRefreshing] = useState(false);
   const [recActionPending, setRecActionPending] = useState({});
   const [recCommentByAsset, setRecCommentByAsset] = useState({});
   const [selectedAssetId, setSelectedAssetId] = useState("");
@@ -677,6 +680,13 @@ export default function App() {
   const [activeAssetId, setActiveAssetId] = useState(null);
   const [mapLayer, setMapLayer] = useState("terrain");
   const [visibleIndustries, setVisibleIndustries] = useState(new Set(INDUSTRIES));
+  const [geoMapHeight, setGeoMapHeight] = useState(520);
+  const [geoMapResizing, setGeoMapResizing] = useState(false);
+  /** Last good hierarchy/overview per industry+currency — instant when switching mining ↔ energy (stale-while-revalidate). */
+  const industryBootstrapCache = useRef({});
+  /** Per industry+currency+asset: Asset page + Model tab (stale-while-revalidate, matches server asset/model TTL). */
+  const assetDetailSessionCache = useRef({});
+  const modelSessionCache = useRef({});
 
   const [simState, setSimState] = useState({
     running: false,
@@ -739,24 +749,18 @@ export default function App() {
   });
   const [connStatus, setConnStatus] = useState({ status: {}, loading: false, processing: false });
   const [connResult, setConnResult] = useState("—");
-  const [sdtReport, setSdtReport] = useState({
-    summary: [],
-    tags: [],
-    industry_window_snapshots: [],
-    trend_by_industry: {},
-    generated_at: "",
-    loading: false,
-    ticks: 300,
-    available_ticks: [300]
-  });
-  const [sdtMetric, setSdtMetric] = useState("drop");
-  const [sdtTicks, setSdtTicks] = useState(300);
   const [discoveredTags, setDiscoveredTags] = useState([]);
   const [tagQuery, setTagQuery] = useState("");
   const [selectedTags, setSelectedTags] = useState([]);
   const [tagMappings, setTagMappings] = useState([]);
   const currencyParam = demoCurrency === "AUTO" ? "" : `&currency=${encodeURIComponent(demoCurrency)}`;
-  const { sites: geoSites, loading: geoLoading, error: geoError, refetch: refetchGeoSites } = useGeoData(visibleIndustries, demoCurrency);
+  const {
+    sites: geoSites,
+    loading: geoLoading,
+    sitesLoading: geoSitesLoading,
+    error: geoError,
+    refetch: refetchGeoSites
+  } = useGeoData(visibleIndustries, demoCurrency);
   const { assets: geoAssets, schematic: geoSchematic, loading: geoAssetLoading } = useAssetData(activeSiteId, demoCurrency);
 
   useEffect(() => {
@@ -791,6 +795,40 @@ export default function App() {
   }, [hierResizing]);
 
   useEffect(() => {
+    if (!geoMapResizing) return undefined;
+    const onMove = (e) => {
+      const hostTop = geoStackRef.current?.getBoundingClientRect?.().top || 0;
+      const minH = 300;
+      const maxH = Math.max(minH + 40, Math.min(window.innerHeight - 180, 860));
+      const next = Math.max(minH, Math.min(maxH, e.clientY - hostTop));
+      setGeoMapHeight(next);
+    };
+    const onUp = () => setGeoMapResizing(false);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [geoMapResizing]);
+
+  useEffect(() => {
+    const bootKey = `${industry}|${currencyParam}`;
+    const snap = industryBootstrapCache.current[bootKey];
+    if (snap?.hierarchy) {
+      setHierarchy(snap.hierarchy);
+      setHierSelection(snap.hierarchy);
+    }
+    if (snap?.sim) {
+      setSimState((prev) => {
+        const next = snap.sim || {};
+        return {
+          ...prev,
+          ...next,
+          running: Boolean(prev?.running || next?.running)
+        };
+      });
+    }
     let cancelled = false;
     (async () => {
       const [h, sim, template, roomCfg] = await Promise.all([
@@ -800,6 +838,11 @@ export default function App() {
         getJson(`/api/ui/genie/rooms?industry=${industry}`, null)
       ]);
       if (cancelled) return;
+      industryBootstrapCache.current[bootKey] = {
+        ...industryBootstrapCache.current[bootKey],
+        hierarchy: h,
+        sim: sim || {}
+      };
       setHierarchy(h);
       setHierSelection(h);
       setSimState((prev) => {
@@ -835,37 +878,68 @@ export default function App() {
   }, [industry]);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const ov = await getJson(`/api/ui/overview?industry=${industry}${currencyParam}`, EMPTY_OVERVIEW);
-      if (cancelled) return;
+    const bootKey = `${industry}|${currencyParam}`;
+    const snap = industryBootstrapCache.current[bootKey];
+    const finLocale = demoCurrency === "JPY" ? "ja" : demoCurrency === "KRW" ? "ko" : "en";
+    const indLabel =
+      finLocale === "ja"
+        ? (JA_INDUSTRY_LABELS[industry] || industry)
+        : finLocale === "ko"
+          ? (KO_INDUSTRY_LABELS[industry] || industry)
+          : industry.charAt(0).toUpperCase() + industry.slice(1);
+    const applyOverview = (ov) => {
       setOverview(ov);
       setAgentMsgs((ov.messages || []).map((m) => ({ role: m.role, text: m.text, label: m.label || "AI" })));
-      setFinanceMsgs([{
-        role: "agent",
-        label: locale === "ja" ? "財務コマンドAI" : locale === "ko" ? "재무 커맨드 AI" : "Finance Command AI",
-        text: locale === "ja"
-          ? `${industryLabel(industry)}向けに、${(ov.executive || {}).currency || demoCurrency}で予知保全の財務シナリオに回答できます。`
-          : locale === "ko"
-          ? `${industryLabel(industry)}에 대해 ${(ov.executive || {}).currency || demoCurrency} 기준의 예지정비 재무 시나리오를 답변할 수 있습니다.`
-          : `I can answer financial predictive maintenance scenarios for ${industry} in ${(ov.executive || {}).currency || demoCurrency}.`
-      }]);
-      if (!selectedAssetId) {
-        const defaultAsset = ov.assets?.[0]?.id || "";
-        setSelectedAssetId(defaultAsset);
+      const exCcy = (ov.executive || {}).currency || demoCurrency;
+      setFinanceMsgs([
+        {
+          role: "agent",
+          label: finLocale === "ja" ? "財務コマンドAI" : finLocale === "ko" ? "재무 커맨드 AI" : "Finance Command AI",
+          text:
+            finLocale === "ja"
+              ? `${indLabel}向けに、${exCcy}で予知保全の財務シナリオに回答できます。`
+              : finLocale === "ko"
+                ? `${indLabel}에 대해 ${exCcy} 기준의 예지정비 재무 시나리오를 답변할 수 있습니다.`
+                : `I can answer financial predictive maintenance scenarios for ${industry} in ${exCcy}.`
+        }
+      ]);
+      setSelectedAssetId((prev) => prev || ov.assets?.[0]?.id || "");
+    };
+    setOverviewRefreshing(true);
+    if (snap?.overview) {
+      applyOverview(snap.overview);
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const ov = await getJson(`/api/ui/overview?industry=${industry}${currencyParam}`, EMPTY_OVERVIEW);
+        if (cancelled) return;
+        industryBootstrapCache.current[bootKey] = {
+          ...industryBootstrapCache.current[bootKey],
+          overview: ov
+        };
+        applyOverview(ov);
+      } finally {
+        if (!cancelled) setOverviewRefreshing(false);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [industry, currencyParam, demoCurrency, selectedAssetId]);
+    // Omit selectedAssetId to avoid refetching overview on every asset selection (warehouse-heavy).
+  }, [industry, currencyParam, demoCurrency]);
 
   useEffect(() => {
     if (!selectedAssetId) return;
+    const sessionKey = `${industry}|${currencyParam}|${selectedAssetId}`;
+    const snap = assetDetailSessionCache.current[sessionKey];
+    if (snap) setAssetDetail(snap);
+    else setAssetDetail(null);
     let cancelled = false;
     (async () => {
       const detail = await getJson(`/api/ui/asset/${selectedAssetId}?industry=${industry}${currencyParam}`, null);
       if (cancelled) return;
+      if (detail) assetDetailSessionCache.current[sessionKey] = detail;
       setAssetDetail(detail);
     })();
     return () => {
@@ -875,15 +949,21 @@ export default function App() {
 
   useEffect(() => {
     if (!selectedAssetId) return;
+    const sessionKey = `${industry}|${currencyParam}|${selectedAssetId}`;
+    const snap = modelSessionCache.current[sessionKey];
+    if (snap) setModel(snap);
+    else setModel(null);
     let cancelled = false;
     (async () => {
-      const modelData = await getJson(`/api/ui/model/${selectedAssetId}?industry=${industry}`, null);
-      if (!cancelled) setModel(modelData);
+      const modelData = await getJson(`/api/ui/model/${selectedAssetId}?industry=${industry}${currencyParam}`, null);
+      if (cancelled) return;
+      if (modelData) modelSessionCache.current[sessionKey] = modelData;
+      setModel(modelData);
     })();
     return () => {
       cancelled = true;
     };
-  }, [industry, selectedAssetId]);
+  }, [industry, selectedAssetId, currencyParam]);
 
   useEffect(() => {
     if (!selectedAssetId || page !== "p5") return;
@@ -949,11 +1029,6 @@ export default function App() {
     if (simTab !== "connector") return;
     refreshZerobusStatus();
   }, [simTab, conn.protocol]);
-
-  useEffect(() => {
-    if (page !== "p6" || simTab !== "sdt") return;
-    loadSdtReport();
-  }, [page, simTab, industry, sdtTicks]);
 
   useEffect(() => {
     if (page !== "p6" || !simState?.running || simTab !== "sim") return undefined;
@@ -1160,32 +1235,6 @@ export default function App() {
     }
     return executive.value_statement || EMPTY_EXECUTIVE.value_statement;
   }, [effectiveUiCurrency, executive.ebit_saved_fmt, executive.value_statement]);
-
-  const sdtWindowInsights = useMemo(() => {
-    const summary = sdtReport.summary || [];
-    const tags = sdtReport.tags || [];
-    if (!summary.length) {
-      return {
-        avgDropPct: 0,
-        avgKeptPct: 0,
-        bestIndustry: null,
-        worstIndustry: null,
-        topDropTag: null
-      };
-    }
-    const avgDropPct = summary.reduce((acc, r) => acc + Number(r.drop_pct || 0), 0) / summary.length;
-    const avgKeptPct = summary.reduce((acc, r) => acc + Number(r.kept_pct || 0), 0) / summary.length;
-    const bestIndustry = [...summary].sort((a, b) => Number(b.drop_pct || 0) - Number(a.drop_pct || 0))[0] || null;
-    const worstIndustry = [...summary].sort((a, b) => Number(a.drop_pct || 0) - Number(b.drop_pct || 0))[0] || null;
-    const topDropTag = [...tags].sort((a, b) => Number(b.drop_pct || 0) - Number(a.drop_pct || 0))[0] || null;
-    return { avgDropPct, avgKeptPct, bestIndustry, worstIndustry, topDropTag };
-  }, [sdtReport.summary, sdtReport.tags]);
-
-  const sdtSortedTags = useMemo(() => {
-    const tags = [...(sdtReport.tags || [])];
-    const metricKey = sdtMetric === "drop" ? "drop_pct" : "kept_pct";
-    return tags.sort((a, b) => Number(b[metricKey] || 0) - Number(a[metricKey] || 0));
-  }, [sdtReport.tags, sdtMetric]);
 
   async function sendMessage(overrideText = "", overrideAssetId = "") {
     const userText = String(overrideText || agentInput || "").trim();
@@ -1400,6 +1449,14 @@ export default function App() {
           { ...EMPTY_OVERVIEW, messages: overview.messages || [] }
         );
         setOverview(ov);
+        const bk = `${industry}|${currencyParam}`;
+        industryBootstrapCache.current[bk] = {
+          ...industryBootstrapCache.current[bk],
+          overview: ov
+        };
+        const assetKey = `${industry}|${currencyParam}|${equipmentId}`;
+        delete assetDetailSessionCache.current[assetKey];
+        delete modelSessionCache.current[assetKey];
         setRecCommentByAsset((prev) => ({ ...prev, [equipmentId]: "" }));
       }
     } finally {
@@ -1554,10 +1611,22 @@ export default function App() {
         getJson(`/api/ui/model/${encodeURIComponent(assetId)}?industry=${industry}${currencyParam}`, model),
         getJson(`/api/ui/advanced_pdm?asset_id=${encodeURIComponent(assetId)}&industry=${industry}${currencyParam}`, advancedPdm)
       ]);
-      setOverview(ov || EMPTY_OVERVIEW);
+      const ovFinal = ov || EMPTY_OVERVIEW;
+      setOverview(ovFinal);
+      const bk = `${industry}|${currencyParam}`;
+      industryBootstrapCache.current[bk] = {
+        ...industryBootstrapCache.current[bk],
+        overview: ovFinal
+      };
       setSimFlow(flow || simFlow);
-      if (detail) setAssetDetail(detail);
-      if (modelData) setModel(modelData);
+      if (detail) {
+        setAssetDetail(detail);
+        assetDetailSessionCache.current[`${industry}|${currencyParam}|${assetId}`] = detail;
+      }
+      if (modelData) {
+        setModel(modelData);
+        modelSessionCache.current[`${industry}|${currencyParam}|${assetId}`] = modelData;
+      }
       if (advData) setAdvancedPdm(advData);
       setSimPipeline((prev) => ({
         ...prev,
@@ -1662,29 +1731,6 @@ export default function App() {
     setConnStatus((s) => ({ ...s, loading: true }));
     const status = await getJson("/api/zerobus/status", { status: {} });
     setConnStatus((s) => ({ ...s, loading: false, status: status.status || {} }));
-  }
-
-  async function loadSdtReport() {
-    setSdtReport((p) => ({ ...p, loading: true }));
-    const data = await getJson(`/api/ui/sdt/report?industry=${industry}&ticks=${sdtTicks}`, {
-      summary: [],
-      tags: [],
-      industry_window_snapshots: [],
-      trend_by_industry: {},
-      generated_at: "",
-      ticks: sdtTicks,
-      available_ticks: [sdtTicks]
-    });
-    setSdtReport({
-      summary: data.summary || [],
-      tags: data.tags || [],
-      industry_window_snapshots: data.industry_window_snapshots || [],
-      trend_by_industry: data.trend_by_industry || {},
-      generated_at: data.generated_at || "",
-      loading: false,
-      ticks: data.ticks || sdtTicks,
-      available_ticks: data.available_ticks || [sdtTicks]
-    });
   }
 
   async function loadSavedZerobusConfig() {
@@ -1824,6 +1870,17 @@ export default function App() {
             {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
+        {((geoLoading && geoSites.length === 0) || geoSitesLoading) ? (
+          <span className="topbar-load-status" title="Geo map site list loading in background">
+            {geoLoading && geoSites.length === 0
+              ? (locale === "ja" ? "拠点読込中…" : locale === "ko" ? "지점 로드 중…" : "Map sites loading…")
+              : locale === "ja"
+                ? `マップ拠点 ${geoSites.length} · 続行中…`
+                : locale === "ko"
+                  ? `맵 지점 ${geoSites.length} · 로딩 중…`
+                  : `${geoSites.length} map sites · loading more…`}
+          </span>
+        ) : null}
         <span className="isa-badge">{locale === "ja" ? `ライブ ・ ${liveClock}` : locale === "ko" ? `실시간 · ${liveClock}` : `Live · ${liveClock}`}</span>
       </header>
 
@@ -1854,6 +1911,11 @@ export default function App() {
               <button className={`view-btn ${view === "operator" ? "active" : ""}`} onClick={() => setView("operator")}>{t("Operator")}</button>
               <button className={`view-btn ${view === "executive" ? "active" : ""}`} onClick={() => setView("executive")}>{t("Executive")}</button>
             </div>
+            {overviewRefreshing ? (
+              <div className="fleet-refresh-banner" role="status" aria-live="polite">
+                {locale === "ja" ? "フリート更新中…" : locale === "ko" ? "플릿 데이터 새로고침 중…" : "Fleet updating…"}
+              </div>
+            ) : null}
             <div className="kpi-strip" style={{ flex: 1, borderBottom: "none" }}>
               <div className="kpi">
                 <div className="kpi-l">{t("Fleet Health")}</div>
@@ -2243,6 +2305,12 @@ export default function App() {
                       i
                     </span>
                   </div>
+                  {executive.work_order_source === "lakebase_ods" && executive.erp_ingestion && (
+                    <div className="exec-erp-ingest" title={`${executive.erp_ingestion.bronze_work_orders} → ${executive.erp_ingestion.ods_table}`}>
+                      <span className="exec-erp-ingest-label">ERP ingest</span>
+                      <span className="exec-erp-ingest-val">{executive.erp_ingestion.pipeline_label}</span>
+                    </div>
+                  )}
                   <div className="exec-chip-row">
                     {(executive.erp?.cost_centers || []).map((c) => <span key={c} className="exec-chip">{c}</span>)}
                   </div>
@@ -2269,9 +2337,11 @@ export default function App() {
                       <div>
                         <div className="exec-wo-id">{w.wo_id}</div>
                         <div className="exec-wo-meta">
-                          {w.equipment_id} · {w.priority} · {w.work_center}
+                          {w.equipment_id} · {w.priority} · {w.status || "—"} · {w.work_center}
+                          {w.source_system ? <span className="exec-wo-src"> · {w.source_system}</span> : null}
                           <span className="exec-tip" data-tip={execTips.work_orders || ""} aria-label={execTips.work_orders || ""} tabIndex={0}>i</span>
                         </div>
+                        {w.bdc_session_id ? <div className="exec-wo-bdc">{w.bdc_session_id}</div> : null}
                       </div>
                       <div className="exec-wo-impact" title={execTips.work_order_net_ebit_impact || execTips.ebit_saved || ""}>
                         {w.net_ebit_impact_fmt}
@@ -2754,7 +2824,6 @@ export default function App() {
             <button className={`p6itab ${simTab === "sim" ? "active" : ""}`} onClick={() => setSimTab("sim")}>{t("Sim")}</button>
             <button className={`p6itab ${simTab === "config" ? "active" : ""}`} onClick={() => setSimTab("config")}>{t("Industry Configuration")}</button>
             <button className={`p6itab ${simTab === "connector" ? "active" : ""}`} onClick={() => setSimTab("connector")}>{t("Connector Setup")}</button>
-            <button className={`p6itab ${simTab === "sdt" ? "active" : ""}`} onClick={() => setSimTab("sdt")}>{t("SDT Benchmark")}</button>
           </div>
 
           <div className={`p6-panel ${simTab === "sim" ? "active" : ""}`}>
@@ -3035,128 +3104,6 @@ export default function App() {
               </div>
             </div>
           </div>
-          <div className={`p6-panel ${simTab === "sdt" ? "active" : ""}`}>
-            <div className="cfg-wrap">
-              <div className="cfg-left">
-                <div className="cfg-section">
-                  <div className="cfg-sec-title" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    SDT Compression by Industry
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <select className="cfg-sel" value={sdtTicks} onChange={(e) => setSdtTicks(Number(e.target.value))}>
-                        {(sdtReport.available_ticks || [300]).map((t) => (
-                          <option key={`ticks-${t}`} value={t}>{t} ticks</option>
-                        ))}
-                      </select>
-                      <select className="cfg-sel" value={sdtMetric} onChange={(e) => setSdtMetric(e.target.value)}>
-                        <option value="drop">Drop %</option>
-                        <option value="kept">Kept %</option>
-                      </select>
-                      <button className="cfg-add-btn" onClick={loadSdtReport} disabled={sdtReport.loading}>
-                        {sdtReport.loading ? "Refreshing..." : "Refresh"}
-                      </button>
-                    </div>
-                  </div>
-                  <div className="sdt-summary-grid">
-                    {(sdtReport.summary || []).map((r) => {
-                      const metricValue = Number(sdtMetric === "drop" ? (r.drop_pct || 0) : (r.kept_pct || 0));
-                      const trendPoints = (sdtReport.trend_by_industry || {})[r.industry] || [];
-                      const trendSeries = trendPoints.map((p) => Number(sdtMetric === "drop" ? (p.drop_pct || 0) : (p.kept_pct || 0)));
-                      const trendTickLegend = trendPoints.map((p) => `${p.ticks}`).join(" · ");
-                      return (
-                        <div key={`sdt-${r.industry}`} className="sdt-card">
-                          <div className="sdt-card-top">
-                            <div className="sdt-card-industry">{r.industry}</div>
-                            <div className="sdt-card-metric">{metricValue.toFixed(2)}%</div>
-                          </div>
-                          <div className="sdt-card-sub">{sdtMetric === "drop" ? "drop ratio" : "kept ratio"} ({sdtReport.ticks || sdtTicks} ticks)</div>
-                          {trendSeries.length > 1 && (
-                            <div className="sdt-trend-mini">
-                              <TrendLine values={trendSeries} color={sdtMetric === "drop" ? "#FF6B57" : "#16A34A"} height={44} />
-                              <div className="sdt-trend-legend">windows: {trendTickLegend} ticks</div>
-                            </div>
-                          )}
-                          <div className="sdt-split-rail">
-                            <div className="sdt-split-keep" style={{ width: `${Math.max(0, Math.min(100, Number(r.kept_pct || 0)))}%` }} />
-                            <div className="sdt-split-drop" style={{ width: `${Math.max(0, Math.min(100, Number(r.drop_pct || 0)))}%` }} />
-                          </div>
-                          <div className="sdt-card-foot">
-                            <span>Raw {Number(r.raw_total || 0).toLocaleString()}</span>
-                            <span>SDT {Number(r.sdt_total || 0).toLocaleString()}</span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div style={{ marginTop: 12, padding: 10, border: "1px solid var(--border)", borderRadius: 6, background: "#fff" }}>
-                    <div style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>
-                      Time-series window analysis ({sdtReport.ticks || sdtTicks} ticks)
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8, fontSize: 12 }}>
-                      <div><strong>Avg drop:</strong> {Number(sdtWindowInsights.avgDropPct || 0).toFixed(2)}%</div>
-                      <div><strong>Avg kept:</strong> {Number(sdtWindowInsights.avgKeptPct || 0).toFixed(2)}%</div>
-                      <div><strong>Best industry:</strong> {sdtWindowInsights.bestIndustry ? `${sdtWindowInsights.bestIndustry.industry} (${Number(sdtWindowInsights.bestIndustry.drop_pct || 0).toFixed(2)}% drop)` : "n/a"}</div>
-                      <div><strong>Lowest drop:</strong> {sdtWindowInsights.worstIndustry ? `${sdtWindowInsights.worstIndustry.industry} (${Number(sdtWindowInsights.worstIndustry.drop_pct || 0).toFixed(2)}% drop)` : "n/a"}</div>
-                      <div style={{ gridColumn: "1 / -1" }}>
-                        <strong>Top compressed tag:</strong> {sdtWindowInsights.topDropTag ? `${sdtWindowInsights.topDropTag.tag_name} (${Number(sdtWindowInsights.topDropTag.drop_pct || 0).toFixed(2)}% drop)` : "n/a"}
-                      </div>
-                    </div>
-                  </div>
-                  {!!(sdtReport.industry_window_snapshots || []).length && (
-                    <div className="sdt-window-snapshots">
-                      <div className="sdt-window-title">{industry} multi-window snapshots</div>
-                      <div className="sdt-window-list">
-                        {(sdtReport.industry_window_snapshots || []).map((w) => (
-                          <div key={`snap-${w.ticks}`} className="sdt-window-pill">
-                            <span>{w.ticks} ticks</span>
-                            <strong>{Number(sdtMetric === "drop" ? (w.drop_pct || 0) : (w.kept_pct || 0)).toFixed(2)}%</strong>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  <div style={{ marginTop: 10, color: "var(--muted)", fontSize: 11 }}>
-                    Generated: {sdtReport.generated_at ? new Date(sdtReport.generated_at).toLocaleString() : "n/a"} · window: {sdtReport.ticks || sdtTicks} ticks
-                  </div>
-                </div>
-              </div>
-              <div className="cfg-right">
-                <div className="cfg-section" style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-                  <div className="cfg-sec-title">Tag-level {sdtMetric === "drop" ? "Drop" : "Kept"} ({industry})</div>
-                  <div className="mapping-hdr">
-                    <span style={{ flex: 2 }}>Tag</span><span style={{ flex: 1 }}>Raw</span><span style={{ flex: 1 }}>SDT</span><span style={{ flex: 1 }}>{sdtMetric === "drop" ? "Drop %" : "Kept %"}</span><span style={{ flex: 2 }}>Visual</span>
-                  </div>
-                  <div className="mapping-list">
-                    {!(sdtReport.tags || []).length ? (
-                      <div style={{ color: "var(--muted)", fontSize: 12, padding: 12, textAlign: "center" }}>
-                        No SDT benchmark data found. Run `python3 tools/sdt_compression_report.py`.
-                      </div>
-                    ) : (
-                      sdtSortedTags.map((t, idx) => (
-                        <div key={`sdt-tag-${t.tag_name}`} className="map-row">
-                          <span className="map-rank">#{idx + 1}</span>
-                          <span className="map-tag">{t.tag_name}</span>
-                          <span className="map-val">{t.raw_count}</span>
-                          <span className="map-val">{t.sdt_count}</span>
-                          <span className="map-val">{(sdtMetric === "drop" ? (t.drop_pct || 0) : (t.kept_pct || 0)).toFixed(2)}%</span>
-                          <span style={{ flex: 2 }}>
-                            <span className="sdt-rail">
-                              <span
-                                className="sdt-rail-fill"
-                                style={{
-                                  width: `${Math.max(0, Math.min(100, sdtMetric === "drop" ? (t.drop_pct || 0) : (t.kept_pct || 0)))}%`,
-                                  background: sdtMetric === "drop" ? "#FF6B57" : "#16A34A"
-                                }}
-                              />
-                            </span>
-                          </span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
 
         <div className={`page ${page === "p7" ? "active" : ""}`} id="p7">
@@ -3380,13 +3327,17 @@ export default function App() {
             <div className="geo-topbar">
               <div className="geo-top-title">Geo Intelligence</div>
               <div className="geo-top-meta">
-                {geoLoading ? "Loading sites..." : `${geoSites.length} sites`}
+                {geoLoading && geoSites.length === 0
+                  ? "Loading sites..."
+                  : geoSitesLoading
+                    ? `${geoSites.length} site${geoSites.length === 1 ? "" : "s"} · loading more…`
+                    : `${geoSites.length} site${geoSites.length === 1 ? "" : "s"}`}
                 {geoError ? <span className="geo-err">{geoError}</span> : null}
               </div>
               <button className="sbtn" onClick={refetchGeoSites}>Refresh</button>
             </div>
-            <div className="geo-stack">
-              <div className="geo-map-top">
+            <div className="geo-stack" ref={geoStackRef}>
+              <div className="geo-map-top" style={{ height: geoMapHeight, flexBasis: geoMapHeight }}>
                 <GeoMap
                   sites={geoSites}
                   onSiteClick={onGeoSiteClick}
@@ -3397,6 +3348,11 @@ export default function App() {
                   onMapLayerChange={setMapLayer}
                 />
               </div>
+              <div
+                className={`geo-map-splitter ${geoMapResizing ? "active" : ""}`}
+                onMouseDown={() => setGeoMapResizing(true)}
+                title="Drag to resize map area"
+              />
               <div className="geo-drill-wrap">
                 {activeGeoSite ? (
                   <div className="geo-facility-wrap">

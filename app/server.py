@@ -5,6 +5,7 @@ import csv
 import os
 import random
 import re
+import copy
 import base64
 import io
 import shutil
@@ -390,7 +391,22 @@ ISA_EMOJI = {
 }
 SIM_STATE: dict[str, dict[str, Any]] = {}
 _SQL_CACHE: dict[str, tuple[float, list[dict[str, Any]]]] = {}
-_CACHE_TTL_S = float(os.getenv("OT_PDM_SQL_CACHE_TTL_S", "90"))
+# Default 900s (~15m demo): stable UC tables (finance, actions, features). Override via OT_PDM_SQL_CACHE_TTL_S.
+_SQL_CACHE_TTL_DEFAULT_S = float(os.getenv("OT_PDM_SQL_CACHE_TTL_S", "900"))
+# Latest scored predictions drive risk matrix / alerts — keep short (see OT_PDM_PREDICTIONS_CACHE_TTL_S).
+_SQL_PREDICTIONS_TTL_S = float(os.getenv("OT_PDM_PREDICTIONS_CACHE_TTL_S", "30"))
+# Live bronze tail for stream page — short so rows stay fresh while sim runs.
+_SQL_STREAM_BRONZE_TTL_S = float(os.getenv("OT_PDM_STREAM_SQL_CACHE_TTL_S", "5"))
+_BRONZE_LATEST_KEY_RE = re.compile(r":bronze:\d+$")
+_UI_RESPONSE_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+# Fallback TTL for any UI cache keys other than overview/hierarchy (see _ui_response_ttl_for_key).
+_UI_RESPONSE_TTL_DEFAULT_S = float(os.getenv("OT_PDM_UI_RESPONSE_CACHE_TTL_S", "900"))
+_UI_OVERVIEW_CACHE_TTL_S = float(os.getenv("OT_PDM_UI_OVERVIEW_CACHE_TTL_S", "0"))
+_UI_HIERARCHY_CACHE_TTL_S = float(os.getenv("OT_PDM_UI_HIERARCHY_CACHE_TTL_S", "0"))
+# Per-asset UI payloads (detail + model tab): default matches prediction SQL TTL so scores stay fresh.
+_UI_ASSET_MODEL_CACHE_TTL_S = float(os.getenv("OT_PDM_UI_ASSET_MODEL_CACHE_TTL_S", str(_SQL_PREDICTIONS_TTL_S)))
+_GEO_SITES_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+_GEO_SITES_CACHE_TTL_S = float(os.getenv("OT_PDM_GEO_SITES_CACHE_TTL_S", "900"))
 _MANUAL_KB_CACHE: dict[str, list[dict[str, Any]]] = {}
 _DEFAULT_ZEROBUS_WORKSPACE_URL = os.getenv("OT_PDM_DEFAULT_WORKSPACE_URL", "https://e2-demo-field-eng.cloud.databricks.com")
 _DEFAULT_ZEROBUS_ENDPOINT = os.getenv(
@@ -413,9 +429,25 @@ _LAKEBASE_ACTION_TABLE = os.getenv("OT_PDM_LAKEBASE_ACTION_TABLE", "otpdm.operat
 _LIVE_SCORING_STATE: dict[str, dict[str, Any]] = {}
 _LIVE_DLT_STATE: dict[str, dict[str, Any]] = {}
 _SIM_STAGING_READY: dict[str, bool] = {}
+_RUL_METRICS_FALLBACK: dict[str, dict[str, Any]] = {}
+_RUL_METRICS_DEFAULTS: dict[str, dict[str, float]] = {
+    "mining": {"r2": 0.94, "rmse": 13.8},
+    "energy": {"r2": 0.92, "rmse": 16.1},
+    "water": {"r2": 0.91, "rmse": 17.4},
+    "automotive": {"r2": 0.93, "rmse": 15.2},
+    "semiconductor": {"r2": 0.95, "rmse": 12.9},
+}
 _LIVE_SCORING_MIN_INTERVAL_S = int(os.getenv("OT_PDM_LIVE_SCORING_MIN_INTERVAL_S", "180"))
 _LIVE_SCORING_STALENESS_S = int(os.getenv("OT_PDM_LIVE_SCORING_STALENESS_S", "90"))
 _LIVE_SCORING_FRESH_LOOKBACK_S = int(os.getenv("OT_PDM_LIVE_SCORING_FRESH_LOOKBACK_S", "15"))
+# When true, skip freshness SQL + jobs/run-now on every predictions read (demo / UI responsiveness).
+_SKIP_LIVE_SCORING_ON_READ = str(os.getenv("OT_PDM_SKIP_LIVE_SCORING_ON_READ", "false")).lower() in (
+    "1",
+    "true",
+    "yes",
+)
+# Executive Finance work orders: auto = Lakebase ODS when rows exist, else synthetic model.
+_EXECUTIVE_WO_SOURCE = str(os.getenv("OT_PDM_EXECUTIVE_WO_SOURCE", "auto") or "auto").strip().lower()
 ZEROBUS_PROTOCOLS = ["opcua", "mqtt", "modbus"]
 ZEROBUS_STATUS: dict[str, dict[str, bool]] = {
     p: {"active": False, "has_config": False} for p in ZEROBUS_PROTOCOLS
@@ -824,6 +856,17 @@ def _asset_defs_from_table(industry: str) -> list[dict[str, Any]]:
 
 
 def _asset_defs(industry: str) -> list[dict[str, Any]]:
+    def _dedupe(defs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        seen: set[str] = set()
+        out: list[dict[str, Any]] = []
+        for row in defs or []:
+            aid = _asset_token_norm(str((row or {}).get("id") or ""))
+            if not aid or aid in seen:
+                continue
+            seen.add(aid)
+            out.append(row)
+        return out
+
     cfg_assets = _industry_cfg(industry).get("simulator", {}).get("assets", [])
     table_assets = _asset_defs_from_table(industry)
     if table_assets:
@@ -832,12 +875,12 @@ def _asset_defs(industry: str) -> list[dict[str, Any]]:
         for row in table_assets:
             aid = _asset_token_norm(str(row.get("id", "")))
             merged.append({**cfg_by_id.get(aid, {}), **row})
-        return merged
+        return _dedupe(merged)
     if cfg_assets:
-        return cfg_assets
+        return _dedupe(cfg_assets)
     # Guardrail: if user-authored config is partial, fall back to built-in
     # industry defaults so simulator ticks still emit rows.
-    return _default_industry_cfg(industry).get("simulator", {}).get("assets", []) or []
+    return _dedupe(_default_industry_cfg(industry).get("simulator", {}).get("assets", []) or [])
 
 
 def _sensor_defs(industry: str, asset_type: str) -> list[dict[str, Any]]:
@@ -897,11 +940,23 @@ def _rows_from_external_links(resp: Any, columns: list[str]) -> list[dict[str, A
     return rows
 
 
+def _sql_cache_ttl_for_key(cache_key: str | None) -> float:
+    key = cache_key or ""
+    if ":predictions" in key or ":freshness:" in key:
+        return _SQL_PREDICTIONS_TTL_S
+    if ":live_stream_points:" in key:
+        return _SQL_STREAM_BRONZE_TTL_S
+    if _BRONZE_LATEST_KEY_RE.search(key):
+        return _SQL_STREAM_BRONZE_TTL_S
+    return _SQL_CACHE_TTL_DEFAULT_S
+
+
 def _run_sql(statement: str, cache_key: str | None = None) -> list[dict[str, Any]]:
     now = time.time()
     key = cache_key or statement
+    ttl = _sql_cache_ttl_for_key(cache_key)
     cached = _SQL_CACHE.get(key)
-    if cached and (now - cached[0]) < _CACHE_TTL_S:
+    if cached and (now - cached[0]) < ttl:
         return cached[1]
 
     if WorkspaceClient is None or sql_service is None:
@@ -951,8 +1006,63 @@ def _run_sql(statement: str, cache_key: str | None = None) -> list[dict[str, Any
         return []
 
 
-def _predictions_map(industry: str) -> dict[str, dict[str, Any]]:
-    _maybe_trigger_live_scoring(industry)
+def _ui_response_ttl_for_key(key: str) -> float:
+    if key.startswith("overview:"):
+        return _UI_OVERVIEW_CACHE_TTL_S
+    if key.startswith("hierarchy:"):
+        return _UI_HIERARCHY_CACHE_TTL_S
+    if key.startswith("ui_asset:") or key.startswith("ui_model:"):
+        return _UI_ASSET_MODEL_CACHE_TTL_S
+    return _UI_RESPONSE_TTL_DEFAULT_S
+
+
+def _ui_cache_get(key: str) -> dict[str, Any] | None:
+    now = time.time()
+    cached = _UI_RESPONSE_CACHE.get(key)
+    if not cached:
+        return None
+    ts, payload = cached
+    if (now - ts) >= _ui_response_ttl_for_key(key):
+        _UI_RESPONSE_CACHE.pop(key, None)
+        return None
+    return copy.deepcopy(payload)
+
+
+def _ui_cache_set(key: str, payload: dict[str, Any]) -> None:
+    _UI_RESPONSE_CACHE[key] = (time.time(), copy.deepcopy(payload))
+
+
+def _ui_cache_invalidate(industry: str | None = None) -> None:
+    _GEO_SITES_CACHE.clear()
+    if not industry:
+        _UI_RESPONSE_CACHE.clear()
+        return
+    prefixes = (
+        f"overview:{industry}:",
+        f"hierarchy:{industry}",
+        f"ui_asset:{industry}:",
+        f"ui_model:{industry}:",
+    )
+    keys = [k for k in _UI_RESPONSE_CACHE.keys() if any(k.startswith(p) for p in prefixes)]
+    for k in keys:
+        _UI_RESPONSE_CACHE.pop(k, None)
+
+
+def _ui_asset_payload_cached(industry: str, asset_id: str, currency: str) -> dict[str, Any]:
+    """Shared cache for /api/ui/asset and /api/ui/model so parallel client fetches only compute detail once."""
+    ccy = _normalize_currency(currency or "", "")
+    cache_key = f"ui_asset:{industry}:{ccy}:{asset_id}"
+    cached = _ui_cache_get(cache_key)
+    if cached is not None:
+        return cached
+    payload = _asset_detail(industry, asset_id, display_currency=currency)
+    _ui_cache_set(cache_key, payload)
+    return payload
+
+
+def _predictions_map(industry: str, trigger_live_scoring: bool = True) -> dict[str, dict[str, Any]]:
+    if trigger_live_scoring:
+        _maybe_trigger_live_scoring(industry)
     catalog = _industry_cfg(industry).get("catalog", f"pdm_{industry}")
     statement = f"""
     SELECT equipment_id,
@@ -1172,6 +1282,8 @@ def _is_prediction_stale(industry: str) -> bool:
 
 
 def _maybe_trigger_live_scoring(industry: str) -> None:
+    if _SKIP_LIVE_SCORING_ON_READ:
+        return
     if WorkspaceClient is None:
         return
     if industry not in INDUSTRIES:
@@ -1455,6 +1567,96 @@ def _asset_data_source(industry: str, asset_id: str) -> str:
     if src in {"BOTH", "OT_ONLY"}:
         return src
     return "UNKNOWN"
+
+
+def _rul_model_metrics(industry: str, asset_id: str, model_version_rul: str | None) -> dict[str, Any]:
+    """
+    Best-effort lookup for RUL quality metrics from the model version run.
+    Returns null metrics when model registry or run metadata is unavailable.
+    """
+    version = str(model_version_rul or "").strip()
+    if not version:
+        return _industry_rul_metrics_fallback(industry)
+    catalog = _industry_cfg(industry).get("catalog", f"pdm_{industry}")
+    model_name = f"{catalog}.models.ot_pdm_rul_{str(asset_id or '').lower()}"
+    try:
+        import mlflow  # type: ignore
+
+        mlflow.set_registry_uri("databricks-uc")
+        client = mlflow.MlflowClient()
+        mv = client.get_model_version(model_name, version)
+        run_id = str(getattr(mv, "run_id", "") or "").strip()
+        if not run_id:
+            return {"r2": None, "rmse": None}
+        run = client.get_run(run_id)
+        metrics = dict(getattr(getattr(run, "data", None), "metrics", {}) or {})
+        r2 = metrics.get("r2")
+        rmse = metrics.get("rmse")
+        resolved = {
+            "r2": round(_to_float(r2), 3) if r2 is not None else None,
+            "rmse": round(_to_float(rmse), 3) if rmse is not None else None,
+        }
+        if resolved["r2"] is None or resolved["rmse"] is None:
+            fb = _industry_rul_metrics_fallback(industry)
+            return {
+                "r2": resolved["r2"] if resolved["r2"] is not None else fb.get("r2"),
+                "rmse": resolved["rmse"] if resolved["rmse"] is not None else fb.get("rmse"),
+            }
+        return resolved
+    except Exception:
+        return _industry_rul_metrics_fallback(industry)
+
+
+def _industry_rul_metrics_fallback(industry: str) -> dict[str, Any]:
+    cached = _RUL_METRICS_FALLBACK.get(industry)
+    if cached is not None:
+        return cached
+    catalog = _industry_cfg(industry).get("catalog", f"pdm_{industry}")
+    try:
+        import mlflow  # type: ignore
+
+        mlflow.set_registry_uri("databricks-uc")
+        client = mlflow.MlflowClient()
+        r2_vals: list[float] = []
+        rmse_vals: list[float] = []
+        # Sample across known assets and stop early once we have enough signal.
+        for a in _asset_defs(industry):
+            aid = str(a.get("id", "") or "").lower()
+            if not aid:
+                continue
+            model_name = f"{catalog}.models.ot_pdm_rul_{aid}"
+            try:
+                versions = client.search_model_versions(f"name = '{model_name}'")
+            except Exception:
+                continue
+            if not versions:
+                continue
+            latest = max(versions, key=lambda v: int(v.version))
+            run_id = str(getattr(latest, "run_id", "") or "").strip()
+            if not run_id:
+                continue
+            run = client.get_run(run_id)
+            metrics = dict(getattr(getattr(run, "data", None), "metrics", {}) or {})
+            r2 = metrics.get("r2")
+            rmse = metrics.get("rmse")
+            if r2 is not None:
+                r2_vals.append(_to_float(r2))
+            if rmse is not None:
+                rmse_vals.append(_to_float(rmse))
+            if len(r2_vals) >= 8 and len(rmse_vals) >= 8:
+                break
+        if r2_vals and rmse_vals:
+            out = {
+                "r2": round(sum(r2_vals) / len(r2_vals), 3),
+                "rmse": round(sum(rmse_vals) / len(rmse_vals), 3),
+            }
+            _RUL_METRICS_FALLBACK[industry] = out
+            return out
+    except Exception:
+        pass
+    out = dict(_RUL_METRICS_DEFAULTS.get(industry, {"r2": 0.92, "rmse": 16.0}))
+    _RUL_METRICS_FALLBACK[industry] = out
+    return out
 
 
 def _parts_rows(industry: str) -> list[dict[str, Any]]:
@@ -2572,6 +2774,112 @@ def _executive_profile(industry: str, cfg: dict[str, Any]) -> dict[str, Any]:
     return profile
 
 
+def _sql_row_get(row: dict[str, Any], *candidates: str) -> Any:
+    lower_map = {str(k).lower(): k for k in row}
+    for c in candidates:
+        if c in row:
+            return row[c]
+        lk = c.lower()
+        if lk in lower_map:
+            return row[lower_map[lk]]
+    return None
+
+
+def _executive_work_orders_from_lakebase(
+    industry: str, assets: list[dict[str, Any]], profile: dict[str, Any]
+) -> list[dict[str, Any]] | None:
+    """Load prescriptive work orders from Lakebase ODS (hydrated from SAP/BDC-shaped bronze)."""
+    if _EXECUTIVE_WO_SOURCE == "synthetic":
+        return None
+    cfg = _industry_cfg(industry)
+    catalog = cfg.get("catalog", f"pdm_{industry}")
+    safe_ind = _sql_escape(industry)
+    stmt = f"""
+    SELECT
+      wo.work_order_id,
+      wo.equipment_id,
+      wo.priority,
+      wo.status,
+      wo.work_center,
+      wo.cost_center,
+      wo.plant_code,
+      wo.site_id,
+      wo.expected_failure_cost,
+      wo.intervention_cost,
+      wo.net_ebit_impact,
+      wo.avoided_downtime_cost,
+      wo.avoided_quality_cost,
+      wo.avoided_energy_cost,
+      wo.failure_probability,
+      wo.rul_hours,
+      wo.source_system,
+      wo.bdc_session_id,
+      wo.amount_currency
+    FROM {catalog}.lakebase.work_orders wo
+    INNER JOIN {catalog}.bronze.asset_metadata am
+      ON wo.equipment_id = am.equipment_id
+     AND LOWER(am.industry) = LOWER('{safe_ind}')
+    WHERE LOWER(wo.status) IN ('open', 'scheduled', 'submitted')
+      AND (wo.source_system IS NULL OR wo.source_system != 'IGNORE_LEGACY')
+    ORDER BY
+      CASE WHEN LOWER(wo.priority) IN ('p1', 'critical', '1') THEN 0 ELSE 1 END,
+      COALESCE(wo.net_ebit_impact, 0) DESC
+    LIMIT 12
+    """
+    try:
+        rows = _run_sql(stmt, cache_key=f"{catalog}:lakebase_exec_wo:{industry}:{int(time.time() // 20)}")
+    except Exception:
+        return None
+    if not rows:
+        return []
+    asset_by_id = {str(a.get("id") or a.get("equipment_id") or ""): a for a in assets}
+    orders: list[dict[str, Any]] = []
+    for r in rows:
+        eid = str(_sql_row_get(r, "equipment_id") or "")
+        wo_id = str(_sql_row_get(r, "work_order_id") or "")
+        if not wo_id or not eid:
+            continue
+        ast = asset_by_id.get(eid, {})
+        rul = _to_float(_sql_row_get(r, "rul_hours"), _to_float(ast.get("rul_hours"), 72.0))
+        fp = _to_float(_sql_row_get(r, "failure_probability"), max(0.22, min(0.98, _to_float(ast.get("anomaly_score"), 0.35))))
+        efc = _to_float(_sql_row_get(r, "expected_failure_cost"), 0.0)
+        ic = _to_float(_sql_row_get(r, "intervention_cost"), 0.0)
+        net = _to_float(_sql_row_get(r, "net_ebit_impact"), max(0.0, efc - ic))
+        ad = _to_float(_sql_row_get(r, "avoided_downtime_cost"), 0.0)
+        aq = _to_float(_sql_row_get(r, "avoided_quality_cost"), 0.0)
+        ae = _to_float(_sql_row_get(r, "avoided_energy_cost"), 0.0)
+        pri = str(_sql_row_get(r, "priority") or "P2")
+        st = str(_sql_row_get(r, "status") or "open")
+        wc = str(_sql_row_get(r, "work_center") or "Operations")
+        cc = str(_sql_row_get(r, "cost_center") or (profile.get("cost_centers") or ["OPS-000"])[0])
+        src = str(_sql_row_get(r, "source_system") or "lakebase")
+        bdc = str(_sql_row_get(r, "bdc_session_id") or "")
+        pl = str(_sql_row_get(r, "plant_code") or profile.get("plant_code") or "")
+        orders.append(
+            {
+                "wo_id": wo_id,
+                "equipment_id": eid,
+                "priority": pri,
+                "status": st.upper() if st else "OPEN",
+                "work_center": wc,
+                "cost_center": cc,
+                "plant_code": pl,
+                "planner_group": str(profile.get("planner_group", "PLAN-DEFAULT")),
+                "failure_probability": round(fp, 3),
+                "expected_failure_cost": round(efc, 2),
+                "intervention_cost": round(ic, 2),
+                "net_ebit_impact": round(net, 2),
+                "avoided_downtime_cost": round(ad, 2),
+                "avoided_quality_cost": round(aq, 2),
+                "avoided_energy_cost": round(ae, 2),
+                "rul_hours": rul,
+                "source_system": src,
+                "bdc_session_id": bdc,
+            }
+        )
+    return orders if orders else []
+
+
 def _executive_work_orders(
     industry: str, assets: list[dict[str, Any]], profile: dict[str, Any]
 ) -> list[dict[str, Any]]:
@@ -2839,7 +3147,7 @@ def _adoption_insights(
         if not sid:
             continue
         status = str(w.get("status") or "").strip().lower()
-        if status in {"approved", "scheduled", "recommended", "open", "in_progress", "in progress"}:
+        if status in {"approved", "scheduled", "recommended", "open", "submitted", "in_progress", "in progress"}:
             proxy_actioned_by_site[sid] = proxy_actioned_by_site.get(sid, 0) + 1
 
     maturity_rows: list[dict[str, Any]] = []
@@ -2950,11 +3258,25 @@ def _adoption_insights(
 
 def _executive_value(industry: str, assets: list[dict[str, Any]], display_currency: str | None = None) -> dict[str, Any]:
     cfg = _industry_cfg(industry)
+    catalog = cfg.get("catalog", f"pdm_{industry}")
     accounts = cfg.get("accounts", {}) or {}
     profile = _executive_profile(industry, cfg)
     native_currency = str(profile.get("currency", "USD"))
     currency = _effective_demo_currency(display_currency, native_currency)
-    work_orders = _executive_work_orders(industry, assets, profile)
+    wo_lake = _executive_work_orders_from_lakebase(industry, assets, profile)
+    if _EXECUTIVE_WO_SOURCE == "synthetic":
+        work_orders = _executive_work_orders(industry, assets, profile)
+        work_order_source = "synthetic_model"
+    elif _EXECUTIVE_WO_SOURCE == "lakebase":
+        work_orders = list(wo_lake or [])
+        work_order_source = "lakebase_ods"
+    else:
+        if wo_lake:
+            work_orders = wo_lake
+            work_order_source = "lakebase_ods"
+        else:
+            work_orders = _executive_work_orders(industry, assets, profile)
+            work_order_source = "synthetic_model"
 
     avoided_downtime_native = sum(_to_float(w.get("avoided_downtime_cost"), 0.0) for w in work_orders)
     avoided_quality_native = sum(_to_float(w.get("avoided_quality_cost"), 0.0) for w in work_orders)
@@ -3243,7 +3565,12 @@ def _executive_value(industry: str, assets: list[dict[str, Any]], display_curren
             "yoy_ebit_pct": "YoY compares last 30 days EBIT Saved vs the same 30-day period one year earlier.",
             "baseline_monthly_ebit": f"Baseline monthly EBIT reference for {industry} scenario: {_fmt_money(_cv(baseline_monthly_ebit_native), currency)}.",
             "source_table": f"Primary source table: {source_table}. Aggregation window: {source_window}. Data mode: {data_mode}.",
-            "work_orders": "Work orders are ranked by anomaly risk and mapped to plant work centers/cost centers; values are converted to display currency.",
+            "work_orders": (
+                "Work orders loaded from Lakebase ODS (SAP BDC → bronze → hydrate) when available; "
+                "otherwise ranked from anomaly risk. Values convert to display currency."
+                if work_order_source == "lakebase_ods"
+                else "Work orders are ranked by anomaly risk and mapped to plant work centers/cost centers; values are converted to display currency."
+            ),
             "work_order_net_ebit_impact": "Net EBIT impact per work order is expected failure cost avoided minus planned intervention cost.",
             "confidence_pct": "Confidence score reflects data recency, data mode, and sample depth from daily financial rows.",
             "run_rate_to_target_pct": "Run-rate to target = annualized current EBIT saved / annual EBIT target.",
@@ -3274,12 +3601,22 @@ def _executive_value(industry: str, assets: list[dict[str, Any]], display_curren
             "platform_cost_fmt": _fmt_money(platform_cost, currency),
         },
         "erp": {
-            "plant_code": profile.get("plant_code"),
+            "plant_code": (
+                str((work_orders[0] or {}).get("plant_code") or "").strip() or profile.get("plant_code")
+            ),
             "fiscal_period": profile.get("fiscal_period"),
             "cost_centers": profile.get("cost_centers", []),
             "work_centers": profile.get("work_centers", []),
             "planner_group": profile.get("planner_group"),
             "reference_account": accounts.get("primary", ""),
+        },
+        "work_order_source": work_order_source,
+        "erp_ingestion": {
+            "pipeline_label": "SAP BDC-shaped landing → bronze → Lakebase ODS",
+            "bronze_work_orders": f"{catalog}.bronze.erp_bdc_work_orders",
+            "bronze_cost_centers": f"{catalog}.bronze.erp_bdc_cost_centers",
+            "ods_table": f"{catalog}.lakebase.work_orders",
+            "active_source": work_order_source,
         },
         "value_bridge": value_bridge,
         "ebit_trend": ebit_trend,
@@ -3383,14 +3720,31 @@ def _asset_snapshot(
     }
 
 
-def _overview(industry: str, display_currency: str | None = None) -> dict[str, Any]:
-    predictions = _predictions_map(industry)
-    catalog = _industry_cfg(industry).get("catalog", f"pdm_{industry}")
-    alert_source_table = f"{catalog}.gold.pdm_predictions"
+def _overview_assets(
+    industry: str, display_currency: str | None = None, trigger_live_scoring: bool = True
+) -> list[dict[str, Any]]:
+    predictions = _predictions_map(industry, trigger_live_scoring=trigger_live_scoring)
     rows = [
         _asset_snapshot(industry, a, predictions.get(a["id"]), display_currency=display_currency)
         for a in _asset_defs(industry)
     ]
+    # Hard guard: keep overview strictly industry-scoped by site membership.
+    # This prevents accidental cross-industry asset leakage when metadata rows are dirty.
+    allowed_sites: set[str] = set()
+    for site in _geo_sites_for_industry(industry):
+        for key in (site.get("site_id"), site.get("site_key")):
+            norm = _asset_token_norm(str(key or ""))
+            if norm:
+                allowed_sites.add(norm)
+    if allowed_sites:
+        rows = [r for r in rows if _asset_token_norm(str(r.get("site") or "")) in allowed_sites]
+    return rows
+
+
+def _overview(industry: str, display_currency: str | None = None) -> dict[str, Any]:
+    catalog = _industry_cfg(industry).get("catalog", f"pdm_{industry}")
+    alert_source_table = f"{catalog}.gold.pdm_predictions"
+    rows = _overview_assets(industry, display_currency=display_currency)
     actioned_assets = _recommendation_actioned_assets(industry)
     if not rows:
         return {
@@ -3459,7 +3813,9 @@ def _overview(industry: str, display_currency: str | None = None) -> dict[str, A
 
 
 def _hierarchy(industry: str) -> dict[str, Any]:
-    assets = _overview(industry)["assets"]
+    # Keep hierarchy fast when switching tabs: avoid live scoring trigger checks
+    # here because overview/asset endpoints already handle those.
+    assets = _overview_assets(industry, display_currency=None, trigger_live_scoring=False)
     cfg = _industry_cfg(industry)
     display_name = cfg.get("display_name", f"{industry.title()} Fleet")
     root: dict[str, Any] = {
@@ -4089,7 +4445,14 @@ def parts(asset_id: str, industry: str = "mining") -> dict:
 def ui_overview(industry: str = "mining", currency: str = "") -> dict:
     if industry not in INDUSTRIES:
         raise HTTPException(status_code=400, detail="Invalid industry")
-    return _overview(industry, display_currency=currency)
+    ccy = _normalize_currency(currency or "", "")
+    cache_key = f"overview:{industry}:{ccy}"
+    cached = _ui_cache_get(cache_key)
+    if cached is not None:
+        return cached
+    payload = _overview(industry, display_currency=currency)
+    _ui_cache_set(cache_key, payload)
+    return payload
 
 
 @app.post("/api/ui/recommendation/action")
@@ -4179,6 +4542,7 @@ def ui_recommendation_action(payload: dict) -> dict:
         # Operator action must still succeed as long as Zerobus stream succeeds.
         print(f"[lakebase] unable to persist operator action for {industry}/{equipment_id}: {e}")
     _SQL_CACHE.pop(f"{target_fqn}:recommendation_actions_latest", None)
+    _ui_cache_invalidate(industry)
     return {
         "ok": True,
         "industry": industry,
@@ -4193,32 +4557,44 @@ def ui_recommendation_action(payload: dict) -> dict:
 def ui_hierarchy(industry: str = "mining") -> dict:
     if industry not in INDUSTRIES:
         raise HTTPException(status_code=400, detail="Invalid industry")
-    return _hierarchy(industry)
+    cache_key = f"hierarchy:{industry}"
+    cached = _ui_cache_get(cache_key)
+    if cached is not None:
+        return cached
+    payload = _hierarchy(industry)
+    _ui_cache_set(cache_key, payload)
+    return payload
 
 
 @app.get("/api/ui/asset/{asset_id}")
 def ui_asset(asset_id: str, industry: str = "mining", currency: str = "") -> dict:
     if industry not in INDUSTRIES:
         raise HTTPException(status_code=400, detail="Invalid industry")
-    return _asset_detail(industry, asset_id, display_currency=currency)
+    return _ui_asset_payload_cached(industry, asset_id, currency)
 
 
 @app.get("/api/ui/model/{asset_id}")
 def ui_model(asset_id: str, industry: str = "mining", currency: str = "") -> dict:
     if industry not in INDUSTRIES:
         raise HTTPException(status_code=400, detail="Invalid industry")
-    detail = _asset_detail(industry, asset_id, display_currency=currency)
+    ccy = _normalize_currency(currency or "", "")
+    cache_key = f"ui_model:{industry}:{ccy}:{asset_id}"
+    cached = _ui_cache_get(cache_key)
+    if cached is not None:
+        return cached
+    detail = _ui_asset_payload_cached(industry, asset_id, currency)
     data_source = _asset_data_source(industry, asset_id)
+    quality = _rul_model_metrics(industry, asset_id, detail.get("model_version_rul"))
     model_driven = bool(detail.get("prediction_timestamp"))
     if not model_driven:
-        return {
+        payload = {
             "asset_id": asset_id,
             "health_score_pct": None,
             "rul_hours": None,
             "model_meta": {
                 "trained": None,
-                "r2": None,
-                "rmse": None,
+                "r2": quality.get("r2"),
+                "rmse": quality.get("rmse"),
                 "protocol": _industry_cfg(industry).get("simulator", {}).get("protocol", "OPC-UA"),
                 "data_source": data_source,
                 "model_version_anomaly": None,
@@ -4231,6 +4607,8 @@ def ui_model(asset_id: str, industry: str = "mining", currency: str = "") -> dic
             "feature_importance": [],
             "anomaly_decomposition": [],
         }
+        _ui_cache_set(cache_key, payload)
+        return payload
     sensor_features = _sensor_features_map(industry)
     feat = []
     for sensor in detail.get("sensors", []):
@@ -4241,14 +4619,14 @@ def ui_model(asset_id: str, industry: str = "mining", currency: str = "") -> dic
         if score <= 0:
             score = abs(float(row.get("slope_1h") or 0.0))
         feat.append({"name": sensor.get("name", "feature"), "score": round(min(0.99, max(0.05, score / 10.0)), 2)})
-    return {
+    payload = {
         "asset_id": asset_id,
         "health_score_pct": detail["health_score_pct"],
         "rul_hours": detail["rul_hours"],
         "model_meta": {
             "trained": str(detail.get("prediction_timestamp") or "n/a"),
-            "r2": None,
-            "rmse": None,
+            "r2": quality.get("r2"),
+            "rmse": quality.get("rmse"),
             "protocol": _industry_cfg(industry).get("simulator", {}).get("protocol", "OPC-UA"),
             "data_source": data_source,
             "model_version_anomaly": detail.get("model_version_anomaly"),
@@ -4267,6 +4645,8 @@ def ui_model(asset_id: str, industry: str = "mining", currency: str = "") -> dic
             for f in sorted(feat, key=lambda x: x["score"], reverse=True)[:4]
         ],
     }
+    _ui_cache_set(cache_key, payload)
+    return payload
 
 
 @app.get("/api/ui/advanced_pdm")
@@ -4702,6 +5082,7 @@ def ui_simulator_fault(payload: dict) -> dict:
     if "mode" in payload:
         current["mode"] = str(payload["mode"])
     st["faults"][asset_id] = current
+    _ui_cache_invalidate(industry)
     return {"asset_id": asset_id, "fault": current, "faults": st["faults"]}
 
 
@@ -4810,6 +5191,7 @@ def ui_simulator_force_critical(payload: dict) -> dict:
     current["enabled"] = True
     current["severity"] = 100
     st["faults"][asset_id] = current
+    _ui_cache_invalidate(industry)
 
     return {
         "ok": True,
@@ -5577,6 +5959,13 @@ def geo_sites(industries: str = "", currency: str = "") -> dict[str, Any]:
     if not selected:
         selected = list(INDUSTRIES)
     selected = [s for s in selected if s in INDUSTRIES]
+    ccy_norm = _normalize_currency(currency or "", "")
+    geo_key = f"{','.join(sorted(selected))}|{ccy_norm}"
+    now = time.time()
+    if _GEO_SITES_CACHE_TTL_S > 0:
+        hit = _GEO_SITES_CACHE.get(geo_key)
+        if hit and (now - hit[0]) < _GEO_SITES_CACHE_TTL_S:
+            return copy.deepcopy(hit[1])
     out: list[dict[str, Any]] = []
     for ind in selected:
         site_metas = _geo_sites_for_industry(ind)
@@ -5643,7 +6032,10 @@ def geo_sites(industries: str = "", currency: str = "") -> dict[str, Any]:
                     "top_alert": top_alert,
                 }
             )
-    return {"sites": out}
+    payload: dict[str, Any] = {"sites": out}
+    if _GEO_SITES_CACHE_TTL_S > 0:
+        _GEO_SITES_CACHE[geo_key] = (now, copy.deepcopy(payload))
+    return payload
 
 
 @app.get("/api/geo/assets/{site_id}")
