@@ -181,3 +181,22 @@ resources:
               reset_existing: "true"
               seed_demo_planning_case: "true"
 
+    # Refresh SAP/BDC-shaped bronze + Lakebase work_orders demo (Executive Finance ODS path).
+    # Run manually or attach a schedule; safe to re-run (replaces SAP_BDC_DEMO rows only).
+    ot_pdm_erp_bdc_seed_job:
+      name: ot-pdm-erp-bdc-seed-refresh
+      environments:
+        - environment_key: default
+          spec:
+            client: "1"
+            dependencies:
+              - pyyaml
+      tasks:
+        - task_key: refresh_erp_bdc_all_industries
+          environment_key: default
+          spark_python_task:
+            python_file: core/erp_bdc/run_erp_bdc_seed_job.py
+            parameters:
+              - "--industries"
+              - "mining,energy,water,automotive,semiconductor"
+
