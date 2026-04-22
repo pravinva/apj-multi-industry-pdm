@@ -1,36 +1,90 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
+const ALL_GEO_INDUSTRIES = ["mining", "energy", "water", "automotive", "semiconductor"];
+
+function mergeSites(prev, chunk) {
+  const byId = new Map((prev || []).map((s) => [String(s.site_id), s]));
+  for (const s of chunk || []) {
+    if (s && s.site_id != null) byId.set(String(s.site_id), s);
+  }
+  return Array.from(byId.values()).sort((a, b) => {
+    const ia = String(a.industry || "").localeCompare(String(b.industry || ""));
+    if (ia !== 0) return ia;
+    return String(a.site_id || "").localeCompare(String(b.site_id || ""));
+  });
+}
+
+/**
+ * Loads geo sites per industry in parallel; merges as each response arrives.
+ * - sitesLoading: true while any industry request is still in flight
+ * - loading: true only until the first sites appear or all requests finish (empty / failure)
+ */
 export function useGeoData(activeIndustries, currency = "") {
   const [sites, setSites] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [sitesLoading, setSitesLoading] = useState(false);
   const [error, setError] = useState("");
+  const loadGenRef = useRef(0);
 
-  const refetch = useCallback(async () => {
-    const industries = Array.from(activeIndustries || []);
+  const runLoad = useCallback(async () => {
+    const gen = ++loadGenRef.current;
+    const picked = Array.from(activeIndustries || []).sort();
+    const list = picked.length ? picked : [...ALL_GEO_INDUSTRIES];
+    const n = list.length;
+
     setLoading(true);
+    setSitesLoading(n > 0);
     setError("");
-    try {
-      const params = new URLSearchParams();
-      if (industries.length) params.set("industries", industries.join(","));
-      if (currency && currency !== "AUTO") params.set("currency", currency);
-      const query = params.toString() ? `?${params.toString()}` : "";
-      const res = await fetch(`/api/geo/sites${query}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const payload = await res.json();
-      setSites(Array.isArray(payload?.sites) ? payload.sites : []);
-    } catch (e) {
-      setSites([]);
-      setError(String(e?.message || "Failed to load geo sites"));
-    } finally {
-      setLoading(false);
-    }
+    setSites([]);
+    const cur = currency && currency !== "AUTO" ? currency : "";
+
+    const failures = [];
+    let pending = n;
+
+    const finishOne = () => {
+      if (loadGenRef.current !== gen) return;
+      pending -= 1;
+      setSitesLoading(pending > 0);
+      if (pending === 0) {
+        setLoading(false);
+        if (failures.length === n) {
+          setSites([]);
+          setError("Failed to load geo sites");
+        } else if (failures.length > 0) {
+          setError("Some industries could not be loaded");
+        } else {
+          setError("");
+        }
+      }
+    };
+
+    await Promise.all(
+      list.map(async (ind) => {
+        try {
+          const params = new URLSearchParams();
+          params.set("industries", ind);
+          if (cur) params.set("currency", cur);
+          const res = await fetch(`/api/geo/sites?${params.toString()}`);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const payload = await res.json();
+          const chunk = Array.isArray(payload?.sites) ? payload.sites : [];
+          if (loadGenRef.current !== gen) return;
+          setSites((prev) => mergeSites(prev, chunk));
+          if (chunk.length > 0) setLoading(false);
+        } catch (e) {
+          failures.push(e);
+        } finally {
+          finishOne();
+        }
+      })
+    );
   }, [activeIndustries, currency]);
 
   useEffect(() => {
-    refetch();
-  }, [refetch]);
+    runLoad();
+  }, [runLoad]);
 
-  return { sites, loading, error, refetch };
+  return { sites, loading, sitesLoading, error, refetch: runLoad };
 }
 
 export function useAssetData(siteId, currency = "") {

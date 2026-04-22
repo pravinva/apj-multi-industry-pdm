@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>APEX Executive Presentation - 12 Slides</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --db-red: #ff3621;
+      --db-blue: #1f75ff;
+      --db-navy: #14213d;
+      --db-green: #00a972;
+      --bg: #f7f9fc;
+      --card: #ffffff;
+      --line: #d9e1ee;
+      --text: #1c2434;
+      --text-soft: #4d5c74;
+      --shadow: 0 10px 30px rgba(20, 33, 61, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Roboto", Arial, sans-serif;
+      background: linear-gradient(180deg, #ffffff 0%, var(--bg) 100%);
+      color: var(--text);
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: #ffffffee;
+      backdrop-filter: blur(6px);
+      border-bottom: 1px solid var(--line);
+      padding: 12px 20px;
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .brand {
+      font-family: "Barlow", Arial, sans-serif;
+      font-weight: 700;
+      color: var(--db-navy);
+      font-size: 18px;
+      letter-spacing: 0.2px;
+    }
+
+    .counter {
+      font-weight: 600;
+      color: var(--text-soft);
+    }
+
+    .controls {
+      display: flex;
+      gap: 8px;
+    }
+
+    button {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--db-navy);
+      border-radius: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    button:hover {
+      border-color: var(--db-blue);
+    }
+
+    .slider-wrap {
+      border-bottom: 1px solid var(--line);
+      background: #fff;
+      padding: 10px 20px 14px;
+    }
+
+    .slider-wrap label {
+      display: block;
+      font-size: 12px;
+      color: var(--text-soft);
+      margin-bottom: 6px;
+    }
+
+    #deckSlider {
+      width: 100%;
+      accent-color: var(--db-red);
+    }
+
+    .deck {
+      max-width: 1120px;
+      margin: 22px auto 30px;
+      padding: 0 18px;
+    }
+
+    .slide {
+      display: none;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      padding: 34px 38px;
+      min-height: 620px;
+    }
+
+    .slide.active {
+      display: block;
+    }
+
+    h1, h2 {
+      font-family: "Barlow", Arial, sans-serif;
+      margin: 0 0 12px;
+      color: var(--db-navy);
+      line-height: 1.12;
+    }
+
+    h1 {
+      font-size: 46px;
+    }
+
+    h2 {
+      font-size: 34px;
+    }
+
+    .subtitle {
+      font-size: 20px;
+      color: var(--text-soft);
+      margin-bottom: 18px;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 14px 0 22px;
+    }
+
+    .chip {
+      font-family: "Barlow", Arial, sans-serif;
+      font-weight: 600;
+      font-size: 12px;
+      border-radius: 999px;
+      padding: 6px 11px;
+      border: 1px solid var(--line);
+      color: var(--db-navy);
+      background: #fff;
+    }
+
+    .chip.red {
+      background: #fff2f0;
+      border-color: #ffd2ca;
+      color: #aa2f1f;
+    }
+
+    .chip.blue {
+      background: #eef4ff;
+      border-color: #d7e6ff;
+      color: #194ea3;
+    }
+
+    .chip.green {
+      background: #ecfff8;
+      border-color: #c8f2e4;
+      color: #0e7550;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px 14px;
+      background: #fff;
+    }
+
+    .card h3 {
+      font-family: "Barlow", Arial, sans-serif;
+      margin: 0 0 8px;
+      color: var(--db-navy);
+      font-size: 21px;
+    }
+
+    ul {
+      margin: 8px 0 0 18px;
+      padding: 0;
+      color: var(--text);
+      line-height: 1.45;
+    }
+
+    li {
+      margin: 5px 0;
+    }
+
+    .highlight {
+      border-left: 4px solid var(--db-red);
+      background: #fff7f5;
+      padding: 10px 12px;
+      border-radius: 8px;
+      margin: 16px 0;
+      color: #7a3025;
+      font-weight: 500;
+    }
+
+    .big-metric {
+      display: inline-block;
+      font-family: "Barlow", Arial, sans-serif;
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--db-navy);
+      margin-right: 14px;
+    }
+
+    .footer-note {
+      margin-top: 20px;
+      font-size: 13px;
+      color: var(--text-soft);
+    }
+
+    .dots {
+      display: flex;
+      gap: 7px;
+      justify-content: center;
+      padding: 10px 0 26px;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      border: 1px solid #b9c6dc;
+      background: #e8eef8;
+      cursor: pointer;
+    }
+
+    .dot.active {
+      background: var(--db-red);
+      border-color: var(--db-red);
+    }
+
+    @media (max-width: 900px) {
+      .grid-2 {
+        grid-template-columns: 1fr;
+      }
+      .slide {
+        padding: 22px;
+      }
+      h1 { font-size: 34px; }
+      h2 { font-size: 28px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand">Databricks | APEX Executive Story</div>
+    <div class="counter" id="counter">Slide 1 / 12</div>
+    <div class="controls">
+      <button id="prevBtn" type="button">Prev</button>
+      <button id="nextBtn" type="button">Next</button>
+    </div>
+  </div>
+
+  <div class="slider-wrap">
+    <label for="deckSlider">Slide Navigator</label>
+    <input id="deckSlider" type="range" min="1" max="12" step="1" value="1">
+  </div>
+
+  <main class="deck" id="deck">
+    <section class="slide active">
+      <h1>APEX Energy Trading & Risk Management</h1>
+      <div class="subtitle">The Databricks pitch: a single Lakehouse operating model for three very different power markets.</div>
+      <div class="chips">
+        <span class="chip red">NEM</span>
+        <span class="chip blue">EPEX</span>
+        <span class="chip green">ERCOT</span>
+        <span class="chip">React + FastAPI</span>
+        <span class="chip">Delta + Unity Catalog</span>
+        <span class="chip">MLflow + Notebooks</span>
+        <span class="chip">Databricks Apps</span>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Market Scope Explained</h3>
+          <ul>
+            <li><strong>NEM (Australia):</strong> five-minute dispatch market with FCAS and unit-level operational constraints.</li>
+            <li><strong>EPEX (Europe):</strong> auction-centric day-ahead and intraday structure with cross-border coupling dynamics.</li>
+            <li><strong>ERCOT (Texas):</strong> nodal real-time LMP market with ancillary products and scarcity-driven volatility.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Why One Databricks Platform</h3>
+          <ul>
+            <li>Delta + SQL Warehouses create one analytics engine despite different market microstructures.</li>
+            <li>Unity Catalog enforces common definitions for price, exposure, VaR, and portfolio value.</li>
+            <li>Workflows + Apps convert ingestion, forecasting, and user actions into one operating loop.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="highlight">Executive message: APEX is not three disconnected regional tools; it is one Databricks-native control plane adapted to NEM, EPEX, and ERCOT specifics.</div>
+      <div class="footer-note">Slide 1 of 12 - Introduction</div>
+    </section>
+
+    <section class="slide">
+      <h2>Set the Scene: Business Pressure</h2>
+      <div class="highlight">Each market has different cadence, products, and risk profile, but leadership still needs one auditable decision system.</div>
+      <div class="grid-2">
+        <div class="card">
+          <h3>How the 3 Markets Differ in Practice</h3>
+          <ul>
+            <li><strong>NEM:</strong> dispatch operators react every few minutes to unit availability, constraints, and FCAS opportunities.</li>
+            <li><strong>EPEX:</strong> traders optimize day-ahead positions, then rebalance intraday as weather and demand shift.</li>
+            <li><strong>ERCOT:</strong> desks manage nodal spread risk, congestion, and rapid scarcity pricing events.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Why Databricks Matters for This Mix</h3>
+          <ul>
+            <li>One Lakehouse architecture standardizes ingest, feature engineering, analytics, and app serving.</li>
+            <li>Serverless SQL exposes common KPIs while preserving market-specific business logic.</li>
+            <li>Unity Catalog lineage gives executives traceability from source feeds to user decisions.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Cross-Market Activities APEX Supports</h3>
+          <ul>
+            <li>Ingest market prices, forecasts, and telemetry continuously.</li>
+            <li>Run dispatch, trade, and risk workflows from shared data contracts.</li>
+            <li>Execute portfolio planning with explainable scenario assumptions.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Databricks Pitch on Slide 2</h3>
+          <ul>
+            <li>Without Databricks: three stacks, duplicate governance, inconsistent numbers.</li>
+            <li>With Databricks: one governed platform with reusable jobs, models, and app patterns.</li>
+            <li>Result: faster rollout of new markets with lower operational risk.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-note">Slide 2 of 12 - Scene Setting</div>
+    </section>
+
+    <section class="slide">
+      <h2>Platform Overview</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Experience Layer</h3>
+          <ul>
+            <li>Databricks Apps hosts the React + FastAPI runtime close to data.</li>
+            <li>Role-based workspace: Dispatch, Trader, Risk, Quant, Portfolio.</li>
+            <li>Shared identity and policy controls simplify multi-market operations.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Data + AI Layer</h3>
+          <ul>
+            <li>Delta tables organize market, trading, risk, and portfolio domains.</li>
+            <li>MLflow + notebooks track model versions and publish forecast outputs.</li>
+            <li>Workflows orchestrate ingestion, risk, reconciliation, and monitoring jobs.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-note">Slide 3 of 12 - Platform Snapshot</div>
+    </section>
+
+    <section class="slide">
+      <h2>Slide 4 - Market and Data Foundation</h2>
+      <div class="chips">
+        <span class="chip red">Market Feeds</span>
+        <span class="chip blue">Delta Tables</span>
+        <span class="chip green">Governance</span>
+      </div>
+      <ul>
+        <li>Auto Loader and batch ingestion patterns land NEM, EPEX, and ERCOT feeds reliably.</li>
+        <li>Delta Lake ensures ACID quality for both real-time and historical analytical queries.</li>
+        <li>Unity Catalog standardizes naming, ownership, and discoverability across markets.</li>
+      </ul>
+      <div class="highlight">Databricks pitch: one trusted data layer lowers integration cost while increasing decision confidence.</div>
+      <div class="footer-note">Slide 4 of 12 - Data Foundation</div>
+    </section>
+
+    <section class="slide">
+      <h2>Slide 5 - Forecasting and Model Operations</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Model Lifecycle</h3>
+          <ul>
+            <li>Databricks Workflows schedule daily retraining and forecast publication.</li>
+            <li>MLflow tracks model metrics, lineage, and promotion decisions.</li>
+            <li>Feature and prediction tables stay accessible through governed Delta assets.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Runtime Usage</h3>
+          <ul>
+            <li>Serverless SQL serves predispatch strips to dispatch and trading screens.</li>
+            <li>Risk and quant personas consume the same MLflow-backed model context.</li>
+            <li>Single prediction source prevents conflicting desk signals.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-note">Slide 5 of 12 - ML and Forecasting</div>
+    </section>
+
+    <section class="slide">
+      <h2>Slide 6 - Persona: Dispatch Operator</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Core Activities</h3>
+          <ul>
+            <li>Monitor fleet health, availability, and dispatch targets by interval.</li>
+            <li>Build and submit offer stacks by service type and operational limits.</li>
+            <li>Perform shift handover with full context on actions and exceptions.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Databricks Capabilities Enabling It</h3>
+          <ul>
+            <li>Databricks Apps serves a low-latency dispatch workspace close to data.</li>
+            <li>SQL Warehouses query fresh Delta tables for recommendations and state.</li>
+            <li>Unity Catalog lineage and permissions preserve auditable operator history.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="highlight">Databricks value: faster dispatch decisions with governed, real-time data and model guardrails.</div>
+      <div class="footer-note">Slide 6 of 12 - Dispatch Persona</div>
+    </section>
+
+    <section class="slide">
+      <h2>Slide 7 - Persona: Power Trader</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Core Activities</h3>
+          <ul>
+            <li>Track blotter state, fills, and quote changes in near real time.</li>
+            <li>Manage intraday position deltas and rebalance against forecast updates.</li>
+            <li>Monitor spread and concentration risk by node, product, and tenor.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Databricks Capabilities Enabling It</h3>
+          <ul>
+            <li>Databricks SQL unifies blotter, quotes, and exposure metrics in one semantic layer.</li>
+            <li>Streaming + scheduled updates keep positions synchronized with latest market data.</li>
+            <li>Shared Delta model supports NEM, EPEX, and ERCOT logic without three platforms.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="highlight">Databricks value: tighter intraday P&amp;L control with one trusted analytics engine.</div>
+      <div class="footer-note">Slide 7 of 12 - Trader Persona</div>
+    </section>
+
+    <section class="slide">
+      <h2>Slide 8 - Persona: Risk Manager</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Core Activities</h3>
+          <ul>
+            <li>Review live VaR, stress scenarios, and limit breaches across books.</li>
+            <li>Approve or escalate exposure changes before risk thresholds are exceeded.</li>
+            <li>Run end-of-day control checks and reconcile risk to positions and P&amp;L.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Databricks Capabilities Enabling It</h3>
+          <ul>
+            <li>Workflows orchestrates VaR, stress, and reconciliation jobs with retries and SLAs.</li>
+            <li>Unity Catalog enforces policy controls and provides lineage for audit defense.</li>
+            <li>Delta consistency keeps risk tables aligned with front-office updates.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="highlight">Databricks value: real-time risk visibility with built-in governance by design.</div>
+      <div class="footer-note">Slide 8 of 12 - Risk Persona</div>
+    </section>
+
+    <section class="slide">
+      <h2>Slide 9 - Persona: Quant Developer</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Core Activities</h3>
+          <ul>
+            <li>Prototype new forecasting and strategy signals in notebooks.</li>
+            <li>Backtest models against market regimes and stress windows.</li>
+            <li>Promote validated models into production with measurable impact tracking.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Databricks Capabilities Enabling It</h3>
+          <ul>
+            <li>Notebooks + Jobs provide collaborative research and scheduled production runs.</li>
+            <li>MLflow tracks experiments, model quality, and release lineage.</li>
+            <li>Delta backtest datasets ensure reproducibility and team-wide reuse.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="highlight">Databricks value: quant innovation moves from notebook to desk with less friction.</div>
+      <div class="footer-note">Slide 9 of 12 - Quant Persona</div>
+    </section>
+
+    <section class="slide">
+      <h2>Slide 10 - Persona: Portfolio Manager</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Core Activities</h3>
+          <ul>
+            <li>Evaluate revenue stack composition across energy and ancillary products.</li>
+            <li>Run scenario simulations for PPA terms, duration, and contract structures.</li>
+            <li>Prioritize capital and contract allocations across NEM, EPEX, and ERCOT.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Databricks Capabilities Enabling It</h3>
+          <ul>
+            <li>Databricks SQL powers portfolio economics, benchmark scoring, and scenario analysis.</li>
+            <li>Unity Catalog guarantees scenario assumptions are consistent and governed.</li>
+            <li>Shared Lakehouse model enables cross-market planning with transparent logic.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="highlight">Databricks value: portfolio allocation decisions are faster, explainable, and auditable.</div>
+      <div class="footer-note">Slide 10 of 12 - Portfolio Persona</div>
+    </section>
+
+    <section class="slide">
+      <h2>Slide 11 - Operational Control Plane</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Execution Cadence</h3>
+          <ul>
+            <li>Databricks Workflows orchestrates ingestion, ML, risk, and reconciliation chains.</li>
+            <li>Job-level observability and retries improve reliability of critical market processes.</li>
+            <li>Serverless compute elasticity aligns cost to peak market activity.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Governance Layer</h3>
+          <ul>
+            <li>Unity Catalog centralizes access control across data, models, and AI assets.</li>
+            <li>Lineage provides traceability from source feed to executive dashboard.</li>
+            <li>Audit-ready controls support compliance without separate governance tooling.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-note">Slide 11 of 12 - Operations and Governance</div>
+    </section>
+
+    <section class="slide">
+      <h2>Slide 12 - Executive Summary and Next Steps</h2>
+      <p><span class="big-metric">3</span> markets unified on one application model.</p>
+      <p><span class="big-metric">5</span> personas operating on shared data and ML context.</p>
+      <p><span class="big-metric">1</span> governed platform from data ingest to decision output.</p>
+      <div class="highlight">Databricks pitch: standardize APEX on Databricks to reduce platform sprawl, improve control, and accelerate market decisions.</div>
+      <ul>
+        <li>Scale by workspace using Databricks Asset Bundles and reusable deployment runbooks.</li>
+        <li>Operationalize adoption with persona workflows on Databricks Apps and SQL dashboards.</li>
+        <li>Extend roadmap with AI assistants, optimization, and new market adapters on the same Lakehouse.</li>
+      </ul>
+      <div class="footer-note">Slide 12 of 12 - Close</div>
+    </section>
+  </main>
+
+  <div class="dots" id="dots"></div>
+
+  <script>
+    const slides = Array.from(document.querySelectorAll(".slide"));
+    const counter = document.getElementById("counter");
+    const deckSlider = document.getElementById("deckSlider");
+    const dots = document.getElementById("dots");
+    let current = 0;
+
+    function renderDots() {
+      dots.innerHTML = "";
+      slides.forEach((_, idx) => {
+        const dot = document.createElement("button");
+        dot.className = "dot" + (idx === current ? " active" : "");
+        dot.type = "button";
+        dot.addEventListener("click", () => goTo(idx));
+        dots.appendChild(dot);
+      });
+    }
+
+    function goTo(index) {
+      current = Math.max(0, Math.min(slides.length - 1, index));
+      slides.forEach((s, i) => s.classList.toggle("active", i === current));
+      counter.textContent = `Slide ${current + 1} / ${slides.length}`;
+      deckSlider.value = String(current + 1);
+      renderDots();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    document.getElementById("prevBtn").addEventListener("click", () => goTo(current - 1));
+    document.getElementById("nextBtn").addEventListener("click", () => goTo(current + 1));
+    deckSlider.addEventListener("input", (e) => goTo(Number(e.target.value) - 1));
+
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowRight" || e.key === "PageDown") goTo(current + 1);
+      if (e.key === "ArrowLeft" || e.key === "PageUp") goTo(current - 1);
+      if (e.key === "Home") goTo(0);
+      if (e.key === "End") goTo(slides.length - 1);
+    });
+
+    goTo(0);
+  </script>
+</body>
+</html>

@@ -57,7 +57,9 @@ const PAGE_META = [
   ["p5", "Model", "↗"],
   ["p6", "Sim", "◎"],
   ["p7", "Finance", "¥"],
-  ["p8", "Geo", "◌"]
+  ["p8", "Geo", "◌"],
+  ["p9", "Stoppage", "⏸"],
+  ["p10", "Data Hub", "⌗"]
 ];
 const JA_INDUSTRY_LABELS = {
   mining: "鉱業",
@@ -134,6 +136,21 @@ const JA_UI = {
   "readings emitted": "件の読み取りを送信",
   "Live ingestion flow": "ライブ取り込みフロー",
   "3 stages: Bronze → Silver → Gold (5 recent rows each)": "3段階: Bronze → Silver → Gold（各5行）",
+  "Integration landscape": "連携ランドスケープ",
+  "OT, PI Historian, alignment, and ERP/SAP paths alongside the Medallion flow.": "メダリオンに加え、OT・PI Historian・整合・ERP/SAPの経路を表示します。",
+  "OT (Zerobus landing)": "OT（Zerobusランディング）",
+  "PI Historian (simulated PI-SIM stream)": "PI Historian（PI-SIMシミュレーション）",
+  "OT ↔ PI alignment (silver)": "OT↔PI整合（Silver）",
+  "ERP / SAP BDC": "ERP / SAP BDC",
+  "Curated bronze": "キュレート済みBronze",
+  "Δs": "Δ秒",
+  "SAP demo rows": "SAPデモ行",
+  "open WOs": "未完了WO",
+  "scheduled WOs": "予定WO",
+  "Integration preview: rows from the running simulator buffer when Unity Catalog has no fresh data (same as Medallion flow).":
+    "連携プレビュー: UCに新しいデータがない場合は実行中シミュレータのバッファを表示（メダリオンと同じフォールバック）。",
+  "Databricks warehouse writes are unavailable in this process; Zerobus/PI tables are only filled when the app runs with Databricks SQL access.":
+    "このプロセスではDatabricks SQLへの書き込みが無効です。Zerobus/PIテーブルはDatabricks SQLが使える実行環境でのみ埋まります。",
   Anomaly: "異常度",
   RUL: "残存寿命",
   Exposure: "影響額",
@@ -256,6 +273,21 @@ const KO_UI = {
   "Executive briefing value statement": "경영진 브리핑 가치 요약",
   "Board-ready financial operating view": "이사회 보고용 재무 운영 뷰",
   "One-pane financial view for predictive maintenance value realization.": "예지정비 가치 실현을 위한 단일 화면 재무 뷰입니다.",
+  "Integration landscape": "연동 랜드스케이프",
+  "OT, PI Historian, alignment, and ERP/SAP paths alongside the Medallion flow.": "메달리온 플로우와 함께 OT·PI Historian·정합·ERP/SAP 경로를 표시합니다.",
+  "OT (Zerobus landing)": "OT(Zerobus 랜딩)",
+  "PI Historian (simulated PI-SIM stream)": "PI Historian(PI-SIM 시뮬레이션)",
+  "OT ↔ PI alignment (silver)": "OT↔PI 정합(Silver)",
+  "ERP / SAP BDC": "ERP / SAP BDC",
+  "Curated bronze": "큐레이션 Bronze",
+  "Δs": "Δ초",
+  "SAP demo rows": "SAP 데모 행",
+  "open WOs": "미완료 WO",
+  "scheduled WOs": "예정 WO",
+  "Integration preview: rows from the running simulator buffer when Unity Catalog has no fresh data (same as Medallion flow).":
+    "연동 미리보기: UC에 최신 데이터가 없으면 실행 중 시뮬레이터 버퍼를 표시합니다(메달리온과 동일한 폴백).",
+  "Databricks warehouse writes are unavailable in this process; Zerobus/PI tables are only filled when the app runs with Databricks SQL access.":
+    "이 프로세스에서는 Databricks SQL 쓰기를 사용할 수 없습니다. Zerobus/PI 테이블은 Databricks SQL이 있는 런타임에서만 채워집니다.",
 };
 
 function localizeAlertText(text, locale) {
@@ -633,6 +665,8 @@ export default function App() {
   const [manualFile, setManualFile] = useState(null);
   const [manualUploadPending, setManualUploadPending] = useState(false);
   const [simScoringPending, setSimScoringPending] = useState(false);
+  const [simBulkInjectPending, setSimBulkInjectPending] = useState(false);
+  const [simBulkInjectNote, setSimBulkInjectNote] = useState("");
   const [forceCriticalPendingByAsset, setForceCriticalPendingByAsset] = useState({});
   const [simScoringRunId, setSimScoringRunId] = useState("");
   const [simPipeline, setSimPipeline] = useState({
@@ -682,11 +716,25 @@ export default function App() {
   const [visibleIndustries, setVisibleIndustries] = useState(new Set(INDUSTRIES));
   const [geoMapHeight, setGeoMapHeight] = useState(520);
   const [geoMapResizing, setGeoMapResizing] = useState(false);
+  const [stoppageSummary, setStoppageSummary] = useState(null);
+  const [stoppageTimeline, setStoppageTimeline] = useState([]);
+  const [stoppageLoading, setStoppageLoading] = useState(false);
+  const [stoppageFilters, setStoppageFilters] = useState({ site_id: "", line_id: "", shift_label: "" });
+  const [dataDiscovery, setDataDiscovery] = useState({ datasets: [], term_hits: [], viz_starters: [] });
+  const [dataSearch, setDataSearch] = useState("");
+  const [dataLoading, setDataLoading] = useState(false);
+  const [dataConciergeInput, setDataConciergeInput] = useState("");
+  const [dataConciergeMsgs, setDataConciergeMsgs] = useState([]);
+  const [dataConciergePending, setDataConciergePending] = useState(false);
   /** Last good hierarchy/overview per industry+currency — instant when switching mining ↔ energy (stale-while-revalidate). */
   const industryBootstrapCache = useRef({});
   /** Per industry+currency+asset: Asset page + Model tab (stale-while-revalidate, matches server asset/model TTL). */
   const assetDetailSessionCache = useRef({});
   const modelSessionCache = useRef({});
+  /** Per industry+currency+filters: Stoppage page snapshots (stale-while-revalidate). */
+  const stoppageSessionCache = useRef({});
+  /** Per industry+currency+search: Data Hub discovery snapshots (stale-while-revalidate). */
+  const dataHubSessionCache = useRef({});
 
   const [simState, setSimState] = useState({
     running: false,
@@ -706,6 +754,7 @@ export default function App() {
     gold: { stage: "gold_predictions", tier: "gold", table: "", rows_30m: 0, rows_5m: 0, rows_prev_5m: 0, rate_change_pct: 0, latest_ts: "", rows: [] },
     stages: []
   });
+  const [simIntegration, setSimIntegration] = useState(null);
   const [cfg, setCfg] = useState({
     industry_key: "mining",
     display_name: "",
@@ -1055,9 +1104,25 @@ export default function App() {
       gold: { stage: "gold_predictions", tier: "gold", table: "", rows_30m: 0, rows_5m: 0, rows_prev_5m: 0, rate_change_pct: 0, latest_ts: "", rows: [] },
       stages: []
     };
+    const integFallback = {
+      industry,
+      catalog: "",
+      curated_bronze_table: "",
+      ot_zerobus: { table: "", rows: [], rows_30m: 0, rows_5m: 0, latest_ts: null },
+      pi_historian: { table: "", rows: [], rows_30m: 0, rows_5m: 0, latest_ts: null },
+      ot_pi_alignment: { table: "", rows: [], rows_30m: 0, rows_5m: 0, latest_ot_ts: null, latest_pi_ts: null },
+      erp: {},
+      integration_meta: { warehouse_persist_enabled: true, memory_live_preview: false, explain: "" }
+    };
     const run = async () => {
-      const data = await getJson(`/api/ui/simulator/flow?industry=${industry}&limit=24`, fallback);
-      if (alive) setSimFlow(data || fallback);
+      const [data, integ] = await Promise.all([
+        getJson(`/api/ui/simulator/flow?industry=${industry}&limit=24`, fallback),
+        getJson(`/api/ui/simulator/integration?industry=${industry}&limit=8`, integFallback)
+      ]);
+      if (alive) {
+        setSimFlow(data || fallback);
+        setSimIntegration(integ && integ.industry === industry ? integ : integFallback);
+      }
     };
     run();
     const timer = setInterval(run, 2500);
@@ -1111,6 +1176,76 @@ export default function App() {
       setGeoView("geo");
     }
   }, [geoSites, activeSiteId]);
+
+  useEffect(() => {
+    if (page !== "p9") return undefined;
+    const stopKey = `${industry}|${demoCurrency}|${stoppageFilters.site_id}|${stoppageFilters.line_id}|${stoppageFilters.shift_label}`;
+    const snap = stoppageSessionCache.current[stopKey];
+    if (snap?.summary) {
+      setStoppageSummary(snap.summary);
+      setStoppageTimeline(Array.isArray(snap.timeline) ? snap.timeline : []);
+    } else {
+      setStoppageSummary(null);
+      setStoppageTimeline([]);
+    }
+    let cancelled = false;
+    setStoppageLoading(true);
+    (async () => {
+      const params = new URLSearchParams();
+      params.set("industry", industry);
+      if (demoCurrency !== "AUTO") params.set("currency", demoCurrency);
+      if (stoppageFilters.site_id) params.set("site_id", stoppageFilters.site_id);
+      if (stoppageFilters.line_id) params.set("line_id", stoppageFilters.line_id);
+      if (stoppageFilters.shift_label) params.set("shift_label", stoppageFilters.shift_label);
+      const [summary, timeline] = await Promise.all([
+        getJson(`/api/ui/stoppage/summary?${params.toString()}`, null),
+        getJson(`/api/ui/stoppage/timeline?${params.toString()}&limit=120`, { events: [] }),
+      ]);
+      if (cancelled) return;
+      setStoppageSummary(summary);
+      setStoppageTimeline(Array.isArray(timeline?.events) ? timeline.events : []);
+      stoppageSessionCache.current[stopKey] = {
+        summary,
+        timeline: Array.isArray(timeline?.events) ? timeline.events : [],
+        ts: Date.now(),
+      };
+      setStoppageLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [page, industry, demoCurrency, stoppageFilters.site_id, stoppageFilters.line_id, stoppageFilters.shift_label]);
+
+  useEffect(() => {
+    if (page !== "p10") return undefined;
+    const dataKey = `${industry}|${demoCurrency}|${String(dataSearch || "").trim().toLowerCase()}`;
+    const snap = dataHubSessionCache.current[dataKey];
+    if (snap?.payload) {
+      setDataDiscovery(snap.payload);
+    } else {
+      setDataDiscovery({ datasets: [], term_hits: [], viz_starters: [] });
+    }
+    let cancelled = false;
+    setDataLoading(true);
+    const timer = setTimeout(async () => {
+      const params = new URLSearchParams();
+      params.set("industry", industry);
+      if (demoCurrency !== "AUTO") params.set("currency", demoCurrency);
+      if (dataSearch.trim()) params.set("q", dataSearch.trim());
+      const payload = await getJson(`/api/ui/data/discovery?${params.toString()}`, { datasets: [], term_hits: [], viz_starters: [] });
+      if (cancelled) return;
+      setDataDiscovery(payload || { datasets: [], term_hits: [], viz_starters: [] });
+      dataHubSessionCache.current[dataKey] = {
+        payload: payload || { datasets: [], term_hits: [], viz_starters: [] },
+        ts: Date.now(),
+      };
+      setDataLoading(false);
+    }, 180);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [page, industry, dataSearch, demoCurrency]);
 
   const selectedAsset = useMemo(
     () => overview.assets.find((a) => a.id === selectedAssetId) || overview.assets[0] || null,
@@ -1198,6 +1333,10 @@ export default function App() {
       : locale === "ko" ? (KO_UI[text] || text)
       : text
   );
+  const stoppageKpis = stoppageSummary?.kpis || {};
+  const stoppageSiteOptions = Array.isArray(stoppageSummary?.site_options) ? stoppageSummary.site_options : [];
+  const stoppageLineOptions = Array.isArray(stoppageSummary?.line_options) ? stoppageSummary.line_options : [];
+  const stoppageShiftOptions = Array.isArray(stoppageSummary?.shift_options) ? stoppageSummary.shift_options : [];
   const dayUnit = locale === "ja" ? "日" : locale === "ko" ? "일" : "days";
   const shortDayUnit = locale === "ja" ? "日" : locale === "ko" ? "일" : "d";
   const industryLabel = (ind) => (
@@ -1397,6 +1536,17 @@ export default function App() {
           rowsEmitted: Number(res?.rows_emitted || 0),
           enabledAssets: Array.isArray(res?.enabled_fault_assets) ? res.enabled_fault_assets : []
         }));
+      } else if (res?.ok && res?.demo_sql_writes) {
+        setSimPipeline((prev) => ({
+          ...prev,
+          active: false,
+          phase: "Demo: bronze/silver/gold updated via SQL (no DLT or scoring job). Refresh the flow view.",
+          runStatus: "SUCCESS",
+          runResult: "SUCCESS",
+          rowsEmitted: Number(res?.rows_emitted || 0),
+          enabledAssets: Array.isArray(res?.enabled_fault_assets) ? res.enabled_fault_assets : [],
+          completedAt: new Date().toISOString()
+        }));
       } else if (res?.ok && Number(res?.rows_emitted || 0) > 0) {
         setSimPipeline((prev) => ({
           ...prev,
@@ -1429,6 +1579,48 @@ export default function App() {
       }));
     } finally {
       setSimScoringPending(false);
+    }
+  }
+
+  async function triggerSimAllIndustriesInjection() {
+    if (simBulkInjectPending) return;
+    setSimBulkInjectPending(true);
+    setSimBulkInjectNote("Injecting randomized scenarios across all industries...");
+    try {
+      const res = await postJson(
+        "/api/ui/simulator/inject_scenario_all",
+        {
+          industries: INDUSTRIES,
+          heavy_industries: 2,
+          reset_existing: true
+        },
+        { ok: false, industries: {} }
+      );
+      const done = Object.keys(res?.industries || {}).length;
+      if (res?.ok) {
+        setSimBulkInjectNote(
+          `Completed all-industry injection for ${done} industries. Bronze/Silver/Gold demo rows were seeded.`
+        );
+      } else {
+        const errCount = Array.isArray(res?.errors) ? res.errors.length : 0;
+        setSimBulkInjectNote(
+          `Injection finished with ${errCount} issue(s). Successful industries: ${done}.`
+        );
+      }
+      if (page === "p6" && simTab === "sim") {
+        const [flowData, integData, stateData] = await Promise.all([
+          getJson(`/api/ui/simulator/flow?industry=${industry}&limit=30`, EMPTY_FLOW),
+          getJson(`/api/ui/simulator/integration?industry=${industry}&limit=12`, null),
+          getJson(`/api/ui/simulator/state?industry=${industry}`, null),
+        ]);
+        setSimFlow(flowData || EMPTY_FLOW);
+        setSimIntegration(integData || null);
+        if (stateData) setSimState((prev) => ({ ...prev, ...stateData }));
+      }
+    } catch {
+      setSimBulkInjectNote("Unable to run all-industry injection.");
+    } finally {
+      setSimBulkInjectPending(false);
     }
   }
 
@@ -1493,6 +1685,25 @@ export default function App() {
       setFinanceMsgs((prev) => [...prev, { role: "agent", text: answer, label: locale === "ja" ? "財務コマンドAI" : locale === "ko" ? "재무 커맨드 AI" : "Finance Command AI", references: refs }]);
     } finally {
       setFinancePending(false);
+    }
+  }
+
+  async function sendDataConciergeMessage() {
+    if (!dataConciergeInput.trim() || dataConciergePending) return;
+    const q = dataConciergeInput.trim();
+    setDataConciergeMsgs((prev) => [...prev, { role: "user", text: q }]);
+    setDataConciergeInput("");
+    setDataConciergePending(true);
+    try {
+      const reply = await postJson(
+        "/api/ui/data/concierge",
+        { industry, currency: demoCurrency === "AUTO" ? executive.currency : demoCurrency, question: q },
+        { answer: "Unable to resolve dataset guidance right now.", recommended_datasets: [] },
+      );
+      const refs = Array.isArray(reply?.recommended_datasets) ? reply.recommended_datasets : [];
+      setDataConciergeMsgs((prev) => [...prev, { role: "agent", text: reply?.answer || "No answer returned.", references: refs }]);
+    } finally {
+      setDataConciergePending(false);
     }
   }
 
@@ -2836,9 +3047,13 @@ export default function App() {
                 <button className="sim-score" onClick={triggerSimScoring} disabled={simScoringPending}>
                   {simScoringPending ? t("Injecting + scoring...") : t("Inject faults + score")}
                 </button>
+                <button className="sim-score" onClick={triggerSimAllIndustriesInjection} disabled={simBulkInjectPending}>
+                  {simBulkInjectPending ? "Injecting all industries..." : "Inject all industries (all sites/tables)"}
+                </button>
                 <div className="sim-status"><div className={`sim-dot ${simState.running ? "running" : ""}`} /><span>{simState.running ? t("Running") : t("Stopped")}</span></div>
                 {!!simScoringRunId && <span className="sim-run-badge">{t("Scoring run")} #{simScoringRunId}</span>}
                 <span className="sim-reading-count">{(simState.reading_count || 0).toLocaleString()} {t("readings emitted")}</span>
+                {!!simBulkInjectNote && <span className="sim-reading-count">{simBulkInjectNote}</span>}
                 {(simPipeline.active || simPipeline.completedAt) && (
                   <div className="sim-pipeline-visual">
                     <div className="sim-pipeline-head">
@@ -2857,6 +3072,145 @@ export default function App() {
                     {!!simPipeline.error && <div className="sim-pipeline-err">{simPipeline.error}</div>}
                   </div>
                 )}
+              </div>
+              <div className="sim-integration-strip">
+                <div className="sim-int-hdr">
+                  <div>
+                    <div className="sim-int-title">{t("Integration landscape")}</div>
+                    <div className="sim-int-sub">{t("OT, PI Historian, alignment, and ERP/SAP paths alongside the Medallion flow.")}</div>
+                  </div>
+                  <div className="sim-int-curated mono">
+                    {t("Curated bronze")}: {simIntegration?.curated_bronze_table || "—"}
+                  </div>
+                </div>
+                {simIntegration?.integration_meta?.memory_live_preview ? (
+                  <div className="sim-int-banner preview">
+                    {t("Integration preview: rows from the running simulator buffer when Unity Catalog has no fresh data (same as Medallion flow).")}
+                  </div>
+                ) : null}
+                {simIntegration?.integration_meta?.warehouse_persist_enabled === false ? (
+                  <div className="sim-int-banner warn">
+                    {t("Databricks warehouse writes are unavailable in this process; Zerobus/PI tables are only filled when the app runs with Databricks SQL access.")}
+                  </div>
+                ) : null}
+                <div className="sim-int-grid">
+                  <div className="sim-int-card">
+                    <div className="sim-int-card-hdr">
+                      <span className="sim-int-card-title">{t("OT (Zerobus landing)")}</span>
+                      <span className="flow-tier-badge bronze">BRONZE</span>
+                    </div>
+                    <div className="sim-int-table mono">{simIntegration?.ot_zerobus?.table || "—"}</div>
+                    <div className="sim-int-kpis">
+                      <span>{Number(simIntegration?.ot_zerobus?.rows_30m || 0).toLocaleString()} / 30m</span>
+                      <span>{Number(simIntegration?.ot_zerobus?.rows_5m || 0).toLocaleString()} / 5m</span>
+                      <span>{simIntegration?.ot_zerobus?.latest_ts ? new Date(simIntegration.ot_zerobus.latest_ts).toLocaleTimeString() : "—"}</span>
+                    </div>
+                    <div className="bronze-table-wrap sim-int-mini">
+                      <table className="bronze-table flow-table">
+                        <thead><tr><th>Timestamp</th><th>Equipment</th><th>Tag</th><th>Value</th><th>Protocol</th></tr></thead>
+                        <tbody>
+                          {(simIntegration?.ot_zerobus?.rows || []).slice(0, 3).map((r, i) => (
+                            <tr key={`oz-${i}`}>
+                              <td className="mono">{String(r.timestamp || "")}</td>
+                              <td className="mono">{r.equipment_id}</td>
+                              <td className="mono">{r.tag_name}</td>
+                              <td className="mono">{r.value}</td>
+                              <td><span className={`proto-badge ${String(r.source_protocol || "").toLowerCase().replace(/[^a-z]/g, "")}`}>{r.source_protocol}</span></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                  <div className="sim-int-card">
+                    <div className="sim-int-card-hdr">
+                      <span className="sim-int-card-title">{t("PI Historian (simulated PI-SIM stream)")}</span>
+                      <span className="flow-tier-badge bronze">BRONZE</span>
+                    </div>
+                    <div className="sim-int-table mono">{simIntegration?.pi_historian?.table || "—"}</div>
+                    <div className="sim-int-kpis">
+                      <span>{Number(simIntegration?.pi_historian?.rows_30m || 0).toLocaleString()} / 30m</span>
+                      <span>{Number(simIntegration?.pi_historian?.rows_5m || 0).toLocaleString()} / 5m</span>
+                      <span>{simIntegration?.pi_historian?.latest_ts ? new Date(simIntegration.pi_historian.latest_ts).toLocaleTimeString() : "—"}</span>
+                    </div>
+                    <div className="bronze-table-wrap sim-int-mini">
+                      <table className="bronze-table flow-table">
+                        <thead><tr><th>Timestamp</th><th>Equipment</th><th>Tag</th><th>Value</th><th>Protocol</th></tr></thead>
+                        <tbody>
+                          {(simIntegration?.pi_historian?.rows || []).slice(0, 3).map((r, i) => (
+                            <tr key={`pi-${i}`}>
+                              <td className="mono">{String(r.timestamp || "")}</td>
+                              <td className="mono">{r.equipment_id}</td>
+                              <td className="mono">{r.tag_name}</td>
+                              <td className="mono">{r.value}</td>
+                              <td><span className={`proto-badge ${String(r.source_protocol || "").toLowerCase().replace(/[^a-z]/g, "")}`}>{r.source_protocol}</span></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                  <div className="sim-int-card sim-int-card-wide">
+                    <div className="sim-int-card-hdr">
+                      <span className="sim-int-card-title">{t("OT ↔ PI alignment (silver)")}</span>
+                      <span className="flow-tier-badge silver">SILVER</span>
+                    </div>
+                    <div className="sim-int-table mono">{simIntegration?.ot_pi_alignment?.table || "—"}</div>
+                    <div className="sim-int-kpis">
+                      <span>{Number(simIntegration?.ot_pi_alignment?.rows_30m || 0).toLocaleString()} / 30m</span>
+                      <span>OT {simIntegration?.ot_pi_alignment?.latest_ot_ts ? new Date(simIntegration.ot_pi_alignment.latest_ot_ts).toLocaleTimeString() : "—"}</span>
+                      <span>PI {simIntegration?.ot_pi_alignment?.latest_pi_ts ? new Date(simIntegration.ot_pi_alignment.latest_pi_ts).toLocaleTimeString() : "—"}</span>
+                    </div>
+                    <div className="bronze-table-wrap sim-int-mini">
+                      <table className="bronze-table flow-table">
+                        <thead>
+                          <tr>
+                            <th>OT ts</th>
+                            <th>Equipment</th>
+                            <th>Tag</th>
+                            <th>OT val</th>
+                            <th>PI val</th>
+                            <th>{t("Δs")}</th>
+                            <th>Source</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(simIntegration?.ot_pi_alignment?.rows || []).slice(0, 3).map((r, i) => (
+                            <tr key={`al-${i}`}>
+                              <td className="mono">{String(r.ot_timestamp || "")}</td>
+                              <td className="mono">{r.equipment_id}</td>
+                              <td className="mono">{r.tag_name}</td>
+                              <td className="mono">{r.ot_value}</td>
+                              <td className="mono">{r.pi_value}</td>
+                              <td className="mono">{r.time_delta_seconds ?? "—"}</td>
+                              <td className="mono">{r.data_source}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                  <div className="sim-int-card sim-int-card-erp">
+                    <div className="sim-int-card-hdr">
+                      <span className="sim-int-card-title">{t("ERP / SAP BDC")}</span>
+                      <span className="sim-int-badge erp">SAP / ODS</span>
+                    </div>
+                    <div className="sim-int-erp-summary">{simIntegration?.erp?.pipeline_summary || "—"}</div>
+                    {simIntegration?.erp?.hint ? <div className="sim-int-erp-hint">{simIntegration.erp.hint}</div> : null}
+                    <div className="sim-int-erp-rows">
+                      <div className="mono sim-int-erp-line">{simIntegration?.erp?.bronze_work_orders}</div>
+                      <div className="mono sim-int-erp-line">{simIntegration?.erp?.bronze_cost_centers}</div>
+                      <div className="mono sim-int-erp-line">{simIntegration?.erp?.ods_work_orders}</div>
+                    </div>
+                    <div className="sim-int-kpis sim-int-erp-kpis">
+                      <span>{t("SAP demo rows")}: {simIntegration?.erp?.ods_sap_demo_rows ?? "—"}</span>
+                      <span>{t("open WOs")}: {simIntegration?.erp?.ods_open_rows ?? "—"}</span>
+                      <span>{t("scheduled WOs")}: {simIntegration?.erp?.ods_scheduled_rows ?? "—"}</span>
+                      <span>Bronze WO: {simIntegration?.erp?.bronze_wo_rows_industry ?? "—"}</span>
+                      <span>Bronze CC: {simIntegration?.erp?.bronze_cc_rows_industry ?? "—"}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
               <div className="p6-main">
                 <div className="asset-config-panel">
@@ -2928,6 +3282,10 @@ export default function App() {
                               </div>
                               <div className={`flow-tier-badge ${String(data.tier || "bronze")}`}>{String(data.tier || "bronze").toUpperCase()}</div>
                               <div className="flow-stage-meta">{data.table || "table unavailable"}</div>
+                              {data.physical_rows_source ? (
+                                <div className="flow-stage-meta flow-stage-meta-secondary mono">{data.physical_rows_source}</div>
+                              ) : null}
+                              {data.flow_note ? <div className="flow-stage-note">{data.flow_note}</div> : null}
                               <div className="flow-stage-transform">
                                 Transformation: {{
                                   bronze_curated: "Read Zerobus landing + validate + normalize in one Bronze table",
@@ -3404,6 +3762,319 @@ export default function App() {
                 ) : (
                   <div className="geo-empty">Select a site from map above to open PID drill-down + Genie.</div>
                 )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className={`page ${page === "p9" ? "active" : ""}`} id="p9">
+          <div className="stoppage-wrap">
+            <div className="stoppage-topbar">
+              <div>
+                <div className="stoppage-title">Line Stoppage Intelligence</div>
+                <div className="stoppage-subtitle">Track stoppage rate, root causes, and prescriptive actions by site/line/shift.</div>
+              </div>
+              <div className="stoppage-filter-row">
+                <select
+                  className="stoppage-filter"
+                  value={stoppageFilters.site_id}
+                  onChange={(e) => setStoppageFilters((prev) => ({ ...prev, site_id: e.target.value }))}
+                >
+                  <option value="">All sites</option>
+                  {stoppageSiteOptions.map((opt) => <option key={`ss-${opt.id}`} value={opt.id}>{opt.label}</option>)}
+                </select>
+                <select
+                  className="stoppage-filter"
+                  value={stoppageFilters.line_id}
+                  onChange={(e) => setStoppageFilters((prev) => ({ ...prev, line_id: e.target.value }))}
+                >
+                  <option value="">All lines</option>
+                  {stoppageLineOptions.map((opt) => <option key={`sl-${opt.id}`} value={opt.id}>{opt.label}</option>)}
+                </select>
+                <select
+                  className="stoppage-filter"
+                  value={stoppageFilters.shift_label}
+                  onChange={(e) => setStoppageFilters((prev) => ({ ...prev, shift_label: e.target.value }))}
+                >
+                  <option value="">All shifts</option>
+                  {stoppageShiftOptions.map((opt) => <option key={`sh-${opt.id}`} value={opt.id}>{opt.label}</option>)}
+                </select>
+                <button className="sbtn" onClick={() => setStoppageFilters({ site_id: "", line_id: "", shift_label: "" })}>Reset</button>
+              </div>
+            </div>
+
+            <div className="stoppage-kpi-grid">
+              <div className="stoppage-kpi-card">
+                <div className="stoppage-kpi-label">Stoppage Rate</div>
+                <div className="stoppage-kpi-value">{Number(stoppageKpis.stoppage_rate_pct || 0).toFixed(2)}%</div>
+              </div>
+              <div className="stoppage-kpi-card">
+                <div className="stoppage-kpi-label">Unplanned Minutes</div>
+                <div className="stoppage-kpi-value">{Number(stoppageKpis.unplanned_stoppage_minutes || 0).toLocaleString()}</div>
+              </div>
+              <div className="stoppage-kpi-card">
+                <div className="stoppage-kpi-label">Total Stoppage Events</div>
+                <div className="stoppage-kpi-value">{Number(stoppageKpis.total_events || 0).toLocaleString()}</div>
+              </div>
+              <div className="stoppage-kpi-card">
+                <div className="stoppage-kpi-label">MTBS</div>
+                <div className="stoppage-kpi-value">{Number(stoppageKpis.mtbs_hours || 0).toFixed(2)}h</div>
+              </div>
+              <div className="stoppage-kpi-card">
+                <div className="stoppage-kpi-label">EBIT at Risk</div>
+                <div className="stoppage-kpi-value">{stoppageKpis.ebit_at_risk_fmt || "—"}</div>
+              </div>
+              <div className="stoppage-kpi-card">
+                <div className="stoppage-kpi-label">Avoided Cost</div>
+                <div className="stoppage-kpi-value">{stoppageKpis.avoided_cost_fmt || "—"}</div>
+              </div>
+            </div>
+
+            <div className="stoppage-main-grid">
+              <div className="stoppage-card">
+                <div className="stoppage-card-title">Top Stoppage Reasons (Pareto)</div>
+                <div className="stoppage-table-wrap">
+                  <table className="stoppage-table">
+                    <thead>
+                      <tr>
+                        <th>Reason</th>
+                        <th>Category</th>
+                        <th>Events</th>
+                        <th>Minutes</th>
+                        <th>Share</th>
+                        <th>Cost Impact</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(stoppageSummary?.reason_pareto || []).slice(0, 10).map((r, idx) => (
+                        <tr key={`rp-${idx}`}>
+                          <td>{r.reason_code}</td>
+                          <td>{r.reason_category}</td>
+                          <td>{Number(r.event_count || 0).toLocaleString()}</td>
+                          <td>{Number(r.stoppage_minutes || 0).toLocaleString()}</td>
+                          <td>{Number(r.share_pct || 0).toFixed(1)}%</td>
+                          <td>{r.cost_impact_fmt || "—"}</td>
+                        </tr>
+                      ))}
+                      {!(stoppageSummary?.reason_pareto || []).length && (
+                        <tr><td colSpan={6}>{stoppageLoading ? "Loading..." : "No reason data available."}</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="stoppage-card">
+                <div className="stoppage-card-title">Line Stoppage Ranking</div>
+                <div className="stoppage-table-wrap">
+                  <table className="stoppage-table">
+                    <thead>
+                      <tr>
+                        <th>Line</th>
+                        <th>Site</th>
+                        <th>Events</th>
+                        <th>Minutes</th>
+                        <th>Rate</th>
+                        <th>EBIT at Risk</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(stoppageSummary?.line_summary || []).slice(0, 10).map((r, idx) => (
+                        <tr key={`ls-${idx}`}>
+                          <td>{r.line_id}</td>
+                          <td>{r.site_id}</td>
+                          <td>{Number(r.stoppage_events || 0).toLocaleString()}</td>
+                          <td>{Number(r.stoppage_minutes || 0).toLocaleString()}</td>
+                          <td>{Number(r.stoppage_rate_pct || 0).toFixed(2)}%</td>
+                          <td>{r.ebit_at_risk_fmt || "—"}</td>
+                        </tr>
+                      ))}
+                      {!(stoppageSummary?.line_summary || []).length && (
+                        <tr><td colSpan={6}>{stoppageLoading ? "Loading..." : "No line stoppage data available."}</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div className="stoppage-main-grid">
+              <div className="stoppage-card">
+                <div className="stoppage-card-title">Stoppage Timeline</div>
+                <div className="stoppage-timeline">
+                  {stoppageTimeline.slice(0, 40).map((ev, idx) => (
+                    <div key={`ev-${idx}`} className={`stoppage-event sev-${String(ev.severity || "warning").toLowerCase()}`}>
+                      <div className="stoppage-event-hdr">
+                        <span>{ev.event_ts ? new Date(ev.event_ts).toLocaleString() : "—"}</span>
+                        <span>{ev.site_id} · {ev.line_id} · {ev.equipment_id}</span>
+                      </div>
+                      <div className="stoppage-event-body">
+                        <strong>{ev.reason_code}</strong> ({ev.reason_category}) · {Number(ev.downtime_minutes || 0).toLocaleString()} min ·
+                        {" "}Risk {Number(ev.anomaly_score || 0).toFixed(2)} · RUL {Number(ev.rul_hours || 0).toFixed(1)}h
+                      </div>
+                      <div className="stoppage-event-cost">{ev.expected_failure_cost_fmt} expected failure vs {ev.avoided_cost_fmt} avoided</div>
+                    </div>
+                  ))}
+                  {!stoppageTimeline.length && (
+                    <div className="stoppage-empty">{stoppageLoading ? "Loading timeline..." : "No stoppage events available for selected filters."}</div>
+                  )}
+                </div>
+              </div>
+
+              <div className="stoppage-card">
+                <div className="stoppage-card-title">Root-Cause Signals & Prescriptive Actions</div>
+                <div className="stoppage-insight-list">
+                  {(stoppageSummary?.correlations || []).map((txt, idx) => (
+                    <div key={`corr-${idx}`} className="stoppage-insight-item">{txt}</div>
+                  ))}
+                </div>
+                <div className="stoppage-action-list">
+                  {(stoppageSummary?.recommended_actions || []).map((a, idx) => (
+                    <div key={`act-${idx}`} className="stoppage-action-item">
+                      <div className="stoppage-action-title">P{a.priority}: {a.title}</div>
+                      <div className="stoppage-action-meta">{a.site_id} · {a.line_id} · {a.reason_code} ({a.reason_category})</div>
+                      <div className="stoppage-action-text">{a.why}</div>
+                      <div className="stoppage-action-text">{a.recommended_action}</div>
+                      <div className="stoppage-action-impact">Potential impact: {a.expected_impact_fmt}</div>
+                    </div>
+                  ))}
+                  {!(stoppageSummary?.recommended_actions || []).length && (
+                    <div className="stoppage-empty">{stoppageLoading ? "Building recommendations..." : "No recommendations available."}</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className={`page ${page === "p10" ? "active" : ""}`} id="p10">
+          <div className="datahub-wrap">
+            <div className="datahub-topbar">
+              <div>
+                <div className="datahub-title">Data Discovery Hub</div>
+                <div className="datahub-subtitle">Find trusted datasets, understand lineage, and start visualizations without Databricks workspace access.</div>
+              </div>
+              <input
+                className="datahub-search"
+                value={dataSearch}
+                onChange={(e) => setDataSearch(e.target.value)}
+                placeholder="Search by business term, dataset, table, column..."
+              />
+            </div>
+
+            <div className="datahub-main-grid">
+              <div className="datahub-card">
+                <div className="datahub-card-title">Certified Dataset Catalog</div>
+                <div className="datahub-datasets">
+                  {(dataDiscovery.datasets || []).map((d) => (
+                    <div key={d.id} className="datahub-dataset-card">
+                      <div className="datahub-dataset-hdr">
+                        <div>
+                          <div className="datahub-dataset-name">{d.name}</div>
+                          <div className="datahub-dataset-fqn">{d.fqn}</div>
+                        </div>
+                        <div className="datahub-badge-row">
+                          <span className="datahub-badge tier">{d.tier}</span>
+                          {(d.certifications || []).map((c) => <span key={`${d.id}-${c}`} className="datahub-badge cert">{c}</span>)}
+                        </div>
+                      </div>
+                      <div className="datahub-dataset-desc">{d.description}</div>
+                      <div className="datahub-meta-grid">
+                        <div><span>Owner</span><strong>{d.owner}</strong></div>
+                        <div><span>Grain</span><strong>{d.grain}</strong></div>
+                        <div><span>Latest</span><strong>{d.latest_ts || "n/a"}</strong></div>
+                        <div><span>Rows</span><strong>{Number(d.row_count || 0).toLocaleString()}</strong></div>
+                      </div>
+                      <div className="datahub-columns">{(d.columns || []).slice(0, 8).map((c) => `${c.name}:${c.type}`).join(" · ") || "Columns unavailable"}</div>
+                      <div className="datahub-lineage">
+                        <div><span>Upstream:</span> {(d.lineage_upstream || []).join(" → ") || "—"}</div>
+                        <div><span>Downstream:</span> {(d.lineage_downstream || []).join(" → ") || "—"}</div>
+                      </div>
+                    </div>
+                  ))}
+                  {!(dataDiscovery.datasets || []).length && (
+                    <div className="datahub-empty">{dataLoading ? "Loading datasets..." : "No datasets matched the search."}</div>
+                  )}
+                </div>
+              </div>
+
+              <div className="datahub-right-col">
+                <div className="datahub-card">
+                  <div className="datahub-card-title">Business Term Matches</div>
+                  <div className="datahub-term-list">
+                    {(dataDiscovery.term_hits || []).map((hit, idx) => (
+                      <div key={`term-${idx}`} className="datahub-term-item">
+                        <div className="datahub-term-name">{hit.term}</div>
+                        <div className="datahub-term-matches">{(hit.matches || []).map((m) => m.fqn).join(" · ")}</div>
+                        {Array.isArray(hit.uc_metrics) && hit.uc_metrics.length > 0 && (
+                          <div className="datahub-term-uc-list">
+                            {hit.uc_metrics.map((m, midx) => (
+                              <div key={`term-${idx}-uc-${midx}`} className="datahub-term-uc-item">
+                                <div className="datahub-term-uc-kv">
+                                  <span>{m.metric}</span>
+                                  <strong>{m.value}</strong>
+                                </div>
+                                <div className="datahub-term-uc-def">{m.definition}</div>
+                                <div className="datahub-term-uc-src">{m.source_table}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    {!(dataDiscovery.term_hits || []).length && <div className="datahub-empty">No term hits for current query.</div>}
+                  </div>
+                </div>
+
+                <div className="datahub-card">
+                  <div className="datahub-card-title">Guided Visualization Starters</div>
+                  <div className="datahub-viz-list">
+                    {(dataDiscovery.viz_starters || []).map((v, idx) => (
+                      <div key={`viz-${idx}`} className="datahub-viz-item">
+                        <div className="datahub-viz-title">{v.title}</div>
+                        <div className="datahub-viz-q">{v.question}</div>
+                        <div className="datahub-viz-meta">Chart: {v.suggested_chart}</div>
+                        <div className="datahub-viz-meta">Metrics: {(v.metrics || []).join(", ")}</div>
+                        <div className="datahub-viz-meta">Dimensions: {(v.dimensions || []).join(", ")}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="datahub-card">
+                  <div className="datahub-card-title">Data Concierge</div>
+                  <div className="datahub-chat">
+                    {dataConciergeMsgs.map((m, idx) => (
+                      <div key={`dc-${idx}`} className={`datahub-msg ${m.role}`}>
+                        <div className="datahub-msg-role">{m.role === "user" ? "ME" : "DATA AI"}</div>
+                        <div className="datahub-msg-bubble">
+                          {m.text}
+                          {m.role === "agent" && Array.isArray(m.references) && m.references.length > 0 && (
+                            <div className="datahub-msg-refs">
+                              {(m.references || []).map((r, ridx) => (
+                                <div key={`dref-${idx}-${ridx}`}>{r.fqn}</div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    {dataConciergePending && <div className="datahub-empty">Resolving dataset guidance...</div>}
+                  </div>
+                  <div className="datahub-chat-input">
+                    <input
+                      className="ainput"
+                      value={dataConciergeInput}
+                      onChange={(e) => setDataConciergeInput(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && sendDataConciergeMessage()}
+                      placeholder="Ask: where can I find line stoppage reasons and downtime cost by shift?"
+                      disabled={dataConciergePending}
+                    />
+                    <button className="sbtn" onClick={sendDataConciergeMessage} disabled={dataConciergePending}>
+                      {dataConciergePending ? "Processing..." : "Ask"}
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

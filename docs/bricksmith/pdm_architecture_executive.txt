@@ -1,0 +1,46 @@
+Create an executive-level architecture diagram for the **OT PdM Intelligence** application (multi-industry predictive and prescriptive maintenance demo on Databricks).
+
+**Title (top, exact text only — do not add color names like “Databricks Navy” or any hex codes):** OT PdM Intelligence — Multi-Industry Maintenance Platform
+
+**Subtitle:** Predictive risk, prescriptive actions, and finance-aware decisions on one Databricks lakehouse
+
+**Audience:** Executives and sponsors. Business language only in the main columns — no file paths, job IDs, or code.
+
+**Layout — five columns left to right:**
+
+**Column 1 — Industrial operations & enterprise context**
+- Plant OT telemetry (equipment sensors, quality signals)
+- Optional live plant connectivity (streaming industrial protocols)
+- ERP / finance context (work orders, cost centers) for prescriptive decisions
+
+**Column 2 — Governed data platform (Databricks)**
+- Per-industry data zones (mining, energy, water, automotive, semiconductor) unified pattern
+- Delta Lake medallion: trusted layers from raw through curated
+- Unity Catalog for security, lineage, and discovery
+
+**Column 3 — Intelligence layer**
+- Anomaly and remaining-life signals from ML models (lifecycle-managed)
+- Maintenance alerts and risk prioritization
+- Financial impact view tying reliability to cost and savings
+
+**Column 4 — Application experience**
+- Single web application: fleet health, asset drill-down, model transparency
+- Simulator for repeatable demos and fault injection
+- Regional sites and executive dashboards
+
+**Column 5 — Business outcomes**
+- Fewer unplanned stops and safer operations
+- Clear “what to do next” recommendations under constraints
+- Audit-friendly, governed path from signal to action
+
+**Bottom cross-cutting strip (one line):**
+Governance, security, and model lineage across OT data, analytics, and actions
+
+**Small callout (margin or corner, one sentence):**
+From operational telemetry to prescriptive maintenance — configured once per industry, delivered as one product experience.
+
+**Visual rules:**
+- White background, strong horizontal flow, low text density
+- Use provided **Databricks**, **Delta Lake**, and **Unity Catalog** logos where those words appear; keep logo sizes consistent
+- Arrows: plant & enterprise data → lakehouse → ML & alerts → app → business value
+- Do not draw numbered circles on logos; no typos

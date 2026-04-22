@@ -1,0 +1,56 @@
+Create a **technical reference architecture** diagram for the **OT PdM Intelligence** repository — a Databricks App (FastAPI + React) on top of a medallion lakehouse with ML and optional OT ingestion.
+
+**Title (render exactly this text, nothing else — no color names, no “Databricks Navy”, no hex codes):** OT PdM Intelligence — Technical Architecture
+
+**Layout:** Left-to-right data plane plus a vertical “app & compute” band on the right. Use clear grouping boxes and labeled arrows.
+
+**1) Sources (far left)**
+- **In-app simulator** — deterministic telemetry + fault injection for demos
+- **Zerobus** — first-mile OT streaming (e.g. OPC-UA, MQTT, Modbus) into workspace landing
+- **ERP / BDC-shaped feeds** — work orders and cost centers into bronze (SAP-style operational data)
+
+**2) Ingestion & bronze (Unity Catalog catalog per industry)**
+- Landing / bronze tables: sensor readings, optional PI-aligned paths, ERP bronze entities
+- **Delta Live Tables** pipelines (conceptual): bronze → silver → gold layers as deployed from the repo bundle
+
+**3) Silver**
+- Feature-rich tables (e.g. sensor features, rolling stats)
+- **OT–PI alignment** silver table for contextualized equipment timelines
+
+**4) Gold**
+- **pdm_predictions** — anomaly scores, RUL-style outputs, labels
+- **maintenance_alerts** and prediction-adjacent gold entities
+- **financial_impact_events** — business-facing impact layer for prescriptive UI
+
+**5) ML lifecycle**
+- Training and **batch scoring** jobs (per-industry) using **MLflow** with **Unity Catalog** model registry
+- Models registered and versioned; scoring refreshes gold predictions
+
+**6) Demo fast-path (label clearly as optional)**
+- Dashed box: simulator “inject” can **write bronze features and gold predictions via SQL** (warehouse execution) for fast demos without waiting for full pipeline/job runs
+
+**7) Application tier (Databricks App)**
+- **FastAPI** (`uvicorn`) — REST APIs: fleet, assets, overview, recommendations, simulator control, integration/medaillon previews
+- **SQL warehouse** — serverless SQL execution for UC queries (Databricks SDK statement execution)
+- **React SPA** — fleet map, hierarchy, asset model tab, stream view, executive finance, simulator panel
+- Optional **Lakebase (Postgres)** — operational ODS for work orders when configured (hydrated from bronze path); app falls back when absent
+
+**8) Cross-cutting**
+- **Unity Catalog** — governance across catalogs/schemas/tables
+- Caching layers for UI SQL (conceptual “short TTL” vs “long TTL” — no numbers required)
+- **Genie** / natural-language analytics only as an optional external consumption callout if space allows (dashed)
+
+**Flows to show with arrows:**
+Simulator / Zerobus / ERP → bronze → (DLT) silver → gold → ML jobs → gold predictions  
+App backend → SQL warehouse → UC tables  
+App backend ↔ Lakebase (optional, dashed)  
+Browser → FastAPI → JSON → React
+
+**Visual constraints:**
+- White or very light background; readable component labels
+- Use uploaded **Databricks**, **Delta Lake**, **Unity Catalog**, **MLflow** logos where those components are named
+- No real warehouse IDs, tokens, email addresses, or notebook file paths in the image
+- No numbered badges on logos; accurate spelling (Delta Live Tables, Unity Catalog, MLflow, FastAPI, React)
+
+**Footer (small):**
+Repo modules: `core/dlt`, `core/ml`, `core/zerobus_ingest`, `core/simulator`, `app/server.py`, `app/src` — show as one small “source layout” note only if it fits without cluttering.

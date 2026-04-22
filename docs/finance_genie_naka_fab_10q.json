@@ -1,0 +1,87 @@
+{
+  "generated_at": "2026-04-04 13:29:37",
+  "site_id": "naka_fab",
+  "site_name": "Renesas Naka Fab",
+  "results": [
+    {
+      "question": "Using exact site_id 'naka_fab', provide a CFO-ready EBIT bridge for the next 30 days: baseline EBIT, EBIT at risk without intervention, EBIT protected with prescriptive maintenance, and net EBIT uplift in JPY.",
+      "status": "COMPLETED",
+      "answer": "For site_id 'naka_fab', the estimated EBIT at risk without intervention over the next 30 days is **118,637.21 JPY**. The baseline EBIT, EBIT protected with prescriptive maintenance, and net EBIT uplift values are not available in the data provided. Only the EBIT at risk figure can be reported for your CFO-ready bridge.\n\nWould you like to see EBIT at risk calculated for all equipment at the 'naka_fab' site regardless of parts inventory?",
+      "duration_s": 15.0,
+      "conversation_id": "01f12fcda6f319f28efbab35b7761141",
+      "message_id": "01f12fcda7001c7aa2a67f1f6bc57a95"
+    },
+    {
+      "question": "Using exact site_id 'naka_fab', quantify avoided vs intervention cost by severity (critical vs warning) and identify the top 3 equipment contributing to EBIT risk.",
+      "status": "COMPLETED",
+      "answer": "For site_id 'naka_fab', the **avoided EBIT risk** and **intervention cost** by severity are as follows: \n- **Critical:** EBIT risk $38,557.09, intervention cost $10,701.43\n- **Warning:** EBIT risk $8,897.79, intervention cost $5,350.72\n- **Other:** EBIT risk $71,182.33, intervention cost $42,805.73\nThe top 3 equipment contributing most to EBIT risk are **ET-04** ($38,557.09), **CMP-07** ($8,897.79), and **CMP-20** ($8,897.79).\n\nWould you like to see avoided costs broken down by actual avoided downtime, quality, and energy costs instead of using estimated EBIT at risk as a proxy?",
+      "duration_s": 19.7,
+      "conversation_id": "01f12fcdafd31b6abacc3024ba88f5d0",
+      "message_id": "01f12fcdafe212dc98d101047252a825"
+    },
+    {
+      "question": "Using exact site_id 'naka_fab', produce a prescriptive next-shift work-order plan: which work orders to execute first, expected JPY value unlocked per action, and why sequencing matters.",
+      "status": "COMPLETED",
+      "answer": "For site_id 'naka_fab', the recommended next-shift work-order plan is to execute work order **SEM-WO-1203** (equipment LT-11, priority P2) first, unlocking an expected **JPY 8,897.79**. The remaining work orders (SEM-WO-1229, SEM-WO-1230, SEM-WO-1231) are all lower priority (P3) and should follow, each also unlocking JPY 8,897.79. Sequencing matters because higher priority, higher risk, and lower remaining useful life (RUL) work orders are executed first to minimize EBIT at risk.\n\nWould you like to see alternative sequencing strategies based on cost or crew availability instead of priority, risk, and RUL?",
+      "duration_s": 16.9,
+      "conversation_id": "01f12fcdbb891c89b0247b31087bbe19",
+      "message_id": "01f12fcdbb941f839a94c9c769edd5b5"
+    },
+    {
+      "question": "Using exact site_id 'naka_fab', estimate the cost of delaying all critical actions by 24 hours and 72 hours, including expected failure cost delta and EBIT impact.",
+      "status": "COMPLETED",
+      "answer": "For site_id **'naka_fab'**, the estimated cost of delaying all critical actions by **24 hours** is **$72,702.66**, and by **72 hours** is **$218,107.98**. The total expected EBIT at risk over 30 days for these actions is **$38,557.09**. Delaying critical actions significantly increases the expected failure cost and EBIT impact for this site.\n\nWould you prefer to see the cost impact of delays calculated as fixed amounts per work order instead of prorated by remaining useful life?",
+      "duration_s": 19.5,
+      "conversation_id": "01f12fcdc5a213f99e097b7bd9c426a3",
+      "message_id": "01f12fcdc5af17aea15c52cfacf7ef66"
+    },
+    {
+      "question": "Using exact site_id 'naka_fab', give an inventory-aware maintenance recommendation: check parts/work-order readiness and state which high-value actions are blocked by parts or crew constraints.",
+      "status": "COMPLETED",
+      "answer": "For site 'naka_fab', all high-value maintenance actions are currently **blocked by crew constraints**, not by parts shortages. The work order with the highest estimated EBIT at risk (SEM-WO-1201, $38,557) is blocked due to crew unavailability, while no work orders are blocked by parts. Crew shortages are the main barrier to executing urgent maintenance actions at this site.\n\nWould you like to see the maintenance recommendations sorted by priority or risk score instead of estimated financial risk?",
+      "duration_s": 17.0,
+      "conversation_id": "01f12fcdd14913768e091f6b95f842da",
+      "message_id": "01f12fcdd15919f7bd757956cfff1b29"
+    },
+    {
+      "question": "Using exact site_id 'naka_fab', summarize financial sensitivity: which single sensor-driven risk change would most improve EBIT, and what operational threshold should be enforced.",
+      "status": "COMPLETED",
+      "answer": "There are no sensor-driven risk changes identified for site_id 'naka_fab' that would improve EBIT, as no relevant data was found. This means there is currently no recommended operational threshold or specific sensor to target for financial sensitivity improvement at this site.\n\nWould you prefer to see operational thresholds based on other percentiles of the sensor's 30-day z-score, such as the 90th or 99th percentile?",
+      "duration_s": 35.4,
+      "conversation_id": "01f12fcddb5f12119155565a73ceb8c2",
+      "message_id": "01f12fcddb6b111d84f87f518534a39d"
+    },
+    {
+      "question": "Using exact site_id 'naka_fab', compare run-to-failure vs prescriptive maintenance for the top-risk asset cluster with JPY impact, downtime impact, and ROI.",
+      "status": "COMPLETED",
+      "answer": "There are **no assets** at site 'naka_fab' that meet the criteria for top-risk clusters with available JPY impact, downtime impact, and ROI data. As a result, a comparison between run-to-failure and prescriptive maintenance for these assets cannot be provided based on the current data.\n\nWould you like to see the comparison grouped by asset clusters instead of individual assets, or separated explicitly by run-to-failure and prescriptive maintenance strategies?\n\nWould you like to see the comparison for all priority levels or a different number of top-risk assets instead?",
+      "duration_s": 24.7,
+      "conversation_id": "01f12fcdf07f14a5aa1f92d5ab12a7ec",
+      "message_id": "01f12fcdf08a1fce8f26e9465f39f7f3"
+    },
+    {
+      "question": "Using exact site_id 'naka_fab', provide a weekly executive operating cadence: KPI targets (EBIT saved, avoided cost, intervention efficiency, critical backlog), trigger thresholds, and actions.",
+      "status": "COMPLETED",
+      "answer": "For site_id **'naka_fab'**, weekly performance shows consistent achievement in key metrics: **EBIT saved** ranges from about 172,000 to 235,000, **avoided cost** ranges from about 212,000 to 295,000, and **intervention efficiency** is typically between 4.66 and 6.58. The **critical backlog** remains at **0** each week, indicating no outstanding high-priority issues. \n\nExamples include:\n- **2026-03-30**: EBIT saved 177,817.21, avoided cost 227,818.73, intervention efficiency 5.23, critical backlog 0\n- **2026-03-23**: EBIT saved 218,608.94, avoided cost 269,637.53, intervention efficiency 6.08, critical backlog 0\n- **2026-03-16**: EBIT saved 177,772.95, avoided cost 220,770.23, intervention efficiency 5.87, critical backlog 0\n- **2026-03-09**: EBIT saved 187,936.87, avoided cost 242,478.98, intervention efficiency 4.66, critical backlog 0\n- **2026-03-02**: EBIT saved 217,369.42, avoided cost 269,995.84, intervention efficiency 6.11, critical backlog 0\n\nWould you like to see suggested trigger thresholds and recommended actions based on these KPIs and backlog levels?",
+      "duration_s": 19.7,
+      "conversation_id": "01f12fcdff3a17089410b9e8566d3317",
+      "message_id": "01f12fcdff4711aa98a1819110fcf859"
+    },
+    {
+      "question": "Using exact site_id 'naka_fab', identify the minimum intervention portfolio that captures at least 80% of avoidable EBIT loss and list the specific actions/tools.",
+      "status": "COMPLETED",
+      "answer": "For site_id **'naka_fab'**, the minimum intervention portfolio that captures at least 80% of avoidable EBIT loss includes work order **SEM-WO-1201** for equipment **ET-04**, with a risk score of **1.0**, priority **P1**, and an estimated EBIT at risk of **$38,557.09** over 30 days. The recommended action is to address this specific work order and tool to achieve the targeted EBIT loss reduction.\n\nWould you prefer to see the minimum intervention portfolio defined by a different threshold than 80% of avoidable EBIT loss or ordered by different criteria such as priority or risk score?",
+      "duration_s": 16.8,
+      "conversation_id": "01f12fce0afd12efb0d46e96df88baf9",
+      "message_id": "01f12fce0b091b0b9c7734f727c4fe55"
+    },
+    {
+      "question": "Using exact site_id 'naka_fab', provide board-level narrative in 5 bullets: current financial exposure, confidence level, immediate actions, 30-day EBIT outlook, and key risk if no action is taken.",
+      "status": "COMPLETED",
+      "answer": "- The **current financial exposure** for site_id 'naka_fab' is $118,637.21.\n- The **confidence level** (maximum risk score) is **1.0**.\n- There are **no immediate open work orders** prioritized for action at this time.\n- The **30-day EBIT at risk outlook** is also $118,637.21.\n- The **key risk if no action is taken** is associated with work order SEM-WO-1201 on equipment ET-04 (priority P1, risk score 1.0), with $38,557.09 EBIT at risk.\n\nWould you prefer the confidence level to be based on anomaly scores or another metric instead of the maximum risk score from work orders?",
+      "duration_s": 19.7,
+      "conversation_id": "01f12fce150514dd83833be9d0512d5e",
+      "message_id": "01f12fce1510164c922252b5bc91a6bc"
+    }
+  ]
+}

@@ -289,6 +289,19 @@ Key widgets:
 - `reset_existing`
 - `seed_demo_planning_case`
 
+## Scheduled demo refresh (finance + ERP)
+
+Opening a demo workspace months later still needs **current** finance history (quarter/year charts) and a fresh **SAP BDC → ODS** slice. After `databricks bundle deploy`, the job **`ot-pdm-demo-scheduled-refresh`** runs **weekly (Saturday 03:30 UTC)** by default:
+
+- Regenerates **`finance.pm_financial_daily`** and **`finance.pm_site_financial_daily`** for all five industries with **1095 days** ending **today** (synthetic series aligned with `RUNME_BOOTSTRAP_ALL` logic).
+- Re-runs **`ot-pdm-erp-bdc-seed-refresh`** (replaces `SAP_BDC_DEMO` work orders only).
+
+The older **`ot-pdm-financial-backfill-${industry}`** job schedule is **paused** in the bundle to avoid duplicate finance runs; unpause it only if you want a separate monthly cadence.
+
+**DLT (bronze / silver / gold tables):** by default each **`ot-pdm-dlt-<industry>`** pipeline is **`continuous: true`**, so it keeps processing new landing data without a daily job (same as before). The job **`ot-pdm-dlt-daily-refresh-all-industries`** is defined but **schedule PAUSED**: it runs `core/dlt/trigger_pipeline_updates.py` to **POST** an update per pipeline—use **Run now** for recovery, or **unpause** the schedule if you want a periodic API kick. If you switch a pipeline to **triggered** (`continuous: false`) for batch-only behavior, that job’s schedule is the natural way to refresh daily.
+
+**Not covered by the weekly finance schedule:** deep OT **historical** sensor backfill still comes from **initial bootstrap** `history_days`, the **simulator/connector**, and **training/scoring** jobs. Re-run `RUNME_BOOTSTRAP_ALL` with a larger `history_days` if you need more years of raw bronze history beyond what live ingest adds.
+
 ## Industry Deploy and Reconcile
 
 Deploy a specific industry:

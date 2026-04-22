@@ -1,0 +1,22 @@
+[
+  {
+    "equipment_id": "ET-04",
+    "shift_label": "Engineering Window A",
+    "shift_start": "2026-03-24T22:00:00Z",
+    "shift_end": "2026-03-25T02:00:00Z",
+    "planned_downtime_hours": 2.0,
+    "maintenance_window_start": "2026-03-25T00:00:00Z",
+    "maintenance_window_end": "2026-03-25T02:00:00Z",
+    "crew_available": true
+  },
+  {
+    "equipment_id": "LT-11",
+    "shift_label": "Engineering Window B",
+    "shift_start": "2026-03-25T06:00:00Z",
+    "shift_end": "2026-03-25T10:00:00Z",
+    "planned_downtime_hours": 1.5,
+    "maintenance_window_start": "2026-03-25T08:30:00Z",
+    "maintenance_window_end": "2026-03-25T10:00:00Z",
+    "crew_available": true
+  }
+]

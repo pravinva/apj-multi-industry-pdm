@@ -1,0 +1,18 @@
+bundle:
+  target: dev
+  profile: DEFAULT
+
+industries:
+  - mining
+  - energy
+  - water
+  - automotive
+  - semiconductor
+
+required:
+  jobs:
+    - training
+    - scoring
+    - zerobus-connector
+    - financial-backfill
+  pipeline: dlt

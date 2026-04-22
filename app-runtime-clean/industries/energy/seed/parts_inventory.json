@@ -1,0 +1,24 @@
+[
+  {
+    "part_number": "V150-GBX-BRG",
+    "description": "Wind turbine gearbox bearing set",
+    "quantity": 4,
+    "location": "Hub-01",
+    "depot": "Perth Service Hub",
+    "unit_cost": 11200,
+    "currency": "AUD",
+    "reorder_point": 1,
+    "lead_time_days": 10
+  },
+  {
+    "part_number": "MPACK-THM-PLATE",
+    "description": "Megapack thermal plate",
+    "quantity": 3,
+    "location": "Hub-02",
+    "depot": "NorthHub Stores",
+    "unit_cost": 8600,
+    "currency": "AUD",
+    "reorder_point": 1,
+    "lead_time_days": 6
+  }
+]

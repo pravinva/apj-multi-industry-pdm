@@ -1,5 +1,6 @@
 import json
 import math
+import os
 import random
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -460,6 +461,17 @@ def bootstrap_industry(client: WorkspaceClient, industry: str) -> None:
     _seed_asset_metadata(client, industry, cfg)
     _seed_sensor_data(client, cfg)
     _seed_feature_vectors(client, cfg)
+    try:
+        from tools.seed_finance_genie_support import SqlRunner as FinanceSqlRunner, seed_industry as seed_finance_support_industry
+
+        wh_id = (
+            os.getenv("OT_PDM_WAREHOUSE_ID", "").strip()
+            or os.getenv("DATABRICKS_SQL_WAREHOUSE_ID", "").strip()
+            or WAREHOUSE_ID
+        )
+        seed_finance_support_industry(FinanceSqlRunner(client=client, warehouse_id=wh_id), industry)
+    except Exception as e:
+        print(f"[warn] finance genie support seeding skipped for {industry}: {e}")
 
     print(f"[ok] bootstrapped {industry} -> {catalog}")
 

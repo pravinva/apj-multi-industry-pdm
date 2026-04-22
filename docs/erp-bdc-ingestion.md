@@ -62,7 +62,7 @@ After `databricks bundle deploy`, a job is defined as **`ot-pdm-erp-bdc-seed-ref
 
 The job runs `core/erp_bdc/run_erp_bdc_seed_job.py`, which calls `run_refresh_for_industry` in `core/erp_bdc/seed_demo.py`: creates bronze ERP tables if needed, ensures `lakebase.work_orders` + ALTER columns, then replaces demo rows (`source_system = 'SAP_BDC_DEMO'`).
 
-**Schedule (optional):** in the job UI add a schedule (e.g. weekly) if you want periodic refresh of demo ERP data.
+**Schedule:** the bundle defines **`ot-pdm-demo-scheduled-refresh`**, which runs **weekly** and includes this ERP task alongside finance regeneration (see README *Scheduled demo refresh*). You can still run **`ot-pdm-erp-bdc-seed-refresh`** manually anytime.
 
 **Note:** Executive UI still joins to `bronze.asset_metadata` for the current industry. Ensure assets exist for that catalog (from workspace bootstrap or your own seed) so work orders appear in Finance.
 

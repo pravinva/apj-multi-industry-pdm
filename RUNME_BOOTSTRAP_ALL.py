@@ -43,7 +43,7 @@ def _runtime_params() -> tuple[list[str], int, str, bool, bool, bool]:
     defaults = {
         "industries_csv": "mining,energy,water,automotive,semiconductor",
         "history_days": "730",
-        "grant_principal": "account users",
+        "grant_principal": "users",
         "trigger_jobs": "true",
         "reset_existing": "true",
         "seed_demo_planning_case": "true",
@@ -130,6 +130,17 @@ def _run_sql(stmt: str) -> None:
     spark.sql(stmt)  # noqa: F821
 
 
+def _ensure_catalog(catalog: str) -> None:
+    # Some workspaces disallow creating new catalogs (or lack metastore default
+    # storage). If the catalog already exists and is usable, skip CREATE.
+    try:
+        _run_sql(f"USE CATALOG {catalog}")
+        return
+    except Exception:
+        pass
+    _run_sql(f"CREATE CATALOG IF NOT EXISTS {catalog}")
+
+
 def _load_yaml(path: Path) -> dict[str, Any]:
     return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
 
@@ -191,10 +202,34 @@ def _create_finance_table(catalog: str) -> None:
           ebit_saved DOUBLE,
           net_benefit DOUBLE,
           baseline_monthly_ebit DOUBLE,
+          unplanned_downtime_cost DOUBLE,
+          unplanned_downtime_hours DOUBLE,
+          maintenance_cost_total DOUBLE,
+          units_produced DOUBLE,
+          maintenance_cost_per_unit DOUBLE,
+          recovered_capacity_units DOUBLE,
+          recovered_capacity_pct DOUBLE,
           updated_at TIMESTAMP
         ) USING DELTA
         """
     )
+    for col, dtype in [
+        ("unplanned_downtime_cost", "DOUBLE"),
+        ("unplanned_downtime_hours", "DOUBLE"),
+        ("maintenance_cost_total", "DOUBLE"),
+        ("units_produced", "DOUBLE"),
+        ("maintenance_cost_per_unit", "DOUBLE"),
+        ("recovered_capacity_units", "DOUBLE"),
+        ("recovered_capacity_pct", "DOUBLE"),
+    ]:
+        try:
+            _run_sql(f"ALTER TABLE {catalog}.finance.pm_financial_daily ADD COLUMN IF NOT EXISTS {col} {dtype}")
+        except Exception:
+            # Some compute runtimes reject IF NOT EXISTS for ADD COLUMN.
+            try:
+                _run_sql(f"ALTER TABLE {catalog}.finance.pm_financial_daily ADD COLUMN {col} {dtype}")
+            except Exception:
+                pass
     _run_sql(
         f"""
         CREATE TABLE IF NOT EXISTS {catalog}.finance.pm_bootstrap_runs (
@@ -246,6 +281,43 @@ def _create_finance_table(catalog: str) -> None:
         ) USING DELTA
         """
     )
+    _run_sql(
+        f"""
+        CREATE TABLE IF NOT EXISTS {catalog}.finance.pm_line_risk_30d (
+          ds DATE,
+          site_id STRING,
+          line_id STRING,
+          equipment_count INT,
+          critical_events_30d INT,
+          warning_events_30d INT,
+          total_events_30d INT,
+          risk_score DOUBLE,
+          ebit_at_risk_30d DOUBLE,
+          avoided_cost_30d DOUBLE,
+          updated_at TIMESTAMP
+        ) USING DELTA
+        """
+    )
+    _run_sql(
+        f"""
+        CREATE TABLE IF NOT EXISTS {catalog}.finance.supplier_quality_failure_daily (
+          ds DATE,
+          site_id STRING,
+          line_id STRING,
+          supplier_id STRING,
+          part_number STRING,
+          defect_rate_ppm DOUBLE,
+          incoming_qc_score DOUBLE,
+          critical_failures_30d INT,
+          alert_failures_30d INT,
+          installs_30d INT,
+          failure_rate_30d DOUBLE,
+          quality_risk_index DOUBLE,
+          correlation_signal DOUBLE,
+          updated_at TIMESTAMP
+        ) USING DELTA
+        """
+    )
 
 
 def _ensure_lakebase_columns(catalog: str) -> None:
@@ -261,10 +333,19 @@ def _seed_erp_bdc_demo(catalog: str, industry: str, cfg: dict[str, Any]) -> None
 
 
 def _grant_access(catalog: str) -> None:
-    p = _safe(GRANT_PRINCIPAL)
-    _run_sql(f"GRANT USE CATALOG ON CATALOG {catalog} TO `{p}`")
-    for sch in ["bronze", "silver", "gold", "lakebase", "agent_tools", "models", "finance"]:
-        _run_sql(f"GRANT USE SCHEMA ON SCHEMA {catalog}.{sch} TO `{p}`")
+    candidates: list[str] = []
+    for principal in [GRANT_PRINCIPAL, "account users", "users", "admins"]:
+        p = _safe(str(principal or "").strip())
+        if p and p not in candidates:
+            candidates.append(p)
+
+    for p in candidates:
+        try:
+            _run_sql(f"GRANT USE CATALOG ON CATALOG {catalog} TO `{p}`")
+            for sch in ["bronze", "silver", "gold", "lakebase", "agent_tools", "models", "finance"]:
+                _run_sql(f"GRANT USE SCHEMA ON SCHEMA {catalog}.{sch} TO `{p}`")
+        except Exception:
+            continue
 
     for tbl in [
         "bronze.pravin_zerobus",
@@ -283,14 +364,17 @@ def _grant_access(catalog: str) -> None:
         "bronze.erp_bdc_cost_centers",
         "finance.pm_financial_daily",
         "finance.pm_site_financial_daily",
+        "finance.pm_line_risk_30d",
+        "finance.supplier_quality_failure_daily",
         "finance.pm_demo_planning_case",
         "finance.pm_bootstrap_runs",
     ]:
-        try:
-            _run_sql(f"GRANT SELECT ON TABLE {catalog}.{tbl} TO `{p}`")
-        except Exception:
-            # Some tables (like maintenance_alerts) may not exist yet pre-DLT.
-            pass
+        for p in candidates:
+            try:
+                _run_sql(f"GRANT SELECT ON TABLE {catalog}.{tbl} TO `{p}`")
+            except Exception:
+                # Some tables/principals may not exist yet in every workspace.
+                pass
 
 
 def _truncate_seed_targets(catalog: str) -> None:
@@ -307,6 +391,8 @@ def _truncate_seed_targets(catalog: str) -> None:
         "bronze.asset_metadata",
         "finance.pm_financial_daily",
         "finance.pm_site_financial_daily",
+        "finance.pm_line_risk_30d",
+        "finance.supplier_quality_failure_daily",
         "finance.pm_demo_planning_case",
     ]:
         try:
@@ -487,8 +573,27 @@ def _finance_rows(industry: str, days: int) -> list[dict[str, Any]]:
                 "ebit_saved": round(ebit, 2),
                 "net_benefit": round(net, 2),
                 "baseline_monthly_ebit": round(baseline, 2),
+                "unplanned_downtime_cost": round(max(0.0, down * rng.uniform(1.18, 1.62)), 2),
+                "unplanned_downtime_hours": round(max(0.0, (down * rng.uniform(1.05, 1.35)) / rng.uniform(1200.0, 2100.0)), 2),
+                "maintenance_cost_total": round(max(0.0, intervention + platform + (energy * 0.12)), 2),
+                "units_produced": round(max(1200.0, (baseline / 900.0) * rng.uniform(0.72, 1.28)), 2),
+                "maintenance_cost_per_unit": 0.0,  # populated below for consistency
+                "recovered_capacity_units": 0.0,   # populated below for consistency
+                "recovered_capacity_pct": 0.0,     # populated below for consistency
                 "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
             }
+        )
+        rows[-1]["maintenance_cost_per_unit"] = round(
+            rows[-1]["maintenance_cost_total"] / max(1.0, rows[-1]["units_produced"]),
+            6,
+        )
+        rows[-1]["recovered_capacity_units"] = round(
+            max(0.0, min(rows[-1]["units_produced"] * 0.24, down / 220.0)),
+            2,
+        )
+        rows[-1]["recovered_capacity_pct"] = round(
+            100.0 * rows[-1]["recovered_capacity_units"] / max(1.0, rows[-1]["units_produced"]),
+            3,
         )
         day += timedelta(days=1)
         i += 1
@@ -544,6 +649,125 @@ def _seed_site_finance(industry: str, cfg: dict[str, Any], days: int) -> None:
             )
         day += timedelta(days=1)
     _seed_json_table(catalog, "finance.pm_site_financial_daily", rows)
+
+
+def _seed_finance_support_tables(industry: str, cfg: dict[str, Any]) -> None:
+    catalog = cfg["catalog"]
+    _run_sql(
+        f"""
+        CREATE OR REPLACE TABLE {catalog}.finance.pm_line_risk_30d
+        USING DELTA AS
+        WITH asset_lines AS (
+          SELECT
+            COALESCE(site_id, 'unknown') AS site_id,
+            COALESCE(unit_id, area_id, 'line_1') AS line_id,
+            COUNT(DISTINCT equipment_id) AS equipment_count
+          FROM {catalog}.bronze.asset_metadata
+          WHERE LOWER(industry) = LOWER('{industry}')
+          GROUP BY 1, 2
+        ),
+        event_30d AS (
+          SELECT
+            COALESCE(site_id, 'unknown') AS site_id,
+            COALESCE(unit_id, area_id, 'line_1') AS line_id,
+            SUM(CASE WHEN LOWER(severity) = 'critical' THEN 1 ELSE 0 END) AS critical_events_30d,
+            SUM(CASE WHEN LOWER(severity) = 'warning' THEN 1 ELSE 0 END) AS warning_events_30d,
+            COUNT(*) AS total_events_30d,
+            ROUND(SUM(COALESCE(expected_failure_cost, 0)), 2) AS ebit_at_risk_30d,
+            ROUND(SUM(COALESCE(avoided_cost, 0)), 2) AS avoided_cost_30d
+          FROM {catalog}.gold.financial_impact_events
+          WHERE prediction_timestamp >= TIMESTAMPADD(DAY, -30, CURRENT_TIMESTAMP())
+          GROUP BY 1, 2
+        ),
+        all_lines AS (
+          SELECT site_id, line_id FROM asset_lines
+          UNION
+          SELECT site_id, line_id FROM event_30d
+        )
+        SELECT
+          CURRENT_DATE() AS ds,
+          l.site_id,
+          l.line_id,
+          CAST(COALESCE(a.equipment_count, 0) AS INT) AS equipment_count,
+          CAST(COALESCE(e.critical_events_30d, 0) AS INT) AS critical_events_30d,
+          CAST(COALESCE(e.warning_events_30d, 0) AS INT) AS warning_events_30d,
+          CAST(COALESCE(e.total_events_30d, 0) AS INT) AS total_events_30d,
+          ROUND(
+            LEAST(
+              100.0,
+              (COALESCE(e.critical_events_30d, 0) * 8.0)
+              + (COALESCE(e.warning_events_30d, 0) * 3.0)
+              + ((COALESCE(e.ebit_at_risk_30d, 0) / GREATEST(1.0, COALESCE(a.equipment_count, 1) * 15000.0)) * 35.0)
+            ),
+            2
+          ) AS risk_score,
+          ROUND(COALESCE(e.ebit_at_risk_30d, 0), 2) AS ebit_at_risk_30d,
+          ROUND(COALESCE(e.avoided_cost_30d, 0), 2) AS avoided_cost_30d,
+          CURRENT_TIMESTAMP() AS updated_at
+        FROM all_lines l
+        LEFT JOIN asset_lines a ON l.site_id = a.site_id AND l.line_id = a.line_id
+        LEFT JOIN event_30d e ON l.site_id = e.site_id AND l.line_id = e.line_id
+        """
+    )
+    _run_sql(
+        f"""
+        CREATE OR REPLACE TABLE {catalog}.finance.supplier_quality_failure_daily
+        USING DELTA AS
+        WITH inv AS (
+          SELECT
+            COALESCE(site_id, 'unknown') AS site_id,
+            COALESCE(unit_id, area_id, 'line_1') AS line_id,
+            COALESCE(equipment_id, 'unknown_equipment') AS equipment_id,
+            COALESCE(part_number, CONCAT('PART-', SUBSTR(MD5(COALESCE(description, 'x')), 1, 8))) AS part_number
+          FROM {catalog}.lakebase.parts_inventory
+        ),
+        supplier_map AS (
+          SELECT
+            *,
+            CONCAT('SUP-', LPAD(CAST((ABS(XXHASH64(part_number)) % 12) + 1 AS STRING), 2, '0')) AS supplier_id,
+            ROUND(20 + (ABS(XXHASH64(CONCAT(part_number, ':ppm'))) % 360), 2) AS defect_rate_ppm,
+            ROUND(70 + ((ABS(XXHASH64(CONCAT(part_number, ':qc'))) % 2800) / 100.0), 2) AS incoming_qc_score
+          FROM inv
+        ),
+        fail_30d AS (
+          SELECT
+            equipment_id,
+            SUM(CASE WHEN LOWER(severity) = 'critical' THEN 1 ELSE 0 END) AS critical_failures_30d,
+            SUM(CASE WHEN LOWER(severity) IN ('critical', 'warning') THEN 1 ELSE 0 END) AS alert_failures_30d
+          FROM {catalog}.gold.financial_impact_events
+          WHERE prediction_timestamp >= TIMESTAMPADD(DAY, -30, CURRENT_TIMESTAMP())
+          GROUP BY equipment_id
+        )
+        SELECT
+          CURRENT_DATE() AS ds,
+          sm.site_id,
+          sm.line_id,
+          sm.supplier_id,
+          sm.part_number,
+          sm.defect_rate_ppm,
+          sm.incoming_qc_score,
+          CAST(COALESCE(f.critical_failures_30d, 0) AS INT) AS critical_failures_30d,
+          CAST(COALESCE(f.alert_failures_30d, 0) AS INT) AS alert_failures_30d,
+          CAST(GREATEST(8, (ABS(XXHASH64(CONCAT(sm.part_number, sm.site_id))) % 44) + 6) AS INT) AS installs_30d,
+          ROUND(
+            COALESCE(f.alert_failures_30d, 0)
+            / GREATEST(1.0, CAST((ABS(XXHASH64(CONCAT(sm.part_number, sm.site_id))) % 44) + 6 AS DOUBLE)),
+            4
+          ) AS failure_rate_30d,
+          ROUND(
+            (sm.defect_rate_ppm / 1000.0) * 0.58 + ((100.0 - sm.incoming_qc_score) / 100.0) * 0.42,
+            4
+          ) AS quality_risk_index,
+          ROUND(
+            ((sm.defect_rate_ppm / 1000.0) * 0.58 + ((100.0 - sm.incoming_qc_score) / 100.0) * 0.42)
+            * (1.0 + (COALESCE(f.alert_failures_30d, 0) * 0.06)),
+            4
+          ) AS correlation_signal,
+          CURRENT_TIMESTAMP() AS updated_at
+        FROM supplier_map sm
+        LEFT JOIN fail_30d f ON sm.equipment_id = f.equipment_id
+        """
+    )
 
 
 def _seed_demo_planning_case(industry: str, cfg: dict[str, Any]) -> None:
@@ -666,7 +890,7 @@ def bootstrap_industry(industry: str) -> None:
     catalog = cfg["catalog"]
     print(f"[bootstrap] {industry} -> {catalog}")
 
-    _run_sql(f"CREATE CATALOG IF NOT EXISTS {catalog}")
+    _ensure_catalog(catalog)
     for sch in ["bronze", "silver", "gold", "lakebase", "agent_tools", "models", "finance"]:
         _run_sql(f"CREATE SCHEMA IF NOT EXISTS {catalog}.{sch}")
 
@@ -684,6 +908,7 @@ def bootstrap_industry(industry: str) -> None:
     _seed_feature_vectors(cfg)
     _seed_finance(industry, cfg, HISTORY_DAYS)
     _seed_site_finance(industry, cfg, HISTORY_DAYS)
+    _seed_finance_support_tables(industry, cfg)
     if SEED_DEMO_PLANNING_CASE:
         _seed_demo_planning_case(industry, cfg)
     _grant_access(catalog)

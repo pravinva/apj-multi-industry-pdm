@@ -1,0 +1,24 @@
+[
+  {
+    "part_number": "ESC-ET04-A",
+    "description": "Electrostatic chuck - Chamber A (ET-04)",
+    "quantity": 1,
+    "location": "Bay3 Shelf C",
+    "depot": "Naka Factory Stores",
+    "unit_cost": 28000,
+    "currency": "USD",
+    "reorder_point": 1,
+    "lead_time_days": 14
+  },
+  {
+    "part_number": "CLEAN-WET-CF",
+    "description": "Wet clean chemical kit - CF process",
+    "quantity": 3,
+    "location": "Bay3 Shelf D02",
+    "depot": "Naka Factory Stores",
+    "unit_cost": 1400,
+    "currency": "USD",
+    "reorder_point": 2,
+    "lead_time_days": 2
+  }
+]
