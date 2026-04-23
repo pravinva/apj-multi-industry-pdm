@@ -116,6 +116,8 @@ OT source (simulator or Zerobus)
   - One-run workspace bootstrap for all industries.
 - `tools/bootstrap_all_industries.py`
   - Scripted bootstrap path.
+- `tools/deploy_bundle_and_bootstrap.py`
+  - One-command deploy for all industries + app + bootstrap/backfill run.
 - `industries/deployment_matrix.yaml`
   - Resource consistency matrix across industry skins.
 - `tools/reconcile_industry_matrix.py`
@@ -260,14 +262,18 @@ Manual retrieval is implemented as a lightweight grounded pattern:
 
 ## Quick Start
 
-1. Validate bundle:
-   - `databricks bundle validate --target dev -p DEFAULT`
-2. Deploy bundle:
-   - `databricks bundle deploy --target dev -p DEFAULT`
-3. Run bootstrap notebook:
-   - `RUNME_BOOTSTRAP_ALL.py` in Databricks.
-4. Verify data in Bronze, Silver, Gold, and finance tables.
-5. Open app endpoint from Databricks Apps.
+For clone-and-run onboarding, the target is <15 minutes to first usable app.
+
+1. 15-minute quickstart (recommended):
+   - `./RUNME_15_MIN.sh --target dev`
+2. Verify data in Bronze, Silver, Gold, and finance tables.
+3. Open app endpoint from Databricks Apps.
+
+Notes:
+- Quickstart deploys a single bundle variant (`industry=mining`) to provision shared resources fast, then runs workspace bootstrap for all industries.
+- Full deployment across all per-industry bundle variants:
+  - `python tools/deploy_bundle_and_bootstrap.py --mode full --target dev --industries mining,energy,water,automotive,semiconductor`
+- Profile is auto-detected from bundle target host when `--profile` is omitted.
 
 ## Bootstrap Notes
 

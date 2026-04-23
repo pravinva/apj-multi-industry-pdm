@@ -12,7 +12,32 @@ from databricks.sdk.service import sql as sql_service
 
 ROOT = Path(__file__).resolve().parents[1]
 INDUSTRIES = ["mining", "energy", "water", "automotive", "semiconductor"]
-WAREHOUSE_ID = "4b9b953939869799"
+WAREHOUSE_ID = (
+    os.getenv("OT_PDM_WAREHOUSE_ID", "").strip()
+    or os.getenv("DATABRICKS_SQL_WAREHOUSE_ID", "").strip()
+)
+
+
+def _resolve_warehouse_id(client: WorkspaceClient) -> str:
+    if WAREHOUSE_ID:
+        return WAREHOUSE_ID
+    running: list[tuple[str, str]] = []
+    fallback: list[tuple[str, str]] = []
+    for wh in client.warehouses.list():
+        wid = str(getattr(wh, "id", "") or "")
+        if not wid:
+            continue
+        name = str(getattr(wh, "name", "") or "").lower()
+        fallback.append((wid, name))
+        if str(getattr(wh, "state", "")).upper().endswith("RUNNING"):
+            running.append((wid, name))
+    for candidates in (running, fallback):
+        for wid, name in candidates:
+            if "unity catalog" in name or "serverless" in name:
+                return wid
+    if fallback:
+        return fallback[0][0]
+    raise RuntimeError("No SQL warehouse found; set OT_PDM_WAREHOUSE_ID or DATABRICKS_SQL_WAREHOUSE_ID.")
 
 
 def _escape(v: str) -> str:
@@ -34,9 +59,10 @@ def _sql_literal(v: Any) -> str:
 
 
 def _run_sql(client: WorkspaceClient, statement: str) -> None:
+    warehouse_id = _resolve_warehouse_id(client)
     resp = client.statement_execution.execute_statement(
         statement=statement,
-        warehouse_id=WAREHOUSE_ID,
+        warehouse_id=warehouse_id,
         wait_timeout="50s",
         disposition=sql_service.Disposition.INLINE,
     )
@@ -467,7 +493,7 @@ def bootstrap_industry(client: WorkspaceClient, industry: str) -> None:
         wh_id = (
             os.getenv("OT_PDM_WAREHOUSE_ID", "").strip()
             or os.getenv("DATABRICKS_SQL_WAREHOUSE_ID", "").strip()
-            or WAREHOUSE_ID
+            or _resolve_warehouse_id(client)
         )
         seed_finance_support_industry(FinanceSqlRunner(client=client, warehouse_id=wh_id), industry)
     except Exception as e:

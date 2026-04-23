@@ -8,7 +8,6 @@ from databricks.sdk import WorkspaceClient
 from databricks.sdk.service import sql as sql_service
 
 INDUSTRIES = ["mining", "energy", "water", "automotive", "semiconductor"]
-DEFAULT_WAREHOUSE_ID = "4b9b953939869799"
 
 
 @dataclass
@@ -372,18 +371,15 @@ def seed_industry(runner: SqlRunner, industry: str) -> None:
 
 def main() -> int:
     client = WorkspaceClient(profile="DEFAULT")
-    requested = (
-        os.getenv("OT_PDM_WAREHOUSE_ID", "").strip()
-        or os.getenv("DATABRICKS_SQL_WAREHOUSE_ID", "").strip()
-        or DEFAULT_WAREHOUSE_ID
-    )
-    warehouse_id = requested
-    try:
-        # Probe selected warehouse quickly; if it no longer exists, fall back.
-        probe = SqlRunner(client=client, warehouse_id=warehouse_id)
-        probe.run("SELECT 1")
-    except Exception:
-        warehouse_id = _resolve_warehouse_id(client)
+    requested = os.getenv("OT_PDM_WAREHOUSE_ID", "").strip() or os.getenv("DATABRICKS_SQL_WAREHOUSE_ID", "").strip()
+    warehouse_id = requested or _resolve_warehouse_id(client)
+    if requested:
+        try:
+            # Probe selected warehouse quickly; if it no longer exists, fall back.
+            probe = SqlRunner(client=client, warehouse_id=warehouse_id)
+            probe.run("SELECT 1")
+        except Exception:
+            warehouse_id = _resolve_warehouse_id(client)
     print(f"[seed] using warehouse_id={warehouse_id}")
     runner = SqlRunner(client=client, warehouse_id=warehouse_id)
     for industry in INDUSTRIES:

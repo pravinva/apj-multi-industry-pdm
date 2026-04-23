@@ -44,6 +44,12 @@ targets:
       host: https://fevm-classic-stable-zz47bh.cloud.databricks.com
 
 resources:
+  apps:
+    ot_pdm_app:
+      name: ot-pdm-app
+      description: "OT PdM Intelligence Databricks App"
+      source_code_path: app
+
   pipelines:
     # Continuous: new Zerobus/PI data is picked up as it lands (typical demo / streaming path).
     # Optional batch refresh: job ot-pdm-dlt-daily-refresh-all-industries (PAUSED by default) calls

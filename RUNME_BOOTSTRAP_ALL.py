@@ -12,6 +12,7 @@ Single notebook to make the demo usable in a fresh workspace after bundle deploy
 """
 
 import json
+import hashlib
 import math
 import random
 import re
@@ -528,6 +529,125 @@ def _seed_feature_vectors(cfg: dict[str, Any]) -> None:
     return
 
 
+def _stable01(*parts: str) -> float:
+    token = "|".join(parts).encode("utf-8")
+    digest = hashlib.sha256(token).hexdigest()
+    return int(digest[:8], 16) / float(0xFFFFFFFF)
+
+
+def _table_row_count(table_fqn: str) -> int:
+    try:
+        row = spark.sql(f"SELECT COUNT(*) AS c FROM {table_fqn}").collect()[0]  # noqa: F821
+        return int(row["c"])
+    except Exception:
+        return 0
+
+
+def _seed_minimum_predictions_and_alerts(industry: str, cfg: dict[str, Any]) -> None:
+    """
+    Ensure Gold has deterministic demo rows after first bootstrap.
+    This avoids empty Risk Matrix / Recent Alerts before DLT+ML jobs catch up.
+    """
+    catalog = cfg["catalog"]
+    assets = cfg.get("simulator", {}).get("assets", []) or []
+    if not assets:
+        return
+
+    pred_table = f"{catalog}.gold.pdm_predictions"
+    fin_table = f"{catalog}.gold.financial_impact_events"
+    pred_count = _table_row_count(pred_table)
+    fin_count = _table_row_count(fin_table)
+    if pred_count > 0 and fin_count > 0:
+        return
+
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    sensors_map = cfg.get("sensors", {}) or {}
+
+    pred_rows: list[dict[str, Any]] = []
+    fin_rows: list[dict[str, Any]] = []
+    for i, a in enumerate(assets):
+        equipment_id = str(a.get("id", "")).strip()
+        if not equipment_id:
+            continue
+        site_id = str(a.get("site", "") or "")
+        area_id = str(a.get("area", "") or "")
+        unit_id = str(a.get("unit", "") or "")
+        severity_cfg = float(a.get("fault_severity", 0.0) or 0.0)
+        jitter = _stable01(industry, equipment_id, "bootstrap")
+        score = max(0.15, min(0.99, (0.20 + 0.74 * severity_cfg) + ((jitter - 0.5) * 0.06)))
+        if score >= 0.80:
+            severity = "critical"
+            rul_hours = max(4.0, 10.0 + (jitter * 14.0))
+        elif score >= 0.50:
+            severity = "warning"
+            rul_hours = 36.0 + (jitter * 72.0)
+        else:
+            severity = "healthy"
+            rul_hours = 180.0 + (jitter * 260.0)
+        anomaly_label = "anomaly" if score >= 0.50 else "normal"
+        pred_ts = (now - timedelta(minutes=(len(assets) - i))).strftime("%Y-%m-%d %H:%M:%S")
+        predicted_failure_ts = (now + timedelta(hours=rul_hours)).strftime("%Y-%m-%d %H:%M:%S")
+        asset_type = str(a.get("type", "") or "")
+        sensor_defs = sensors_map.get(asset_type, []) if asset_type else []
+        top_sensor = str(sensor_defs[0].get("name", "vibration_rms")) if sensor_defs else "vibration_rms"
+        has_window = severity != "critical"
+        crew_available = severity != "critical"
+        downtime_hours = max(1.0, min(16.0, 3.0 + (1.0 - min(1.0, rul_hours / 240.0)) * 11.0))
+        expected_failure_cost = round((18_000.0 + (score * 82_000.0)) * (1.0 + (0.2 * jitter)), 2)
+        maintenance_cost = round(expected_failure_cost * (0.16 if severity == "critical" else 0.22), 2)
+        avoided_cost = round(max(0.0, expected_failure_cost - maintenance_cost), 2)
+        production_loss = round(expected_failure_cost * 0.62, 2)
+
+        pred_rows.append(
+            {
+                "equipment_id": equipment_id,
+                "prediction_timestamp": pred_ts,
+                "anomaly_score": round(score, 4),
+                "anomaly_label": anomaly_label,
+                "rul_hours": round(rul_hours, 2),
+                "predicted_failure_date": predicted_failure_ts,
+                "top_contributing_sensor": top_sensor,
+                "top_contributing_score": round(max(0.05, min(0.99, score * 0.85)), 4),
+                "model_version_anomaly": "bootstrap_seed_v1",
+                "model_version_rul": "bootstrap_seed_v1",
+                "_scored_at": now.strftime("%Y-%m-%d %H:%M:%S"),
+            }
+        )
+        if severity in {"critical", "warning"}:
+            fin_rows.append(
+                {
+                    "equipment_id": equipment_id,
+                    "prediction_timestamp": pred_ts,
+                    "severity": severity,
+                    "anomaly_score": round(score, 4),
+                    "rul_hours": round(rul_hours, 2),
+                    "event_type": "predicted_failure",
+                    "shift_label": "Day Shift" if i % 2 == 0 else "Night Shift",
+                    "maintenance_window_start": (now + timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S") if has_window else None,
+                    "maintenance_window_end": (now + timedelta(hours=10)).strftime("%Y-%m-%d %H:%M:%S") if has_window else None,
+                    "has_maintenance_window": has_window,
+                    "crew_available": crew_available,
+                    "downtime_hours": round(downtime_hours, 2),
+                    "maintenance_cost": maintenance_cost,
+                    "production_loss": production_loss,
+                    "expected_failure_cost": expected_failure_cost,
+                    "avoided_cost": avoided_cost,
+                    "total_event_cost": round(maintenance_cost + production_loss, 2),
+                    "data_source": "bootstrap_seed",
+                    "source_table": pred_table,
+                    "_computed_at": now.strftime("%Y-%m-%d %H:%M:%S"),
+                    "site_id": site_id,
+                    "area_id": area_id,
+                    "unit_id": unit_id,
+                }
+            )
+
+    if pred_count == 0 and pred_rows:
+        _seed_json_table(catalog, "gold.pdm_predictions", pred_rows)
+    if fin_count == 0 and fin_rows:
+        _seed_json_table(catalog, "gold.financial_impact_events", fin_rows)
+
+
 FINANCE_PROFILES = {
     "mining": {"currency": "AUD", "baseline_monthly_ebit": 42_000_000.0},
     "energy": {"currency": "AUD", "baseline_monthly_ebit": 28_000_000.0},
@@ -906,6 +1026,7 @@ def bootstrap_industry(industry: str) -> None:
     _seed_asset_metadata(industry, cfg)
     _seed_erp_bdc_demo(catalog, industry, cfg)
     _seed_feature_vectors(cfg)
+    _seed_minimum_predictions_and_alerts(industry, cfg)
     _seed_finance(industry, cfg, HISTORY_DAYS)
     _seed_site_finance(industry, cfg, HISTORY_DAYS)
     _seed_finance_support_tables(industry, cfg)

@@ -491,10 +491,14 @@ def _resolve_warehouse_id() -> str:
                         return wid
             if fallback:
                 return fallback[0][0]
-        except Exception:
-            pass
-    # Last-resort static fallback for environments without discovery access.
-    return "4b9b953939869799"
+        except Exception as e:
+            raise RuntimeError(
+                "Unable to discover a SQL warehouse automatically. "
+                "Set OT_PDM_WAREHOUSE_ID or DATABRICKS_SQL_WAREHOUSE_ID."
+            ) from e
+    raise RuntimeError(
+        "No SQL warehouse found. Set OT_PDM_WAREHOUSE_ID or DATABRICKS_SQL_WAREHOUSE_ID."
+    )
 
 
 _WAREHOUSE_ID = _resolve_warehouse_id()
