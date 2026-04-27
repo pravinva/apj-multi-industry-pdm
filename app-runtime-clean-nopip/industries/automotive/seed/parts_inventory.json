@@ -1,0 +1,24 @@
+[
+  {
+    "part_number": "AIDA-DIE-TP07",
+    "description": "Stamping die insert kit TP-07",
+    "quantity": 2,
+    "location": "棚 A-07",
+    "depot": "Nagoya Central Stores",
+    "unit_cost": 420000,
+    "currency": "JPY",
+    "reorder_point": 1,
+    "lead_time_days": 12
+  },
+  {
+    "part_number": "FANUC-SRV-WR14",
+    "description": "Servo drive module WR-14",
+    "quantity": 5,
+    "location": "棚 C-04",
+    "depot": "Nagoya Central Stores",
+    "unit_cost": 180000,
+    "currency": "JPY",
+    "reorder_point": 2,
+    "lead_time_days": 5
+  }
+]

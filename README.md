@@ -1,334 +1,228 @@
 # OT PdM Intelligence
 
-Config-driven industrial maintenance application that combines predictive and prescriptive intelligence across multiple industry skins.
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-1f75ff?style=for-the-badge)](#technology-stack)
+[![License: MIT](https://img.shields.io/badge/License-MIT-ff3621?style=for-the-badge)](./LICENSE)
+[![Tests: Pytest](https://img.shields.io/badge/Tests-Pytest-14213d?style=for-the-badge)](#validation-and-tests)
 
-## What This App Is
+Config-driven predictive and prescriptive maintenance application built on Databricks (DABs + Jobs + DLT + MLflow + Apps) with a single codebase that supports multiple industry deployments.
 
-This app is intentionally both:
+## Table of Contents
 
-- **Predictive maintenance**: estimates anomaly risk and remaining useful life (RUL) from telemetry.
-- **Prescriptive maintenance**: recommends actions using risk predictions plus operational and financial context.
+- [Platform Overview](#platform-overview)
+- [Business and Technical Functionality](#business-and-technical-functionality)
+- [System Architecture](#system-architecture)
+- [End-to-End Code Flow](#end-to-end-code-flow)
+- [Repository Sections](#repository-sections)
+- [Data Layers and Key Tables](#data-layers-and-key-tables)
+- [API and UI Sections](#api-and-ui-sections)
+- [Quick Start (15 Minutes)](#quick-start-15-minutes)
+- [Deployment Modes](#deployment-modes)
+- [Simulator and Fault Injection](#simulator-and-fault-injection)
+- [Localization and Currency](#localization-and-currency)
+- [Genie and Retrieval](#genie-and-retrieval)
+- [Validation and Tests](#validation-and-tests)
+- [Technology Stack](#technology-stack)
+- [License](#license)
 
-## Why Predictive and Prescriptive Both
+## Platform Overview
 
-Predictive outputs answer "what is likely to happen."
-Prescriptive outputs answer "what should we do now."
+This application combines:
 
-Using only predictive signals often leaves an execution gap. Operations and finance still need:
+- predictive maintenance (anomaly + remaining useful life),
+- prescriptive maintenance (recommended action pathways),
+- financial impact context (avoided loss, intervention cost, risk exposure),
+- governed AI operations (Unity Catalog + lineage + model lifecycle traceability).
 
-- intervention timing,
-- cost and savings view,
-- expected downside if no action is taken,
-- and actionability under constraints (crew, windows, parts, work orders).
+It is designed to support executive, operator, and technical workflows from one integrated solution.
 
-The app closes this gap by computing recommendations and business impact on top of model outputs.
+## Business and Technical Functionality
 
-## Supported Industries
+### Predictive capabilities
 
-| Industry | Anchor account | Pipeline context |
-|---|---|---|
-| `mining` | Rio Tinto | Haul fleet and conveyor reliability |
-| `energy` | Alinta | Wind, BESS, transformer availability |
-| `water` | Sydney Water | Pumping and leak-risk operations |
-| `automotive` | Toyota | Press and weld line stop-risk reduction |
-| `semiconductor` | Renesas | Etch and lithography yield protection |
+- Asset-level anomaly and severity scoring
+- Remaining useful life trends
+- Fleet health rollups and critical risk visibility
+- Failure mode contextualization
 
-## APJ Site Coverage (Current)
+### Prescriptive capabilities
 
-Each industry now includes 4 APJ sites (20 total), with site-level currency and localized Geo/Genie behavior.
+- Intervention timing recommendations
+- Action options (approve, reject, defer)
+- Financial consequence framing per action path
+- Decision trace persistence for governance and operations
 
-| Industry | Site ID | Site Name | Country/Region | Native Currency |
-|---|---|---|---|---|
-| `mining` | `rio-pilbara` | Rio Pilbara Operations | Australia | `AUD` |
-| `mining` | `tata-odisha` | Tata Steel Diagnostic Operations | India | `INR` |
-| `mining` | `adaro-kalimantan` | PETRONAS Reliability Operations Hub | ASEAN | `SGD` |
-| `mining` | `posco-gangwon` | POSCO Gangwon Mining Hub | South Korea | `KRW` |
-| `water` | `sydney-water` | Sydney Water Western Hub | Australia | `AUD` |
-| `water` | `chennai-water` | CRIS Infrastructure Reliability Hub | India | `INR` |
-| `water` | `pub-singapore` | PUB Singapore Hub | ASEAN | `SGD` |
-| `water` | `seoul-water` | Seoul Water Reliability Hub | South Korea | `KRW` |
-| `automotive` | `toyota-motomachi` | Toyota Motomachi Plant | Japan | `JPY` |
-| `automotive` | `tata-pune` | Mahindra Telemetry Operations | India | `INR` |
-| `automotive` | `toyota-thailand` | VinFast IIoT Operations Hub | ASEAN | `SGD` |
-| `automotive` | `hyundai-ulsan` | Hyundai Ulsan Plant | South Korea | `KRW` |
-| `semiconductor` | `renesas-naka` | Renesas Naka Fab | Japan | `JPY` |
-| `semiconductor` | `vedanta-bengaluru` | Vedanta Bengaluru Fab | India | `INR` |
-| `semiconductor` | `infineon-penang` | Infineon Penang Fab | ASEAN | `SGD` |
-| `semiconductor` | `samsung-giheung` | Samsung Giheung Fab | South Korea | `KRW` |
-| `energy` | `alinta-hsdale` | Hornsdale Grid Storage | Australia | `AUD` |
-| `energy` | `adani-gujarat` | Reliance Network Reliability Hub | India | `INR` |
-| `energy` | `petronas-johor` | GPSC Maintenance Optimization Hub | ASEAN | `SGD` |
-| `energy` | `kepco-jeju` | KEPCO Jeju Grid Hub | South Korea | `KRW` |
+### Operational views
 
-## End-to-End Flow
+- Fleet overview and risk matrix
+- Asset drilldown and hierarchy context
+- Stream health and ingestion observability
+- Simulator-driven scenario rehearsal
+
+## System Architecture
 
 ```text
-OT source (simulator or Zerobus)
-  -> Bronze landing tables
-  -> Bronze DLT (sensor_readings, pi_tag_readings)
-  -> Silver DLT (sensor_features, ot_pi_aligned)
-  -> Gold DLT (feature_vectors, pdm_predictions, maintenance_alerts, financial_impact_events)
-  -> ML training/scoring jobs (anomaly + RUL via MLflow)
+Source systems (Simulator / Zerobus / PI / ERP context)
+  -> Bronze Delta landing
+  -> DLT Bronze normalization
+  -> DLT Silver feature engineering + OT/PI alignment
+  -> DLT Gold predictions + maintenance + finance outputs
+  -> MLflow training and scoring jobs
   -> FastAPI service layer
-  -> React UI (fleet, drilldown, model, finance, simulator)
+  -> React application (Fleet, Finance, Geo, Model, Simulator, Data Hub)
 ```
 
-## Architecture and Modules
+## End-to-End Code Flow
 
-### Core data and ML modules
+1. **Ingest**
+   - `core/zerobus_ingest/connector.py` and simulator feeds land telemetry into Bronze.
+2. **Normalize and align**
+   - `core/dlt/bronze.py` standardizes incoming records.
+   - `core/dlt/silver.py` computes features and OT/PI alignment.
+3. **Materialize business outputs**
+   - `core/dlt/gold.py` publishes predictions, alerts, and finance-aware outputs.
+4. **Model lifecycle**
+   - `core/ml/train.py` trains and registers models.
+   - `core/ml/batch_score.py` scores using registered aliases.
+5. **Serve to application**
+   - `app/server.py` assembles operational and executive payloads.
+6. **Render and action**
+   - `app/src/App.jsx` and component modules render sections and trigger actions.
+7. **Persist operator decisions**
+   - Action APIs write durable decision traces and refresh portfolio-level summaries.
 
-- `core/dlt/bronze.py`
-  - Normalizes landing streams and creates Bronze DLT tables.
-- `core/dlt/silver.py`
-  - Feature engineering and OT/PI alignment (`ot_pi_aligned`).
-- `core/dlt/gold.py`
-  - Prediction-ready vectors and business-facing outputs including `financial_impact_events`.
-- `core/ml/train.py`
-  - Per-industry model training workflow.
-- `core/ml/batch_score.py`
-  - Batch scoring pipeline using registered MLflow models.
-- `core/ml/features.py`
-  - Canonical feature read path and feature preparation logic.
+## Repository Sections
 
-### Ingestion and simulation modules
+| Section | Path | Purpose |
+|---|---|---|
+| App backend | `app/server.py` | API orchestration, SQL queries, simulator hooks, response shaping |
+| App frontend | `app/src/` | Fleet, Finance, Geo, Data Hub, Simulator, Model UX |
+| DLT pipelines | `core/dlt/` | Bronze/Silver/Gold transformations |
+| ML modules | `core/ml/` | Feature prep, training, scoring, model logic |
+| Simulator | `core/simulator/` | Telemetry and fault generation |
+| Bundle resources | `databricks.yml` | Jobs, pipelines, app, variables, schedules |
+| Bootstrap orchestration | `RUNME_BOOTSTRAP_ALL.py` | Multi-industry workspace setup and seed |
+| Automation scripts | `tools/` | Deploy, bootstrap, reconcile, seed utilities |
+| Industry configs | `industries/` | Per-industry prompts, seeds, deployment matrix |
+| Test suite | `tests/` | API, ML, simulator, pipeline and integration tests |
 
-- `core/zerobus_ingest/connector.py`
-  - First-mile OT connectivity integration.
-- `core/simulator/engine.py`
-  - Deterministic and fault-injected telemetry generation for demos.
-- `core/simulator/sdt.py`
-  - Swinging Door Trending compression logic at simulator stage.
+## Data Layers and Key Tables
 
-### Application and user interface modules
+### Bronze
 
-- `app/server.py`
-  - FastAPI backend, SQL orchestration, model and finance payload shaping, action APIs.
-- `app/src/App.jsx`
-  - React UI for fleet, model, simulator, and executive finance views.
-- `app/src/globals.css`
-  - Shared typography and layout styles.
+- Raw and normalized ingestion tables
+- PI and OT landing paths
+- Manual retrieval chunk storage
 
-### Deployment and bootstrap modules
+### Silver
 
-- `databricks.yml`
-  - Bundle resources (jobs, DLT, app deployment, variables).
-- `RUNME_BOOTSTRAP_ALL.py`
-  - One-run workspace bootstrap for all industries.
-- `tools/bootstrap_all_industries.py`
-  - Scripted bootstrap path.
-- `industries/deployment_matrix.yaml`
-  - Resource consistency matrix across industry skins.
-- `tools/reconcile_industry_matrix.py`
-  - Audit and reconcile resources against the matrix.
+- `sensor_features`
+- `ot_pi_aligned`
 
-## Detailed Code Flow
+### Gold
 
-1. **Telemetry landing**
-   - Simulator and Zerobus connector both land into canonical Bronze schema.
-2. **Bronze to Silver**
-   - DLT validates and standardizes raw rows.
-   - Silver computes features and creates alignment tables.
-3. **PI plus OT alignment**
-   - Silver table `ot_pi_aligned` links OT and PI streams using time proximity.
-   - `data_source` provenance is carried to UI and downstream logic.
-4. **Silver to Gold**
-   - Gold materializes feature vectors, predictions, and maintenance alerts.
-5. **Scoring and model lifecycle**
-   - Training jobs register models in MLflow.
-   - Scoring jobs read champion/current model aliases and write outputs.
-6. **OT plus Finance integration**
-   - Gold `financial_impact_events` combines prediction severity with planning and cost assumptions.
-   - Backend exposes computed impacts for executive and prescriptive panels.
-7. **App rendering**
-   - FastAPI returns operational and executive payloads.
-   - React renders model, maintenance, and finance decision views.
+- `feature_vectors`
+- `pdm_predictions`
+- `maintenance_alerts`
+- `financial_impact_events`
 
-## Predictive and Prescriptive Features in UI
+## API and UI Sections
 
-### Predictive
+### Backend APIs
 
-- Asset anomaly score and severity.
-- RUL degradation views.
-- Health rollups and alerting.
-- Failure mode contextualization.
+- Fleet and executive summary APIs
+- Geo site and asset APIs with currency-aware financial payloads
+- Simulator control APIs for scenario injection
+- Recommendation action APIs for approve/reject/defer workflow
+- Data discovery and concierge APIs
+- Agent/Genie chat APIs
 
-### Prescriptive
+### UI sections
 
-- Recommended intervention windows.
-- Expected failure cost vs planned intervention cost.
-- Expected avoided loss and action options.
-- Work-order and financial decision framing.
+- Fleet Health
+- Finance
+- Stoppage
+- Data Discovery Hub
+- Geo Map
+- Hierarchy (ISA-95)
+- Asset and Stream
+- Model
+- Simulator
 
-## Currency and Localization
+## Quick Start (15 Minutes)
 
-The app supports both currency adaptation and localization-aware presentation.
+### Prerequisites
 
-### Currency handling
+- Databricks CLI authenticated to target workspace
+- Python 3.10+
+- Node.js 18+ (for frontend build/update paths)
 
-- Supported display currencies include `USD`, `AUD`, `JPY`, `INR`, `SGD`, and `KRW` (plus automatic mode).
-- Backend computes native values and converts to selected display currency.
-- Financial cards and executive statements are rendered in selected currency format.
-- Industry assumptions are sector-specific, and Geo now supports site-level native currency defaults.
+### Recommended path
 
-### Localization behavior
+1. Clone repository.
+2. Run quickstart:
+   - `./RUNME_15_MIN.sh --target dev`
+3. Verify app and data:
+   - App is running in Databricks Apps.
+   - Bronze/Silver/Gold tables are populated.
+   - Finance and simulator pages show non-empty outputs.
 
-- UI includes localized labels and presentation logic (including Japanese title path in header rendering).
-- Backend keeps numeric and unit payloads normalized while frontend handles language-facing rendering.
-- Currency, date window, and narrative statements are designed for executive readability across regional audiences.
-- Language behavior is currency-driven for operator UX:
-  - `JPY` -> Japanese prompts/text
-  - `KRW` -> Korean prompts/text
-  - other currencies (`USD`, `AUD`, `INR`, `SGD`) -> English text with currency conversion
+## Deployment Modes
 
-### Geo intelligence currency behavior
+### Quickstart mode
 
-- Geo APIs (`/api/geo/sites`, `/api/geo/assets/{site_id}`) accept `currency` and return converted financial values in the selected display currency.
-- In `AUTO` mode, each Geo site uses its native currency (for example India sites use `INR`, ASEAN sites use `SGD`, and South Korea sites use `KRW`).
-- Geo asset list, site rollups, and drill-down financial cards update when the currency selector changes.
-- Fleet risk matrix now includes a site filter (`All sites` + per-site values) for faster operations triage.
-- Geo Genie requests include selected currency context so monetary responses remain aligned with UI selection.
-- For `JPY`, Geo quick prompts, alert phrasing, and Genie guidance are localized to Japanese.
-- For `KRW`, Geo quick prompts, alert phrasing, and Genie guidance are localized to Korean.
-- Gold finance output (`gold.financial_impact_events`) now carries `site_id`/`area_id`/`unit_id` context for site-level finance slicing across India/ASEAN expansions.
+- `./RUNME_15_MIN.sh --target dev`
+- Fast path to provision shared resources and bootstrap all industries.
 
-## PI plus OT Integration
+### Full mode
 
-PI simulation is integrated alongside OT ingestion, not as a separate disconnected demo path.
+- `python tools/deploy_bundle_and_bootstrap.py --mode full --target dev --industries mining,energy,water,automotive,semiconductor`
+- Deploys all configured industry variants and runs full bootstrap sequence.
 
-- PI rows land to `bronze.pi_simulated_tags`.
-- OT rows land to canonical OT Bronze source.
-- Silver `ot_pi_aligned` performs time-aligned join and records provenance (`BOTH`, `OT_ONLY`, `UNKNOWN`).
-- This provenance is used in downstream prescriptive context and model metadata displayed in the UI.
+## Simulator and Fault Injection
 
-## OT plus Finance Integration
+- Simulator can inject warning/critical scenarios for demonstration and validation.
+- Bulk injection supports all industries and table paths (bronze/silver/gold visibility).
+- Relevant endpoints and controls are wired through `app/server.py` and simulator UI actions.
 
-Prescriptive value is grounded in finance-aware outputs.
+## Localization and Currency
 
-- Gold table `gold.financial_impact_events` merges prediction context with operational planning inputs.
-- Output fields include:
-  - `event_type`,
-  - `maintenance_cost`,
-  - `expected_failure_cost`,
-  - `avoided_cost`,
-  - `total_event_cost`,
-  - and source/provenance metadata.
-- Finance page and advanced maintenance sections consume these fields to provide recommendation economics, not just risk scores.
+- Supported display currencies include `USD`, `AUD`, `JPY`, `INR`, `SGD`, `KRW`, plus `AUTO`.
+- Geo and financial sections are currency-aware and site-context-aware.
+- Language behavior can localize prompts and guidance for selected currency contexts.
 
-## App Pages
+## Genie and Retrieval
 
-- **Fleet page**: executive value, portfolio risk, decision cards.
-- **Drilldown page**: asset-level telemetry and risk context.
-- **ISA-95 page**: hierarchy navigation and rolled health.
-- **Factory map mode** (in ISA-95 page): textured physical-layout map with live status pins by industry, click-to-select asset context, and direct "Investigate in Genie" handoff.
-- **Stream page**: recent ingest rows with quality and protocol context.
-- **Model page**: model outputs and advanced maintenance panels.
-- **Simulator page**: fault controls, non-blocking inject/score pipeline, "Force critical" demo action, and ingestion configuration.
+- Industry Genie room routing is configured in `app/genie_rooms.json`.
+- Retrieval ingestion supports markdown/text/PDF from industry manuals and uploads.
+- Chunked references are stored and ranked for grounded responses with source traceability.
 
-## Alert Action Workflow and Lakebase Role
+## Validation and Tests
 
-Alert rows in the Fleet view now include in-row actions:
+Run core checks:
 
-- `Approve`
-- `Reject`
-- `Defer`
+- `python3 -m pytest tests/`
+- `cd app && npm run build`
 
-When an operator selects one of these actions:
+Representative coverage includes:
 
-1. The UI calls `POST /api/ui/recommendation/action`.
-2. The backend writes a decision event to the configured Zerobus target for operational traceability.
-3. The backend persists the durable decision record in Lakebase OLTP (`otpdm.operator_recommendation_actions` by default).
-4. The overview refreshes and the row is marked as `Actioned`.
+- API behavior (`tests/test_app_api.py`)
+- simulator behavior (`tests/test_simulator.py`)
+- DLT/feature paths (`tests/test_bronze.py`, `tests/test_features.py`)
+- ML pipeline logic (`tests/test_ml.py`)
+- integration workflow (`tests/integration/test_full_stack.py`)
 
-This is the role of Lakebase in the incident loop: it is the operational system-of-record for operator decisions, while Delta Gold predictions remain the analytical source for risk and alert generation.
+## Technology Stack
 
-## Genie Room Integration
+- Python 3.10+
+- FastAPI
+- React
+- Databricks Apps
+- Databricks Asset Bundles (DABs)
+- Delta Live Tables
+- MLflow
+- Unity Catalog
+- Pytest
 
-- The app resolves per-industry Genie room IDs from `app/genie_rooms.json`.
-- The "Maintenance Supervisor AI" header includes an "Open Genie room" deep link for the active industry.
-- The UI also shows mapping coverage across industries ("Genie rooms configured: X/5").
-- Hierarchy map/detail flows include "Investigate in Genie" for location-aware incident triage.
+## License
 
-## Manual Retrieval Pattern
-
-Manual retrieval is implemented as a lightweight grounded pattern:
-
-- Ingestion from `industries/<skin>/manuals` and UI uploads.
-- Text extraction for markdown, text, and PDF files.
-- Chunk storage in `pdm_<industry>.bronze.manual_reference_chunks`.
-- Prompt-time ranking by token overlap and context.
-- Source snippets included in agent responses for traceability.
-
-## Quick Start
-
-1. Validate bundle:
-   - `databricks bundle validate --target dev -p DEFAULT`
-2. Deploy bundle:
-   - `databricks bundle deploy --target dev -p DEFAULT`
-3. Run bootstrap notebook:
-   - `RUNME_BOOTSTRAP_ALL.py` in Databricks.
-4. Verify data in Bronze, Silver, Gold, and finance tables.
-5. Open app endpoint from Databricks Apps.
-
-## Bootstrap Notes
-
-`RUNME_BOOTSTRAP_ALL.py` provisions all configured industries in one run:
-
-- catalog and schema creation,
-- core DDL application (`core/catalog/schema.sql`),
-- seed and planning data,
-- finance history backfill,
-- grants,
-- optional trigger of training/scoring jobs.
-
-Key widgets:
-
-- `industries_csv`
-- `history_days`
-- `grant_principal`
-- `trigger_jobs`
-- `reset_existing`
-- `seed_demo_planning_case`
-
-## Industry Deploy and Reconcile
-
-Deploy a specific industry:
-
-- `databricks bundle deploy --target dev -p DEFAULT --var industry=mining`
-- `databricks bundle deploy --target dev -p DEFAULT --var industry=energy`
-- `databricks bundle deploy --target dev -p DEFAULT --var industry=water`
-- `databricks bundle deploy --target dev -p DEFAULT --var industry=automotive`
-- `databricks bundle deploy --target dev -p DEFAULT --var industry=semiconductor`
-
-For app-only refreshes in Databricks Apps (without uploading local virtual environments):
-
-- Sync a clean source path:
-  - `databricks sync -p DEFAULT app /Workspace/Users/<user>/apj-multi-industry-pdm/app-fresh-clean --exclude ".venv" --exclude "node_modules" --exclude "package.json" --exclude "package-lock.json"`
-- Deploy app from that path:
-  - `databricks apps deploy ot-pdm-app -p DEFAULT --source-code-path "/Workspace/Users/<user>/apj-multi-industry-pdm/app-fresh-clean"`
-
-Resource consistency checks:
-
-- Dry run:
-  - `python tools/reconcile_industry_matrix.py --owner <your-user>`
-- Apply reconcile:
-  - `python tools/reconcile_industry_matrix.py --owner <your-user> --apply`
-
-## Local Development and Validation
-
-- Backend:
-  - `cd app && uvicorn server:app --reload --port 8000`
-- Frontend:
-  - `cd app && npm install && npm run dev`
-- Build verification:
-  - `cd app && npm run build`
-- Tests:
-  - `python3 -m pytest tests/`
-
-## Summary
-
-This project is a single multi-industry codebase for reliability intelligence that:
-
-- predicts failures and degradation,
-- prescribes maintenance decisions with business context,
-- aligns PI and OT data streams,
-- and translates model signals into finance-aware operational action.
+This project is licensed under the MIT License. See [`LICENSE`](./LICENSE).

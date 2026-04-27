@@ -1,0 +1,22 @@
+[
+  {
+    "equipment_id": "WT-004",
+    "shift_label": "Morning",
+    "shift_start": "2026-03-24T22:00:00Z",
+    "shift_end": "2026-03-25T06:00:00Z",
+    "planned_downtime_hours": 1.5,
+    "maintenance_window_start": "2026-03-25T04:00:00Z",
+    "maintenance_window_end": "2026-03-25T05:30:00Z",
+    "crew_available": true
+  },
+  {
+    "equipment_id": "BESS-01",
+    "shift_label": "Afternoon",
+    "shift_start": "2026-03-25T06:00:00Z",
+    "shift_end": "2026-03-25T14:00:00Z",
+    "planned_downtime_hours": 2.0,
+    "maintenance_window_start": "2026-03-25T12:00:00Z",
+    "maintenance_window_end": "2026-03-25T14:00:00Z",
+    "crew_available": true
+  }
+]

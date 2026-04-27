@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OT PdM | 15-Minute Narrative Talk Track</title>
+  <style>
+    @font-face {
+      font-family: "BarlowLocal";
+      src: url("./assets/fonts/Barlow-Regular.ttf") format("truetype");
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "BarlowLocal";
+      src: url("./assets/fonts/Barlow-SemiBold.ttf") format("truetype");
+      font-weight: 600;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "RobotoLocal";
+      src: url("./assets/fonts/Roboto-Variable.ttf") format("truetype");
+      font-weight: 100 900;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    :root {
+      --db-red: #ff3621;
+      --db-blue: #1f75ff;
+      --db-navy: #14213d;
+      --db-green: #00a972;
+      --bg: #f6f9ff;
+      --bg-soft: #ffffff;
+      --line: #d9e3f2;
+      --text: #1c2434;
+      --text-soft: #4f5f79;
+      --shadow: 0 14px 36px rgba(20, 33, 61, 0.09);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: linear-gradient(180deg, #ffffff 0%, var(--bg) 100%);
+      color: var(--text);
+      font-family: "RobotoLocal", "Roboto", Arial, sans-serif;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      background: #fffffff2;
+      backdrop-filter: blur(6px);
+      border-bottom: 1px solid var(--line);
+      padding: 14px 20px;
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .brand {
+      font-family: "BarlowLocal", "Barlow", Arial, sans-serif;
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--db-navy);
+      letter-spacing: 0.2px;
+    }
+
+    .clock {
+      color: var(--text-soft);
+      font-weight: 500;
+      font-size: 14px;
+    }
+
+    .btns {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--db-navy);
+      border-radius: 10px;
+      padding: 9px 12px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    button:hover {
+      border-color: var(--db-blue);
+    }
+
+    .wrap {
+      max-width: 1180px;
+      margin: 22px auto 34px;
+      padding: 0 18px;
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 16px;
+    }
+
+    .rail {
+      background: var(--bg-soft);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      padding: 12px;
+      height: fit-content;
+      position: sticky;
+      top: 86px;
+    }
+
+    .rail h3 {
+      margin: 6px 8px 12px;
+      font-family: "BarlowLocal", "Barlow", Arial, sans-serif;
+      color: var(--db-navy);
+      font-size: 18px;
+    }
+
+    .step {
+      border: 1px solid transparent;
+      border-radius: 12px;
+      padding: 10px 11px;
+      margin: 7px 0;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      background: #fff;
+    }
+
+    .step:hover {
+      border-color: #bfd6ff;
+      background: #f8fbff;
+    }
+
+    .step.active {
+      border-color: #9ec1ff;
+      background: #eef5ff;
+      box-shadow: inset 0 0 0 1px #caddff;
+    }
+
+    .step .time {
+      font-size: 11px;
+      color: var(--db-blue);
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+    }
+
+    .step .label {
+      margin-top: 4px;
+      font-size: 14px;
+      color: var(--text);
+      font-weight: 600;
+      line-height: 1.3;
+    }
+
+    .stage {
+      background: var(--bg-soft);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      padding: 24px 28px;
+    }
+
+    .pill {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.25px;
+      background: #fff0ee;
+      color: #b12b17;
+      border: 1px solid #ffd0ca;
+      margin-bottom: 10px;
+    }
+
+    .intro-badge {
+      display: none;
+      margin-left: 8px;
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.25px;
+      background: #edf8f3;
+      color: #127a56;
+      border: 1px solid #b9ebd6;
+      vertical-align: middle;
+    }
+
+    .intro-badge.active {
+      display: inline-block;
+    }
+
+    .metrics-badge {
+      display: none;
+      margin-left: 8px;
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.25px;
+      background: #eef4ff;
+      color: #1f4ca6;
+      border: 1px solid #c7d9ff;
+      vertical-align: middle;
+    }
+
+    .metrics-badge.active {
+      display: inline-block;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-family: "BarlowLocal", "Barlow", Arial, sans-serif;
+      font-size: 34px;
+      line-height: 1.15;
+      color: var(--db-navy);
+    }
+
+    .subtitle {
+      margin: 0 0 14px;
+      font-size: 17px;
+      line-height: 1.45;
+      color: var(--text-soft);
+    }
+
+    .section {
+      margin-top: 16px;
+      border-top: 1px solid var(--line);
+      padding-top: 14px;
+    }
+
+    .section h2 {
+      margin: 0 0 8px;
+      font-family: "BarlowLocal", "Barlow", Arial, sans-serif;
+      font-size: 22px;
+      color: var(--db-navy);
+    }
+
+    .talk {
+      font-size: 16px;
+      line-height: 1.7;
+      margin: 0 0 10px;
+    }
+
+    .screen-chip {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid #d4e4ff;
+      background: #f4f9ff;
+      color: #184ea8;
+      border-radius: 999px;
+      padding: 5px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      margin: 4px 6px 2px 0;
+    }
+
+    .cue-box {
+      margin-top: 10px;
+      background: #f8fbff;
+      border: 1px solid #dce9ff;
+      border-radius: 12px;
+      padding: 10px 12px;
+      color: #2c4470;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .cue-box strong {
+      color: var(--db-navy);
+      font-family: "BarlowLocal", "Barlow", Arial, sans-serif;
+      font-size: 14px;
+    }
+
+    .script-box {
+      margin-top: 10px;
+      background: #ffffff;
+      border: 1px solid #dce9ff;
+      border-radius: 12px;
+      padding: 12px 14px;
+      color: #1f2f4d;
+      font-size: 15px;
+      line-height: 1.72;
+      white-space: pre-line;
+    }
+
+    .script-box.hidden {
+      display: none;
+    }
+
+    .progress-wrap {
+      margin-top: 16px;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px 12px;
+    }
+
+    .progress-track {
+      width: 100%;
+      height: 8px;
+      border-radius: 999px;
+      background: #e8eef8;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--db-blue), var(--db-green));
+      transition: width 0.25s ease;
+    }
+
+    .progress-text {
+      margin-top: 8px;
+      color: var(--text-soft);
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .footer-note {
+      margin-top: 18px;
+      padding-top: 12px;
+      border-top: 1px dashed #d8e3f6;
+      font-size: 13px;
+      color: var(--text-soft);
+      line-height: 1.6;
+    }
+
+    .summary {
+      margin-top: 14px;
+      border: 1px solid #d8e6ff;
+      border-radius: 12px;
+      background: #fbfdff;
+      padding: 12px 14px;
+    }
+
+    .summary h3 {
+      margin: 0 0 8px;
+      font-family: "BarlowLocal", "Barlow", Arial, sans-serif;
+      font-size: 16px;
+      color: var(--db-navy);
+    }
+
+    .summary details {
+      margin: 8px 0;
+      border: 1px solid #e0ebff;
+      border-radius: 10px;
+      background: #fff;
+      padding: 8px 10px;
+    }
+
+    .summary summary {
+      cursor: pointer;
+      font-weight: 700;
+      color: #1d3f77;
+      font-size: 13px;
+    }
+
+    .summary ul {
+      margin: 8px 0 0 18px;
+      padding: 0;
+      font-size: 13px;
+      color: #2e3c56;
+      line-height: 1.5;
+    }
+
+    @media (max-width: 980px) {
+      .wrap {
+        grid-template-columns: 1fr;
+      }
+      .rail {
+        position: static;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand">Databricks OT PdM | 15-Minute Narrative</div>
+    <div class="clock" id="clockText">Segment 1 of 10</div>
+    <div class="btns">
+      <button id="scriptToggleBtn" type="button">Show Speaker Script</button>
+      <button id="prevBtn" type="button">Previous</button>
+      <button id="nextBtn" type="button">Next</button>
+    </div>
+  </div>
+
+  <main class="wrap">
+    <aside class="rail" id="rail"></aside>
+
+    <section class="stage">
+      <span class="pill" id="timePill">0:00-1:30</span>
+      <span class="intro-badge" id="introBadge">Hackathon Intro (30s)</span>
+      <span class="metrics-badge" id="metricsBadge">UC Metrics: Governed Executive KPI Semantics</span>
+      <h1 id="titleText"></h1>
+      <p class="subtitle" id="subtitleText"></p>
+
+      <div class="section">
+        <h2>Screen Focus</h2>
+        <div id="screenChips"></div>
+      </div>
+
+      <div class="section">
+        <h2>Narrative</h2>
+        <p class="talk" id="talkText"></p>
+        <div class="cue-box" id="cueText"></div>
+        <div class="script-box hidden" id="scriptText"></div>
+      </div>
+
+      <div class="progress-wrap">
+        <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+        <div class="progress-text" id="progressText"></div>
+      </div>
+
+      <div class="footer-note">
+        Presenter flow: keep one story from business outcomes to operator execution to technical confidence.
+        Multi-industry portability and currency/language localization are presented as scale and adoption accelerators.
+      </div>
+
+      <div class="summary">
+        <h3>Platform Summary for Q&A</h3>
+
+        <details>
+          <summary>Catalogs, Schemas, App</summary>
+          <ul>
+            <li>App: <code>ot-pdm-app</code></li>
+            <li>Primary catalog: <code>classic_stable_zz47bh_catalog</code> (configured across all industry skins)</li>
+            <li>Schemas: <code>bronze</code>, <code>silver</code>, <code>gold</code>, <code>lakebase</code>, <code>models</code>, <code>finance</code>, <code>agent_tools</code></li>
+          </ul>
+        </details>
+
+        <details>
+          <summary>Pipelines and Jobs</summary>
+          <ul>
+            <li>Pipeline: <code>ot-pdm-dlt-${var.industry}</code> (continuous; bronze/silver/gold libraries)</li>
+            <li>Jobs: <code>ot-pdm-zerobus-connector-${var.industry}</code>, <code>ot-pdm-scoring-${var.industry}</code>, <code>ot-pdm-training-${var.industry}</code></li>
+            <li>Jobs: <code>ot-pdm-financial-backfill-${var.industry}</code>, <code>ot-pdm-workspace-bootstrap</code></li>
+            <li>Jobs: <code>ot-pdm-erp-bdc-seed-refresh</code>, <code>ot-pdm-demo-scheduled-refresh</code>, <code>ot-pdm-dlt-daily-refresh-all-industries</code></li>
+          </ul>
+        </details>
+
+        <details>
+          <summary>Models and Experiment</summary>
+          <ul>
+            <li>MLflow experiment path: <code>/Shared/ot-pdm-intelligence/${var.industry}</code></li>
+            <li>Registered anomaly model pattern: <code>${catalog}.models.ot_pdm_anomaly_${equipment_id}</code></li>
+            <li>Registered RUL model pattern: <code>${catalog}.models.ot_pdm_rul_${equipment_id}</code></li>
+            <li>Model serving in scoring uses <code>champion</code> alias when available</li>
+          </ul>
+        </details>
+
+        <details>
+          <summary>Core Tables</summary>
+          <ul>
+            <li>Bronze: <code>sensor_readings</code>, <code>pravin_zerobus</code>, <code>pi_simulated_tags</code>, <code>asset_metadata</code>, <code>erp_bdc_cost_centers</code>, <code>erp_bdc_work_orders</code></li>
+            <li>Silver: <code>sensor_features</code>, <code>ot_pi_aligned</code></li>
+            <li>Gold: <code>feature_vectors</code>, <code>pdm_predictions</code>, <code>maintenance_alerts</code>, <code>financial_impact_events</code></li>
+            <li>Lakebase: <code>parts_inventory</code>, <code>maintenance_schedule</code>, <code>work_orders</code>, <code>asset_feature_vectors</code></li>
+            <li>Finance: <code>pm_financial_daily</code>, <code>pm_site_financial_daily</code>, <code>pm_line_risk_30d</code>, <code>supplier_quality_failure_daily</code>, <code>pm_demo_planning_case</code>, <code>pm_bootstrap_runs</code></li>
+          </ul>
+        </details>
+
+        <details>
+          <summary>UC Metrics Used in Executive Screen</summary>
+          <ul>
+            <li>Portfolio KPIs: <code>fleet_health_score</code>, <code>critical_assets</code>, <code>asset_count</code>, <code>avoided_cost</code></li>
+            <li>Executive KPIs: <code>ebit_saved</code>, <code>roi_pct</code>, <code>payback_days</code>, <code>ebit_margin_bps</code>, <code>mom_ebit_pct</code>, <code>yoy_ebit_pct</code></li>
+            <li>Outlook KPIs: protected value with actions, protected value without actions, at-risk if deferred, run-rate to target, confidence</li>
+            <li>Defined in backend: <code>app/server.py</code> in <code>_overview()</code> and <code>_executive_value()</code></li>
+            <li>Main UC table sources: <code>gold.financial_impact_events</code>, <code>finance.pm_financial_daily</code>, <code>finance.pm_site_financial_daily</code></li>
+          </ul>
+        </details>
+
+        <details>
+          <summary>Genie Spaces (Room IDs)</summary>
+          <ul>
+            <li>Maintenance Genie rooms: mining <code>01f128443c791e008e51948fc38ec1e2</code>, energy <code>01f128443cb51ea782473b9097f957ac</code>, water <code>01f128443cf81733a5c655cceb2ba133</code>, automotive <code>01f128443d331797aca11e190d0989c2</code>, semiconductor <code>01f128443d6c1e3c96a94bcc06db8d05</code></li>
+            <li>Finance Genie rooms: mining <code>01f12d77e6781f4cb4522fcd99f63b02</code>, energy <code>01f12d77e74713c78020fa26b776242b</code>, water <code>01f12d77e82910dfa4682eede99aecf3</code>, automotive <code>01f12d77e8f31d57ab35bacae5c96e51</code>, semiconductor <code>01f12d77e9d1197aa3bac02a47e61ae9</code></li>
+          </ul>
+        </details>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const segments = [
+      {
+        time: "0:00-1:30",
+        title: "Executive Opening: Decision Velocity and Margin Protection",
+        subtitle: "Set the frame: predictive and prescriptive maintenance in one operating rhythm.",
+        screens: ["Fleet", "Executive KPI tiles", "Top alerts"],
+        talk: "Start with a 30-second context setting for the hackathon judges: this is a predictive and prescriptive maintenance solution spanning mining, utilities, energy, semiconductor, and manufacturing. Share that the design is grounded in real field opportunities and shaped by customer feedback. Clarify that in this demo we simulate OT data, historian data, and SAP BDC ERP data. Then open the value promise: this experience helps operations and business teams act earlier on reliability risk and convert each action into measurable value.",
+        cue: "Say: We are presenting a field-informed predictive and prescriptive maintenance solution that turns reliability signals into business outcomes.",
+        script: "Thanks judges, and thanks everyone for the opportunity to present. In the next 15 minutes, we will walk through a predictive and prescriptive maintenance solution designed for mining, utilities, energy, semiconductor, and manufacturing. This demo is grounded in actual field opportunities and informed by real customer feedback, so the workflow reflects how teams operate in production environments.\n\nIn this demonstration environment, we simulate OT data, historian data, and SAP BDC ERP data so you can see the full operational flow end to end.\n\nWhat I want to show you is a single operating experience that helps teams turn reliability signals into confident, timely maintenance decisions with clear business impact.\n\nWe start here on the Fleet view. This is the executive and operational heartbeat of the environment: overall fleet health, the assets that need immediate attention, and the actions that matter right now.\n\nThe key outcome is alignment. Leadership can see portfolio-level performance. Operations can see exactly where to focus first. Engineering can see the decision context behind each priority.\n\nAs we move through the workflow, you will see one connected story: detect risk early, prioritize intervention, quantify impact, and capture action outcomes."
+      },
+      {
+        time: "1:30-3:00",
+        title: "Fleet Overview: Portfolio Clarity",
+        subtitle: "Move from broad KPI context to prioritized execution focus.",
+        screens: ["Fleet Health", "Critical Assets", "Recent Alerts", "Asset filters"],
+        talk: "Walk through fleet health and critical asset indicators, then move into the alert list. Emphasize that teams can prioritize the assets that create the largest operational and financial effect. Highlight that leadership gets portfolio clarity while site teams receive a focused action queue.",
+        cue: "Say: This is where every stakeholder sees the same priorities and the same outcome lens.",
+        script: "From this same page, I move into the risk and alert context. You can see the most relevant issues first, with clear severity and immediate triage value.\n\nThis gives teams a high-confidence daily rhythm. Morning operations reviews become faster because everyone starts from the same prioritized list. Program leaders can track movement in risk posture over time, and plant teams can execute from the exact same source of truth.\n\nWhen I click into an asset from here, we keep that continuity: portfolio context at the top, equipment-level action context underneath."
+      },
+      {
+        time: "3:00-4:30",
+        title: "Finance and Executive Story: Reliability in Business Terms",
+        subtitle: "Connect technical risk to EBIT-oriented decisions immediately after fleet priorities.",
+        screens: ["Finance", "Value statement", "Scenario panel", "Executive summary"],
+        talk: "Move directly from fleet priorities into finance outcomes. Explain the metric families: portfolio health metrics tell where risk is concentrated, financial impact metrics quantify value capture, and outlook metrics show projected protection versus deferral exposure. Call out that these executive KPIs are Unity Catalog-backed and consistently defined in backend business semantics.",
+        cue: "Say: These executive KPIs are UC-backed, consistently defined, and decision-ready.",
+        script: "Right after prioritizing fleet risk, we move into Finance. This keeps the conversation anchored in executive outcomes.\n\nHere we connect intervention planning with avoided loss, intervention cost, and net benefit. That creates a shared language across operations leaders and business leaders.\n\nThis executive screen uses a consistent Unity Catalog metrics layer with three metric families.\n\nFirst, portfolio metrics. Fleet health score, critical assets, and asset count show risk concentration and operating posture.\n\nSecond, value realization metrics. EBIT saved, ROI, payback days, and EBIT margin basis points show whether interventions are creating measurable business return.\n\nThird, forward-looking metrics. Protected value with actions, protected value without actions, and at-risk-if-deferred quantify what the next planning window can deliver under different action choices.\n\nWe also include momentum metrics such as month-over-month and year-over-year movement to show trajectory, not just a single point in time.\n\nThese metrics are defined in backend semantics and sourced from governed UC tables such as gold.financial_impact_events, finance.pm_financial_daily, and finance.pm_site_financial_daily. They are computed and shaped in executive value logic so every view uses the same business definition.\n\nWhy we need this: without a governed metric layer, each function interprets performance differently. With this model, leaders get a consistent decision baseline, operators get financially aligned priorities, and review meetings move faster because everyone is working from the same metric language."
+      },
+      {
+        time: "4:30-6:00",
+        title: "Line Stoppage and Data Hub: Operational Impact and Trusted Insight",
+        subtitle: "Follow finance with line-level interruption context and data discovery.",
+        screens: ["Stoppage", "Timeline", "Data Hub", "Discovery + concierge"],
+        talk: "Show line stoppage patterns right after finance to connect value with operational events. Then transition to Data Hub to demonstrate how teams quickly discover trusted datasets for investigation and follow-up decisions.",
+        cue: "Say: We connect financial effect to line-level events and actionable data.",
+        script: "From Finance, we go straight into line stoppage and Data Hub.\n\nOn Stoppage, teams can track interruption patterns and understand operational impact over time at the line level. On Data Hub, teams can discover and use trusted datasets quickly for deeper analysis.\n\nTogether, these views create a strong operating loop. You can connect value impact to production events and move directly into guided analysis with trusted data products."
+      },
+      {
+        time: "6:00-7:00",
+        title: "Geo View: Site-Oriented Coordination",
+        subtitle: "Bring the narrative to location-aware execution context.",
+        screens: ["Geo map", "Site drill-in", "Geo cards"],
+        talk: "Use Geo next to show where action is concentrated and how teams coordinate by site context. Emphasize that this supports practical dispatch and executive visibility across locations.",
+        cue: "Say: Priorities are now visible in the exact locations where teams execute.",
+        script: "Next we move to Geo. This gives a location-aware view of where decisions need to be executed.\n\nTeams can see site posture quickly, compare priorities, and coordinate response with local context in mind. Leaders also get a clear operational picture of where performance and risk are concentrated."
+      },
+      {
+        time: "7:00-8:00",
+        title: "Hierarchy View: Structured Operations Flow",
+        subtitle: "Align execution with ISA-95 structure from site to equipment.",
+        screens: ["Hier.", "ISA-95 tree", "Site → Area → Unit → Equipment"],
+        talk: "Show hierarchy right after Geo to demonstrate how decisions flow through the exact structure operations teams use daily. This makes planning and handoff clear across shifts and functions.",
+        cue: "Say: Decisions follow the same operating structure as the plant itself.",
+        script: "From Geo, we go into Hierarchy. Here the workflow aligns with site, area, unit, and equipment structure exactly the way teams run the plant.\n\nThis makes dispatch, planning, and escalation clearer because everyone works from the same operational framework."
+      },
+      {
+        time: "8:00-9:15",
+        title: "Asset View: Explainable Risk at Equipment Level",
+        subtitle: "Connect portfolio context to precise asset action confidence.",
+        screens: ["Asset detail", "Anomaly score", "RUL window", "Sensor trends"],
+        talk: "Drill into one asset and narrate why it is prioritized, when intervention is best, and what signals support the recommendation. Keep this tied to action planning and execution confidence.",
+        cue: "Say: Each asset card gives the why, the when, and the expected impact of intervention.",
+        script: "Now we are in the Asset view. This is where decision confidence gets very practical.\n\nFor this asset, we see condition, risk trajectory, and timing guidance in one place. You can discuss intervention windows with maintenance planners immediately. You can also align reliability teams and operators around one interpretation of what the signal means operationally.\n\nThis helps teams prioritize with precision. The conversation becomes: what is the highest-value action in this window, for this asset, under current operating conditions."
+      },
+      {
+        time: "9:15-10:15",
+        title: "Stream: Data Trust and Operational Readiness",
+        subtitle: "Show source and quality context behind the active decisions.",
+        screens: ["Stream", "Quality", "Source protocol", "Latest telemetry"],
+        talk: "Review telemetry stream quality and source context so teams understand the reliability of the live signal layer behind recommendations.",
+        cue: "Say: Reliable decisions begin with transparent telemetry quality and lineage.",
+        script: "Now on Stream, we are looking at live telemetry context. This helps teams maintain trust and tempo because they can see source and quality metadata alongside recent readings.\n\nIn practice, this creates smooth handoffs between operations, reliability engineering, and data teams. Everyone can inspect the current signal posture quickly and keep decisions moving with confidence."
+      },
+      {
+        time: "10:15-11:30",
+        title: "Model View: Predictive Signals to Prescriptive Guidance",
+        subtitle: "Translate model intelligence into clear maintenance timing.",
+        screens: ["Model", "Prediction outputs", "Top contributing signals"],
+        talk: "Show model outputs and explain how they support intervention timing in practical operational terms. Keep the focus on decision quality and execution readiness.",
+        cue: "Say: Model intelligence arrives in a format teams can execute today.",
+        script: "On the Model page, we bring predictive intelligence directly into daily execution.\n\nHere we see risk scoring and timing insights in a format that supports maintenance action planning. Teams can move from signal interpretation to scheduling conversations in the same workflow.\n\nThis is where model value becomes operational value. The output arrives in a way that supports planners, engineers, and operators together, with a shared view of urgency and expected effect."
+      },
+      {
+        time: "11:30-15:00",
+        title: "Simulator and Closing: Rehearsal, Governance, and Scale",
+        subtitle: "Finish with scenario rehearsal and the production-ready operating model close.",
+        screens: ["Sim", "Inject scenario", "Score + refresh", "Approve / Reject / Defer", "Executive close"],
+        talk: "Close on Simulator as the final section. Use a live scenario to show response dynamics, then highlight decision capture and governance. Clarify that in production environments ingestion is delivered through Lakeflow Connect or Zerobus, including partner ecosystems such as AVEVA, Soracom, Litmus, and Ignition.",
+        cue: "Say: Simulator is for rehearsal; production ingest comes from Lakeflow Connect or Zerobus with partner systems.",
+        script: "We close with Simulator. This is our rehearsal and readiness layer.\n\nI can inject a scenario and watch how the system responds through the same downstream views teams use in normal operations. That gives us a practical way to validate playbooks, tune thresholds, and build confidence before broader rollout moments.\n\nIn this demo, we simulate OT data, historian data, and SAP BDC ERP data to represent the complete operating cycle.\n\nIn live production environments, teams do not rely on simulator feeds. They ingest through Lakeflow Connect or Zerobus, and they can connect through partner ecosystems such as AVEVA, Soracom, Litmus, and Ignition.\n\nFrom here, we also capture decisions directly in workflow with actions such as approve, reject, or defer, so each decision becomes part of an auditable operational record.\n\nAt this point in the flow, you have full continuity: signal, recommendation, financial context, action, and learning.\n\nI will close with three points. First, this is a practical operating model for reliability-led value creation. Second, it gives every role one shared rhythm: prioritize, act, and measure impact. Third, it scales cleanly across regions and environments, with localization support such as currency and language adaptation to accelerate adoption.\n\nThe result is a stronger decision cycle: earlier action, better operational continuity, and clearer business outcomes from maintenance programs.\n\nIf this aligns with your priorities, the next step is a focused pilot rhythm: baseline current KPIs, run this workflow in production cadence, and review value movement together in weekly checkpoints."
+      }
+    ];
+
+    const rail = document.getElementById("rail");
+    const timePill = document.getElementById("timePill");
+    const introBadge = document.getElementById("introBadge");
+    const metricsBadge = document.getElementById("metricsBadge");
+    const titleText = document.getElementById("titleText");
+    const subtitleText = document.getElementById("subtitleText");
+    const screenChips = document.getElementById("screenChips");
+    const talkText = document.getElementById("talkText");
+    const cueText = document.getElementById("cueText");
+    const scriptText = document.getElementById("scriptText");
+    const scriptToggleBtn = document.getElementById("scriptToggleBtn");
+    const clockText = document.getElementById("clockText");
+    const progressFill = document.getElementById("progressFill");
+    const progressText = document.getElementById("progressText");
+    const prevBtn = document.getElementById("prevBtn");
+    const nextBtn = document.getElementById("nextBtn");
+
+    let idx = 0;
+    let scriptVisible = false;
+
+    function renderRail() {
+      rail.innerHTML = '<h3>15-Minute Flow</h3>' + segments.map((s, i) => `
+        <div class="step ${i === idx ? "active" : ""}" data-i="${i}">
+          <div class="time">${s.time}</div>
+          <div class="label">${s.title}</div>
+        </div>
+      `).join("");
+      rail.querySelectorAll(".step").forEach((el) => {
+        el.addEventListener("click", () => {
+          idx = Number(el.dataset.i);
+          renderStage();
+        });
+      });
+    }
+
+    function renderStage() {
+      const s = segments[idx];
+      timePill.textContent = s.time;
+      introBadge.classList.toggle("active", idx === 0);
+      metricsBadge.classList.toggle("active", idx === 2);
+      titleText.textContent = s.title;
+      subtitleText.textContent = s.subtitle;
+      talkText.textContent = s.talk;
+      cueText.innerHTML = "<strong>Presenter Cue:</strong> " + s.cue;
+      scriptText.textContent = s.script || "";
+      scriptText.classList.toggle("hidden", !scriptVisible);
+      scriptToggleBtn.textContent = scriptVisible ? "Hide Speaker Script" : "Show Speaker Script";
+      screenChips.innerHTML = s.screens.map((x) => `<span class="screen-chip">${x}</span>`).join("");
+      clockText.textContent = `Segment ${idx + 1} of ${segments.length}`;
+      const pct = ((idx + 1) / segments.length) * 100;
+      progressFill.style.width = `${pct}%`;
+      progressText.textContent = `Progress: ${Math.round(pct)}% complete`;
+      renderRail();
+    }
+
+    prevBtn.addEventListener("click", () => {
+      idx = Math.max(0, idx - 1);
+      renderStage();
+    });
+
+    nextBtn.addEventListener("click", () => {
+      idx = Math.min(segments.length - 1, idx + 1);
+      renderStage();
+    });
+
+    scriptToggleBtn.addEventListener("click", () => {
+      scriptVisible = !scriptVisible;
+      renderStage();
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowLeft") {
+        idx = Math.max(0, idx - 1);
+        renderStage();
+      } else if (e.key === "ArrowRight") {
+        idx = Math.min(segments.length - 1, idx + 1);
+        renderStage();
+      }
+    });
+
+    renderStage();
+  </script>
+</body>
+</html>

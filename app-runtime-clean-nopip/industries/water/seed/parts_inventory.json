@@ -1,0 +1,24 @@
+[
+  {
+    "part_number": "PMP-BRG-PS07",
+    "description": "Pump bearing kit for PS-07",
+    "quantity": 8,
+    "location": "Rack W-12",
+    "depot": "Prospect Depot",
+    "unit_cost": 940,
+    "currency": "AUD",
+    "reorder_point": 3,
+    "lead_time_days": 3
+  },
+  {
+    "part_number": "MTR-SEAL-03",
+    "description": "Meter seal and coupling kit",
+    "quantity": 20,
+    "location": "Rack W-3",
+    "depot": "CBD Depot",
+    "unit_cost": 75,
+    "currency": "AUD",
+    "reorder_point": 8,
+    "lead_time_days": 2
+  }
+]

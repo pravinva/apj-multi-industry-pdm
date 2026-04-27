@@ -12,7 +12,7 @@ const INDUSTRY_META = {
 };
 
 const APJ_BOUNDS = [
-  [60, -50],
+  [65, -30],
   [155, 45]
 ];
 
@@ -112,7 +112,7 @@ export default function GeoMap({
       {
         padding: { top: 84, right: 52, bottom: 52, left: 52 },
         duration: 700,
-        maxZoom: 4.9
+        maxZoom: 6.2
       }
     );
   };
@@ -163,10 +163,14 @@ export default function GeoMap({
           <Map
             ref={mapRef}
             mapLib={maplibregl}
-            initialViewState={{ longitude: 112, latitude: 2, zoom: 3.3 }}
+            initialViewState={{ longitude: 112, latitude: 6, zoom: 4.1 }}
             maxBounds={APJ_BOUNDS}
             minZoom={2.6}
-            maxZoom={7.5}
+            maxZoom={10.5}
+            scrollZoom
+            dragPan
+            touchZoomRotate
+            doubleClickZoom
             dragRotate={false}
             touchPitch={false}
             mapStyle={style}

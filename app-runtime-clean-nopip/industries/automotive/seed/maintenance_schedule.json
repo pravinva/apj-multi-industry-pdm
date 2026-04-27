@@ -1,0 +1,22 @@
+[
+  {
+    "equipment_id": "TP-07",
+    "shift_label": "Shift A",
+    "shift_start": "2026-03-24T23:00:00Z",
+    "shift_end": "2026-03-25T07:00:00Z",
+    "planned_downtime_hours": 1.5,
+    "maintenance_window_start": "2026-03-25T05:30:00Z",
+    "maintenance_window_end": "2026-03-25T07:00:00Z",
+    "crew_available": true
+  },
+  {
+    "equipment_id": "WR-14",
+    "shift_label": "Shift B",
+    "shift_start": "2026-03-25T07:00:00Z",
+    "shift_end": "2026-03-25T15:00:00Z",
+    "planned_downtime_hours": 1.0,
+    "maintenance_window_start": "2026-03-25T13:30:00Z",
+    "maintenance_window_end": "2026-03-25T14:30:00Z",
+    "crew_available": true
+  }
+]

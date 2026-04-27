@@ -1,0 +1,6 @@
+fastapi
+uvicorn[standard]
+pyyaml
+databricks-sdk
+cryptography
+psycopg[binary]

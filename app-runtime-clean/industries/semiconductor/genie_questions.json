@@ -1,0 +1,7 @@
+[
+  "Which etch tools had particle counts above spec in the last 24 hours?",
+  "What is the total wafer lot exposure across all critical tools today?",
+  "Show me overlay error trend for LT-11 over the last 7 days",
+  "Which tools are predicted to require maintenance within the next 48 hours?",
+  "What is the current fab availability (稼働率) compared to last week?"
+]

@@ -2,7 +2,6 @@ import os
 import sys
 from argparse import ArgumentParser
 from pathlib import Path
-from glob import glob
 
 import mlflow
 import pandas as pd
@@ -13,8 +12,6 @@ def _ensure_repo_root_on_path() -> Path:
         candidates.append(Path(__file__).resolve().parents[2])
     cwd = Path.cwd()
     candidates.extend([cwd, *cwd.parents])
-    for p in glob("/Workspace/Users/*/.bundle/ot-pdm-intelligence/dev/files"):
-        candidates.append(Path(p))
     for root in candidates:
         if (root / "core" / "config" / "loader.py").exists():
             root_s = str(root)
