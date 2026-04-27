@@ -4,211 +4,245 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>CXO Talk Track - Predictive + Prescriptive Maintenance</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
   <style>
-    :root {
-      --bg: #1b2431;
-      --panel: #1f2937;
-      --ink: #e8eefc;
-      --muted: #b8c6ea;
-      --brand: #ff3621;
-      --accent: #94a3b8;
-      --ok: #34d399;
-      --warn: #f59e0b;
+    @font-face {
+      font-family: "BarlowLocal";
+      src: url("./assets/fonts/Barlow-Regular.ttf") format("truetype");
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
     }
+    @font-face {
+      font-family: "BarlowLocal";
+      src: url("./assets/fonts/Barlow-SemiBold.ttf") format("truetype");
+      font-weight: 600;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "RobotoLocal";
+      src: url("./assets/fonts/Roboto-Variable.ttf") format("truetype");
+      font-weight: 100 900;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    :root {
+      --db-red: #ff3621;
+      --db-blue: #1f75ff;
+      --db-navy: #14213d;
+      --bg: #f5f8ff;
+      --panel: #ffffff;
+      --line: #d8e3f2;
+      --ink: #1c2434;
+      --muted: #4f5f79;
+      --chip: #f4f8ff;
+      --shadow: 0 10px 26px rgba(20, 33, 61, 0.09);
+    }
+
     * { box-sizing: border-box; }
+
     body {
       margin: 0;
-      font-family: "Roboto", "Segoe UI", Arial, sans-serif;
       background: var(--bg);
       color: var(--ink);
-      line-height: 1.35;
+      font-family: "RobotoLocal", "Roboto", "Segoe UI", Arial, sans-serif;
+      line-height: 1.38;
     }
-    h1, h2, h3, .kicker { font-family: "Barlow", "Segoe UI", Arial, sans-serif; }
+
+    h1, h2, h3, .kicker {
+      font-family: "BarlowLocal", "Barlow", "Segoe UI", Arial, sans-serif;
+    }
+
     .deck {
       width: 1280px;
       margin: 0 auto;
-      padding: 28px;
+      padding: 22px;
     }
+
     .slide {
-      width: 1224px;
-      min-height: 688px;
-      background: linear-gradient(160deg, #111a32 0%, #0d1428 100%);
-      border: 1px solid #253050;
-      border-radius: 18px;
-      padding: 42px 46px;
-      margin: 0 0 26px 0;
+      width: 1236px;
+      min-height: 700px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      padding: 36px 40px;
+      margin-bottom: 24px;
       position: relative;
       page-break-after: always;
       break-after: page;
-      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
     }
-    .slide:last-child { page-break-after: auto; break-after: auto; }
-    .kicker {
-      font-size: 15px;
-      color: var(--accent);
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
+
+    .slide:last-child {
+      page-break-after: auto;
+      break-after: auto;
+    }
+
+    .brand-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
       margin-bottom: 10px;
+    }
+
+    .kicker {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--db-blue);
+    }
+
+    .brand-chip {
+      border: 1px solid #cddcff;
+      background: var(--chip);
+      color: #325d9d;
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 12px;
       font-weight: 600;
     }
-    h1, h2 {
-      margin: 0 0 14px 0;
-      line-height: 1.15;
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: 50px;
+      line-height: 1.1;
+      color: var(--db-navy);
     }
-    h1 { font-size: 52px; }
-    h2 { font-size: 40px; }
-    p.lead {
+
+    h2 {
+      margin: 0 0 10px;
+      font-size: 40px;
+      line-height: 1.12;
+      color: var(--db-navy);
+    }
+
+    .lead {
+      margin: 0 0 16px;
+      font-size: 22px;
       color: var(--muted);
-      font-size: 23px;
-      max-width: 1020px;
-      margin: 0 0 22px 0;
+      max-width: 1080px;
     }
+
     .grid-2 {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 18px;
-      margin-top: 16px;
+      gap: 14px;
+      margin-top: 14px;
     }
+
     .card {
-      background: var(--panel);
-      border: 1px solid #2b375a;
-      border-radius: 14px;
-      padding: 18px 20px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px 16px;
+      background: #fff;
     }
+
     .card h3 {
-      margin: 0 0 8px 0;
+      margin: 0 0 7px;
       font-size: 22px;
-      color: #f5f8ff;
+      color: var(--db-navy);
     }
+
     ul {
       margin: 8px 0 0 20px;
       padding: 0;
-      color: var(--muted);
-      font-size: 21px;
+      color: #334155;
+      font-size: 20px;
     }
-    li { margin: 8px 0; }
+
+    li { margin: 7px 0; }
+
+    .flow {
+      margin-top: 12px;
+      border: 1px solid #cbdbf8;
+      background: #f7fbff;
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-size: 19px;
+      color: #1f365e;
+    }
+
     .metric-row {
+      margin-top: 15px;
       display: grid;
       grid-template-columns: repeat(4, 1fr);
-      gap: 14px;
-      margin-top: 20px;
+      gap: 11px;
     }
+
     .metric {
-      border-radius: 12px;
-      padding: 14px 16px;
-      border: 1px solid #2b375a;
-      background: #101730;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      padding: 10px 12px;
+      background: #fff;
     }
+
     .metric .v {
-      font-size: 36px;
+      font-size: 30px;
       font-weight: 700;
-      color: #ffffff;
+      color: #122544;
       margin-bottom: 4px;
     }
+
     .metric .l {
-      color: var(--muted);
-      font-size: 15px;
+      font-size: 13px;
+      color: #4d5d77;
       text-transform: uppercase;
       letter-spacing: 0.05em;
     }
-    .flow {
-      margin-top: 18px;
-      border: 1px dashed #3b4a76;
-      border-radius: 12px;
-      padding: 14px 16px;
-      color: #d6e3ff;
-      font-size: 21px;
-    }
+
     .diagram-wrap {
-      margin-top: 16px;
-      border: 1px solid #33426b;
-      border-radius: 14px;
-      background: radial-gradient(circle at top right, #172447 0%, #101933 55%, #0d152b 100%);
-      padding: 12px;
+      margin-top: 14px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fcfdff;
+      padding: 10px;
     }
+
     .diagram-wrap svg {
       width: 100%;
       height: auto;
       display: block;
     }
+
     .node {
-      fill: #1b274b;
-      stroke: #4a5f99;
+      fill: #ffffff;
+      stroke: #9db2d3;
       stroke-width: 1.4;
-      rx: 10;
-      ry: 10;
     }
+
     .node-title {
-      fill: #f2f7ff;
+      fill: #14213d;
       font-size: 13px;
       font-weight: 700;
-      font-family: "Barlow", "Segoe UI", Arial, sans-serif;
+      font-family: "BarlowLocal", "Barlow", Arial, sans-serif;
     }
+
     .node-sub {
-      fill: #bcd0fb;
+      fill: #4f5f79;
       font-size: 11px;
-      font-family: "Roboto", "Segoe UI", Arial, sans-serif;
+      font-family: "RobotoLocal", "Roboto", Arial, sans-serif;
     }
+
     .edge {
-      stroke: #7fa2ff;
-      stroke-width: 1.8;
+      stroke: #1f75ff;
+      stroke-width: 1.6;
       fill: none;
-      marker-end: url(#arrow);
-      opacity: 0.95;
+      marker-end: url(#arrowLight);
     }
-    .pill-node {
-      fill: #111a36;
-      stroke: #556ba8;
-      stroke-width: 1.2;
-      rx: 999;
-      ry: 999;
-    }
-    .pill-text {
-      fill: #dce8ff;
-      font-size: 10px;
-      font-family: "Roboto", "Segoe UI", Arial, sans-serif;
-    }
-    .bar {
-      margin-top: 16px;
-      background: #0f1630;
-      border: 1px solid #2f3a5d;
-      border-radius: 999px;
-      height: 34px;
-      position: relative;
-      overflow: hidden;
-    }
-    .bar > span {
-      position: absolute;
-      left: 0;
-      top: 0;
-      bottom: 0;
-      width: 68%;
-      background: linear-gradient(90deg, var(--brand), #ff7f4e);
-    }
+
     .foot {
       position: absolute;
-      left: 46px;
-      right: 46px;
-      bottom: 24px;
+      left: 40px;
+      right: 40px;
+      bottom: 18px;
       display: flex;
       justify-content: space-between;
-      color: #90a3d3;
-      font-size: 14px;
+      font-size: 13px;
+      color: #6b7d9a;
     }
-    .tag {
-      display: inline-block;
-      border-radius: 999px;
-      font-size: 14px;
-      padding: 5px 10px;
-      border: 1px solid #34426d;
-      color: #d8e3ff;
-      margin-right: 8px;
-    }
-    .good { color: var(--ok); }
-    .warn { color: var(--warn); }
+
     @media print {
       body { background: #fff; }
       .deck { width: 100%; margin: 0; padding: 0; }
@@ -226,143 +260,116 @@
 <body>
   <div class="deck">
     <section class="slide">
-      <div class="kicker">Board / CXO Briefing</div>
+      <div class="brand-row">
+        <div class="kicker">CXO Briefing</div>
+        <div class="brand-chip">Databricks | Solution Architecture Narrative</div>
+      </div>
       <h1>Predictive + Prescriptive Maintenance</h1>
-      <p class="lead">Convert OT telemetry into bottom-line impact: fewer failures, faster decisions, and measurable EBITDA protection across industrial operations.</p>
+      <p class="lead">A unified operating pattern that turns telemetry and maintenance context into consistent, financially grounded decisions.</p>
       <div class="grid-2">
         <div class="card">
-          <h3>Business Goal</h3>
+          <h3>Executive Lens</h3>
           <ul>
-            <li>Reduce unplanned downtime and production loss</li>
-            <li>Prioritize high-value interventions first</li>
-            <li>Align operations and finance on one decision view</li>
-            <li>Equip AEs and SAs with one repeatable demo-to-value motion</li>
+            <li>Portfolio-level visibility of operational risk</li>
+            <li>Priority actions connected to financial impact</li>
+            <li>Shared KPI semantics across operations and finance</li>
           </ul>
         </div>
         <div class="card">
-          <h3>Databricks Outcome</h3>
+          <h3>Solution Lens</h3>
           <ul>
-            <li>Unified OT+IT+financial data foundation</li>
-            <li>Real-time risk and RUL intelligence</li>
-            <li>Action recommendations with economic impact</li>
-            <li>Same solution pattern across 5 industries: Mining, Energy, Water, Automotive, Semiconductor</li>
+            <li>Unified OT, historian, and ERP-informed context</li>
+            <li>Predictive insight with prescriptive action pathways</li>
+            <li>Governed data and model lifecycle with traceability</li>
           </ul>
         </div>
       </div>
-      <div class="foot">
-        <span>OT PdM Intelligence</span>
-        <span>Slide 1 of 8</span>
-      </div>
+      <div class="foot"><span>OT PdM Intelligence</span><span>Slide 1 of 8</span></div>
     </section>
 
     <section class="slide">
-      <div class="kicker">Why This Matters</div>
-      <h2>Predictive Alone Tells You What. Prescriptive Tells You What to Do.</h2>
+      <div class="brand-row">
+        <div class="kicker">Operating Problem</div>
+        <div class="brand-chip">From Signals to Decisions</div>
+      </div>
+      <h2>Predictive and Prescriptive Work Together</h2>
       <div class="grid-2">
         <div class="card">
-          <h3>Without Prescriptive</h3>
+          <h3>Predictive Layer</h3>
           <ul>
-            <li>Too many alerts, low actionability</li>
-            <li>Engineering and finance misaligned</li>
-            <li>Interventions triggered too early or too late</li>
+            <li>Identifies risk concentration and degradation timing</li>
+            <li>Provides anomaly and remaining-useful-life context</li>
+            <li>Supports early intervention planning</li>
           </ul>
         </div>
         <div class="card">
-          <h3>With Predictive + Prescriptive</h3>
+          <h3>Prescriptive Layer</h3>
           <ul>
-            <li>Risk scored by failure likelihood and timing</li>
-            <li>Actions ranked by value at risk</li>
-            <li>Decision captured: approve, defer, or reject</li>
+            <li>Ranks actions by expected operational effect</li>
+            <li>Connects intervention to value-at-risk framing</li>
+            <li>Captures approve/defer/reject decisions for governance</li>
           </ul>
         </div>
       </div>
       <div class="metric-row">
-        <div class="metric"><div class="v">30-50%</div><div class="l">Fewer critical surprises</div></div>
-        <div class="metric"><div class="v">10-20%</div><div class="l">Lower maintenance spend waste</div></div>
-        <div class="metric"><div class="v">2-4x</div><div class="l">Faster triage decisions</div></div>
-        <div class="metric"><div class="v">High</div><div class="l">Executive confidence</div></div>
+        <div class="metric"><div class="v">Fleet</div><div class="l">Risk Posture</div></div>
+        <div class="metric"><div class="v">Asset</div><div class="l">Actionability</div></div>
+        <div class="metric"><div class="v">Finance</div><div class="l">Value Context</div></div>
+        <div class="metric"><div class="v">Audit</div><div class="l">Decision Trace</div></div>
       </div>
-      <div class="foot">
-        <span>Business Framing</span>
-        <span>Slide 2 of 8</span>
-      </div>
+      <div class="foot"><span>Solution Framing</span><span>Slide 2 of 8</span></div>
     </section>
 
     <section class="slide">
-      <div class="kicker">Bottom-Line Visibility</div>
-      <h2>Financially-Quantified Maintenance Decisions</h2>
-      <p class="lead">Every recommendation is tied to economic outcome: avoided loss vs intervention cost, in business currency.</p>
+      <div class="brand-row">
+        <div class="kicker">Executive Metrics</div>
+        <div class="brand-chip">Unity Catalog Semantics</div>
+      </div>
+      <h2>Financially-Grounded Maintenance Decisions</h2>
+      <p class="lead">Executive metrics are defined in governed UC-backed semantics so portfolio, operations, and finance views remain consistent.</p>
       <div class="flow">
-        Signal drift -> Failure risk + RUL -> Prescribed action -> Avoided loss projection -> Recorded operator decision
+        Signal drift -> Risk + RUL -> Recommended action -> Avoided impact vs intervention cost -> Recorded decision
       </div>
       <div class="grid-2">
         <div class="card">
-          <h3>Example Asset Decision</h3>
+          <h3>Metric Families</h3>
           <ul>
-            <li>Avoided cost: JPY 1,849,543</li>
-            <li>Intervention cost: JPY 507,133</li>
-            <li class="good">Net protected value: JPY 1,342,410</li>
+            <li>Portfolio: fleet health, critical assets, asset count</li>
+            <li>Value: ebit saved, ROI, payback, margin impact</li>
+            <li>Outlook: protected value and deferred-risk exposure</li>
           </ul>
         </div>
         <div class="card">
-          <h3>Executive Readout</h3>
+          <h3>Why This Matters</h3>
           <ul>
-            <li>Portfolio risk concentration</li>
-            <li>Expected loss if deferred</li>
-            <li>Actioned vs unactioned exposure</li>
+            <li>Creates one decision baseline across stakeholders</li>
+            <li>Improves review cadence with shared KPI language</li>
+            <li>Connects reliability action to business outcomes</li>
           </ul>
         </div>
       </div>
-      <div class="foot">
-        <span>Value Narrative</span>
-        <span>Slide 3 of 8</span>
-      </div>
+      <div class="foot"><span>Executive Semantics</span><span>Slide 3 of 8</span></div>
     </section>
 
     <section class="slide">
-      <div class="kicker">Databricks End-to-End</div>
-      <h2>How the Platform Makes This Possible</h2>
+      <div class="brand-row">
+        <div class="kicker">Platform Architecture</div>
+        <div class="brand-chip">Lakehouse + AI + App Runtime</div>
+      </div>
+      <h2>End-to-End Solution Pattern on Databricks</h2>
       <div class="flow">
-        OT Sources (simulator / Zerobus / PI) -> Delta Bronze -> Delta Live Tables (Silver/Gold) ->
-        MLflow models (anomaly + RUL) -> FastAPI + React app -> AI-assisted actions (Genie)
-      </div>
-      <div class="grid-2">
-        <div class="card">
-          <h3>Data + AI Stack</h3>
-          <ul>
-            <li>Streaming and batch on one lakehouse</li>
-            <li>Feature pipelines with lineage</li>
-            <li>Model lifecycle, scoring, and traceability</li>
-          </ul>
-        </div>
-        <div class="card">
-          <h3>Operational Decision Layer</h3>
-          <ul>
-            <li>Geo and fleet risk visualization</li>
-            <li>Asset-level recommendations and chat</li>
-            <li>Action persistence for audit and execution</li>
-            <li>Currency switch drives localized narrative and financial context (for example, JPY)</li>
-          </ul>
-        </div>
-      </div>
-      <div class="card" style="margin-top:16px;">
-        <h3 style="margin:0 0 8px 0;">Field Readiness for AE + SA</h3>
-        <ul style="font-size:19px;">
-          <li>One end-to-end architecture and talk track reusable across Mining to Semiconductor</li>
-          <li>Localization switch (currency/language) makes value story customer-native in every region</li>
-        </ul>
+        OT / historian / ERP context -> Delta Bronze -> DLT Silver/Gold -> MLflow model lifecycle -> App + Genie-assisted workflows
       </div>
       <div class="diagram-wrap">
         <svg viewBox="0 0 1120 210" role="img" aria-label="OT PdM end-to-end architecture">
           <defs>
-            <marker id="arrow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
-              <path d="M0,0 L10,4 L0,8 z" fill="#7fa2ff"></path>
+            <marker id="arrowLight" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+              <path d="M0,0 L10,4 L0,8 z" fill="#1f75ff"></path>
             </marker>
           </defs>
-
           <rect class="node" x="10" y="28" width="160" height="72"></rect>
-          <text class="node-title" x="22" y="52">OT Sources</text>
-          <text class="node-sub" x="22" y="70">Zerobus / PI / Simulator</text>
+          <text class="node-title" x="22" y="52">Source Systems</text>
+          <text class="node-sub" x="22" y="70">OT / Historian / ERP</text>
 
           <rect class="node" x="210" y="28" width="150" height="72"></rect>
           <text class="node-title" x="222" y="52">Delta Bronze</text>
@@ -370,162 +377,136 @@
 
           <rect class="node" x="400" y="28" width="170" height="72"></rect>
           <text class="node-title" x="412" y="52">DLT Silver / Gold</text>
-          <text class="node-sub" x="412" y="70">Features + predictions + value</text>
+          <text class="node-sub" x="412" y="70">Features, predictions, value</text>
 
           <rect class="node" x="610" y="28" width="160" height="72"></rect>
-          <text class="node-title" x="622" y="52">ML + MLOps</text>
-          <text class="node-sub" x="622" y="70">MLflow anomaly + RUL</text>
+          <text class="node-title" x="622" y="52">MLflow</text>
+          <text class="node-sub" x="622" y="70">Anomaly + RUL lifecycle</text>
 
           <rect class="node" x="810" y="28" width="150" height="72"></rect>
           <text class="node-title" x="822" y="52">App + Genie</text>
-          <text class="node-sub" x="822" y="70">Geo, Fleet, AI actions</text>
+          <text class="node-sub" x="822" y="70">Decision workflows</text>
 
           <rect class="node" x="980" y="28" width="130" height="72"></rect>
-          <text class="node-title" x="992" y="52">Business</text>
-          <text class="node-sub" x="992" y="70">EBITDA protection</text>
+          <text class="node-title" x="992" y="52">Outcomes</text>
+          <text class="node-sub" x="992" y="70">Operational + financial</text>
 
           <path class="edge" d="M170 64 L210 64"></path>
           <path class="edge" d="M360 64 L400 64"></path>
           <path class="edge" d="M570 64 L610 64"></path>
           <path class="edge" d="M770 64 L810 64"></path>
           <path class="edge" d="M960 64 L980 64"></path>
-
-          <rect class="pill-node" x="120" y="142" width="180" height="34"></rect>
-          <text class="pill-text" x="137" y="163">Unity Catalog Governance</text>
-
-          <rect class="pill-node" x="338" y="142" width="158" height="34"></rect>
-          <text class="pill-text" x="354" y="163">Lineage + Quality</text>
-
-          <rect class="pill-node" x="534" y="142" width="188" height="34"></rect>
-          <text class="pill-text" x="552" y="163">Action Audit Trail</text>
-
-          <rect class="pill-node" x="760" y="142" width="210" height="34"></rect>
-          <text class="pill-text" x="779" y="163">Currency/Language Localization</text>
-
-          <path class="edge" d="M210 142 L210 108"></path>
-          <path class="edge" d="M418 142 L485 108"></path>
-          <path class="edge" d="M628 142 L690 108"></path>
-          <path class="edge" d="M864 142 L885 108"></path>
         </svg>
       </div>
-      <div class="foot">
-        <span>Lakehouse + AI</span>
-        <span>Slide 4 of 8</span>
-      </div>
+      <div class="foot"><span>Reference Architecture</span><span>Slide 4 of 8</span></div>
     </section>
 
     <section class="slide">
-      <div class="kicker">Governance and Trust</div>
-      <h2>Enterprise Controls Built In</h2>
+      <div class="brand-row">
+        <div class="kicker">Governance and Controls</div>
+        <div class="brand-chip">Data + AI + Decision Traceability</div>
+      </div>
+      <h2>Operational Trust Is Built into the Design</h2>
       <div class="grid-2">
         <div class="card">
           <h3>Data Governance</h3>
           <ul>
-            <li>Unity Catalog for access and policy control</li>
-            <li>Lineage across OT tables, features, and outputs</li>
-            <li>Consistent schemas across industries</li>
+            <li>Unity Catalog policy and access controls</li>
+            <li>Lineage from ingest to executive KPI</li>
+            <li>Consistent schema contracts across workloads</li>
           </ul>
         </div>
         <div class="card">
-          <h3>AI Governance</h3>
+          <h3>AI and Decision Governance</h3>
           <ul>
-            <li>Versioned models and reproducible scoring</li>
-            <li>Action-level audit trail (approve/defer/reject)</li>
-            <li>Human-in-the-loop decision authority</li>
+            <li>Versioned model lifecycle and scoring trace</li>
+            <li>Human decision capture for action workflows</li>
+            <li>Audit-ready recommendation context</li>
           </ul>
         </div>
       </div>
-      <div class="card" style="margin-top:16px;">
-        <span class="tag">Security</span>
-        <span class="tag">Compliance</span>
-        <span class="tag">Observability</span>
-        <span class="tag">Traceability</span>
-        <p class="lead" style="font-size:20px; margin-top:10px;">Governed AI is what makes maintenance recommendations board-ready, regulator-ready, and operations-ready.</p>
-      </div>
-      <div class="foot">
-        <span>Risk and Compliance</span>
-        <span>Slide 5 of 8</span>
-      </div>
+      <div class="foot"><span>Governed Operations</span><span>Slide 5 of 8</span></div>
     </section>
 
     <section class="slide">
-      <div class="kicker">5-Minute Demo Story</div>
-      <h2>What You Show a CXO Live</h2>
+      <div class="brand-row">
+        <div class="kicker">Solution Walkthrough</div>
+        <div class="brand-chip">Executive-to-Operator Flow</div>
+      </div>
+      <h2>How the Experience Is Presented Live</h2>
       <ul>
-        <li><strong>1.</strong> Open Geo view -> select a high-risk site and asset.</li>
-        <li><strong>2.</strong> Show anomaly + RUL + financial impact in selected currency.</li>
-        <li><strong>3.</strong> Ask AI for root cause, risk level, and action sequence.</li>
-        <li><strong>4.</strong> Execute decision (approve/defer/reject) and capture trace.</li>
-        <li><strong>5.</strong> Return to fleet view to show portfolio-level business impact.</li>
+        <li><strong>1.</strong> Fleet: establish current portfolio posture and top priorities</li>
+        <li><strong>2.</strong> Finance: connect priorities to value and intervention economics</li>
+        <li><strong>3.</strong> Stoppage + Data Hub: show line impact and trusted analysis paths</li>
+        <li><strong>4.</strong> Geo + Hierarchy: navigate from site to equipment context</li>
+        <li><strong>5.</strong> Asset + Model: explain risk progression and action timing</li>
+        <li><strong>6.</strong> Simulator: rehearse scenario response and close with governance</li>
       </ul>
-      <div class="bar"><span></span></div>
-      <p class="lead" style="font-size:18px;">Talk track cue: "This is not a dashboard. This is a governed, financially-aware decision system."</p>
-      <div class="foot">
-        <span>Demo Narrative</span>
-        <span>Slide 6 of 8</span>
-      </div>
+      <div class="flow">Simulator is used for rehearsal; production ingestion patterns use Lakeflow Connect or Zerobus with partner ecosystems.</div>
+      <div class="foot"><span>Presentation Sequence</span><span>Slide 6 of 8</span></div>
     </section>
 
     <section class="slide">
-      <div class="kicker">Business KPI Framework</div>
-      <h2>How Success Is Measured in 30-90 Days</h2>
-      <div class="metric-row">
-        <div class="metric"><div class="v">-X%</div><div class="l">Unplanned downtime hours</div></div>
-        <div class="metric"><div class="v">+Y%</div><div class="l">Planned intervention ratio</div></div>
-        <div class="metric"><div class="v">+Z</div><div class="l">Avoided-loss run rate</div></div>
-        <div class="metric"><div class="v">T-</div><div class="l">Decision lead time</div></div>
+      <div class="brand-row">
+        <div class="kicker">Measurement Framework</div>
+        <div class="brand-chip">Operational and Financial KPIs</div>
       </div>
-      <div class="grid-2" style="margin-top:16px;">
-        <div class="card">
-          <h3>Operational KPIs</h3>
-          <ul>
-            <li>Critical alert closure time</li>
-            <li>Mean time between disruptions</li>
-            <li>Maintenance schedule adherence</li>
-          </ul>
-        </div>
-        <div class="card">
-          <h3>Financial KPIs</h3>
-          <ul>
-            <li>Avoided cost vs intervention spend</li>
-            <li>Loss prevented per site / line / tool</li>
-            <li>Quarterly EBITDA protection signal</li>
-          </ul>
-        </div>
-      </div>
-      <div class="foot">
-        <span>Value Realization</span>
-        <span>Slide 7 of 8</span>
-      </div>
-    </section>
-
-    <section class="slide">
-      <div class="kicker">Executive Close</div>
-      <h2>Decision Request</h2>
-      <p class="lead">Approve a focused pilot for one critical site and asset class, with baseline and target KPIs tracked weekly.</p>
+      <h2>How Solution Performance Is Evaluated</h2>
       <div class="grid-2">
         <div class="card">
-          <h3>Pilot Scope</h3>
+          <h3>Operational Metrics</h3>
           <ul>
-            <li>1 site, 1 asset class, 30-45 days</li>
-            <li>Unified OT + maintenance + finance view</li>
-            <li>Weekly governance review and KPI report</li>
+            <li>Critical alert closure cadence</li>
+            <li>Maintenance schedule adherence</li>
+            <li>Downtime concentration by site/line/equipment</li>
           </ul>
         </div>
         <div class="card">
-          <h3>Expected Executive Output</h3>
+          <h3>Financial Metrics</h3>
           <ul>
-            <li>Documented value-at-risk reduction</li>
-            <li>Productionized governance pattern</li>
-            <li>Scale blueprint across plants/fabs</li>
+            <li>Avoided impact vs intervention spend</li>
+            <li>EBIT contribution trend and confidence</li>
+            <li>Value-at-risk reduction by action status</li>
           </ul>
         </div>
       </div>
-      <p class="lead" style="font-size:18px; margin-top:20px;">Bottom line: predictive tells you what may fail; prescriptive tells you what to do now; Databricks makes both measurable, governed, and scalable.</p>
-      <div class="foot">
-        <span>Call to Action</span>
-        <span>Slide 8 of 8</span>
+      <div class="metric-row">
+        <div class="metric"><div class="v">Portfolio</div><div class="l">Risk Concentration</div></div>
+        <div class="metric"><div class="v">Action</div><div class="l">Execution Quality</div></div>
+        <div class="metric"><div class="v">Value</div><div class="l">Economic Effect</div></div>
+        <div class="metric"><div class="v">Governance</div><div class="l">Decision Trace</div></div>
       </div>
+      <div class="foot"><span>Evaluation Model</span><span>Slide 7 of 8</span></div>
+    </section>
+
+    <section class="slide">
+      <div class="brand-row">
+        <div class="kicker">Executive Summary</div>
+        <div class="brand-chip">Solution Architecture Close</div>
+      </div>
+      <h2>What This Solution Delivers</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Business Outcome</h3>
+          <ul>
+            <li>A unified reliability decision model</li>
+            <li>Shared executive and operational KPI semantics</li>
+            <li>Clear linkage from action to financial effect</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Technical Outcome</h3>
+          <ul>
+            <li>Governed lakehouse and model lifecycle pattern</li>
+            <li>Reusable ingestion and analytics architecture</li>
+            <li>Operationally traceable decision workflows</li>
+          </ul>
+        </div>
+      </div>
+      <p class="lead" style="margin-top:20px;">
+        Predictive and prescriptive maintenance work as one system when data, model outputs, and decisions share a governed contract.
+      </p>
+      <div class="foot"><span>Closing Statement</span><span>Slide 8 of 8</span></div>
     </section>
   </div>
 </body>
