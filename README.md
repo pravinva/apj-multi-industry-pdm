@@ -129,24 +129,24 @@ Source systems (Simulator / Zerobus / PI / ERP context)
 
 ### Backend APIs
 
-- Fleet and executive summary APIs
-- Geo site and asset APIs with currency-aware financial payloads
-- Simulator control APIs for scenario injection
-- Recommendation action APIs for approve/reject/defer workflow
-- Data discovery and concierge APIs
-- Agent/Genie chat APIs
+- **Fleet and executive summary APIs**: Assemble portfolio KPIs, top-risk assets, alert concentration, and executive finance rollups from Gold outputs for the landing dashboard.
+- **Geo site and asset APIs**: Return site-level and asset-level context for map drilldowns, including currency-aware financial impact fields for localized decision views.
+- **Simulator control APIs**: Trigger fault injection, scoring, and scenario progression so demo and validation runs can populate Bronze/Silver/Gold pathways on demand.
+- **Recommendation action APIs**: Persist approve/reject/defer operator decisions and return refreshed status so actioned alerts are traceable and auditable.
+- **Data discovery and concierge APIs**: Expose table-level availability, row counts, freshness, and guided dataset context to speed investigation in the Data Hub experience.
+- **Agent and Genie chat APIs**: Route domain prompts with governed context (industry, site, metrics, manual chunks) and return grounded responses for supervisor workflows.
 
 ### UI sections
 
-- Fleet Health
-- Finance
-- Stoppage
-- Data Discovery Hub
-- Geo Map
-- Hierarchy (ISA-95)
-- Asset and Stream
-- Model
-- Simulator
+- **Fleet Health**: Executive entry point showing current reliability posture, critical asset distribution, and prioritized action queue.
+- **Finance**: Converts maintenance risk into economic terms such as avoided impact, intervention cost, and aggregate value protection.
+- **Stoppage**: Highlights production interruption risk and line-level operational impact so teams can align maintenance timing with output commitments.
+- **Data Discovery Hub**: Provides searchable dataset visibility, freshness signals, and guided access paths for analysts and operators.
+- **Geo Map**: Shows site and asset condition geographically, enabling rapid location-based triage with localized currency context.
+- **Hierarchy (ISA-95)**: Organizes health and risk from enterprise to line/tool level so users can navigate root context quickly.
+- **Asset and Stream**: Combines asset-level diagnostics with recent telemetry stream behavior to connect model outputs to raw operating signals.
+- **Model**: Surfaces anomaly and RUL outputs, confidence cues, and model-driven recommendation context for technical validation.
+- **Simulator**: Generates controlled warning/critical scenarios to rehearse response workflows and verify end-to-end data propagation.
 
 ## Quick Start (15 Minutes)
 
