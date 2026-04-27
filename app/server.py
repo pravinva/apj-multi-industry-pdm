@@ -2792,6 +2792,53 @@ def _genie_extract_text(message: dict[str, Any]) -> str:
     return ""
 
 
+def _genie_uc_metrics_context(industry: str, currency: str = "") -> str:
+    """
+    Compact UC-backed metrics contract for Genie so answers align with
+    executive KPI semantics and table lineage.
+    """
+    catalog = _industry_cfg(industry).get("catalog", f"pdm_{industry}")
+    predictions_fqn = f"{catalog}.gold.pdm_predictions"
+    events_fqn = f"{catalog}.gold.financial_impact_events"
+    finance_daily_fqn = f"{catalog}.finance.pm_financial_daily"
+    site_finance_fqn = f"{catalog}.finance.pm_site_financial_daily"
+    features_fqn = f"{catalog}.silver.sensor_features"
+    sensor_fqn = f"{catalog}.bronze.sensor_readings"
+
+    snapshot_lines: list[str] = []
+    try:
+        ov = _overview(industry, display_currency=currency)
+        kpis = ov.get("kpis", {}) if isinstance(ov, dict) else {}
+        ex = ov.get("executive", {}) if isinstance(ov, dict) else {}
+        if isinstance(kpis, dict):
+            snapshot_lines.append(f"- fleet_health_score: {round(_to_float(kpis.get('fleet_health_score'), 0.0), 1)}")
+            snapshot_lines.append(f"- critical_assets: {int(_to_float(kpis.get('critical_assets'), 0))}")
+            snapshot_lines.append(f"- asset_count: {int(_to_float(kpis.get('asset_count'), 0))}")
+        if isinstance(ex, dict):
+            snapshot_lines.append(f"- ebit_saved_fmt: {str(ex.get('ebit_saved_fmt') or '')}")
+            snapshot_lines.append(f"- roi_pct: {round(_to_float(ex.get('roi_pct'), 0.0), 2)}")
+            snapshot_lines.append(f"- payback_days: {round(_to_float(ex.get('payback_days'), 0.0), 2)}")
+    except Exception:
+        pass
+
+    context = (
+        "Unity Catalog metrics contract (keep KPI semantics consistent):\n"
+        f"- Predictions table: {predictions_fqn}\n"
+        f"- Financial impact table: {events_fqn}\n"
+        f"- Finance daily table: {finance_daily_fqn}\n"
+        f"- Site finance table: {site_finance_fqn}\n"
+        f"- Sensor features table: {features_fqn}\n"
+        f"- Raw sensor table: {sensor_fqn}\n"
+        "Rules:\n"
+        "1) Keep fleet/executive KPI names and meanings aligned with overview semantics.\n"
+        "2) Derive financial impact from gold.financial_impact_events and finance daily/site tables.\n"
+        "3) Do not invent alternate KPI definitions that conflict with executive view.\n"
+    )
+    if snapshot_lines:
+        context += "Current KPI snapshot:\n" + "\n".join(snapshot_lines) + "\n"
+    return context
+
+
 def _sanitize_zerobus_config_for_response(cfg: dict[str, Any]) -> dict[str, Any]:
     safe = json.loads(json.dumps(cfg))
     auth = (safe.get("auth", {}) or {})
@@ -7745,6 +7792,12 @@ def agent_chat(payload: dict) -> dict:
         effective_user_text = (
             f"{effective_user_text}\n\n"
             "Language note: respond entirely in English."
+        )
+    uc_ctx = _genie_uc_metrics_context(industry, currency)
+    if uc_ctx:
+        effective_user_text = (
+            f"{effective_user_text}\n\n"
+            f"{uc_ctx}"
         )
     manual_refs = _manual_references(
         industry,

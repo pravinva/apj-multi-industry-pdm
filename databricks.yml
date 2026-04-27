@@ -97,6 +97,10 @@ resources:
             parameters:
               - "--industry"
               - "${var.industry}"
+      schedule:
+        pause_status: UNPAUSED
+        quartz_cron_expression: "0 */15 * * * ?"
+        timezone_id: UTC
 
     ot_pdm_scoring_job:
       name: ot-pdm-scoring-${var.industry}
@@ -170,7 +174,7 @@ resources:
               - "--days"
               - "1095"
       schedule:
-        pause_status: PAUSED
+        pause_status: UNPAUSED
         quartz_cron_expression: "0 15 1 * * ?"
         timezone_id: UTC
 
@@ -192,9 +196,13 @@ resources:
               industries_csv: "mining,energy,water,automotive,semiconductor"
               history_days: "730"
               grant_principal: "users"
-              trigger_jobs: "true"
-              reset_existing: "true"
+              trigger_jobs: "false"
+              reset_existing: "false"
               seed_demo_planning_case: "true"
+      schedule:
+        pause_status: UNPAUSED
+        quartz_cron_expression: "0 0 1 ? * SUN *"
+        timezone_id: UTC
 
     # SAP/BDC + Lakebase work_orders demo (Executive ODS). Safe to re-run (replaces SAP_BDC_DEMO only).
     # Scheduled weekly via ot_pdm_demo_scheduled_refresh; keep this job for manual runs.
@@ -214,6 +222,10 @@ resources:
             parameters:
               - "--industries"
               - "mining,energy,water,automotive,semiconductor"
+      schedule:
+        pause_status: UNPAUSED
+        quartz_cron_expression: "0 45 3 * * ?"
+        timezone_id: UTC
 
     # Weekly demo data refresh: ~3y finance (industry + site) through "today", plus ERP/BDC ODS slice.
     # Unpause after deploy so long-lived demos keep quarter/year charts current without re-bootstrap.
@@ -265,7 +277,7 @@ resources:
               - "--industries"
               - "mining,energy,water,automotive,semiconductor"
       schedule:
-        pause_status: PAUSED
+        pause_status: UNPAUSED
         quartz_cron_expression: "0 0 4 * * ?"
         timezone_id: UTC
 
