@@ -1,0 +1,91 @@
+digraph finance_methodology_nano_banana {
+  graph [rankdir=LR, bgcolor="white", pad="0.25", nodesep="0.45", ranksep="0.65", fontname="Helvetica"];
+  node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=11, color="#cbd5e1", fillcolor="#ffffff", fontcolor="#0f172a"];
+  edge [color="#64748b", arrowsize=0.8, penwidth=1.4];
+
+  title [shape=plain, label=<
+    <TABLE BORDER="0" CELLBORDER="0" CELLPADDING="2">
+      <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="26"><B>Executive Finance Methodology</B></FONT></TD></TR>
+      <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="13" COLOR="#475569">ROI, payback, and EBIT impact in Industrial Intelligence</FONT></TD></TR>
+    </TABLE>
+  >];
+
+  subgraph cluster_inputs {
+    label="1) Data Inputs";
+    color="#dbeafe";
+    style="rounded";
+    fontname="Helvetica";
+    fontsize=12;
+    finance_daily [fillcolor="#eff6ff", label=<
+      <B>Primary Finance Daily</B><BR/>
+      &lt;catalog&gt;.finance.pm_financial_daily<BR ALIGN="LEFT"/>
+      <FONT POINT-SIZE="10" COLOR="#475569">30d aggregated cost/value context</FONT>
+    >];
+    impact_events [fillcolor="#eff6ff", label=<
+      <B>Financial Impact Events</B><BR/>
+      &lt;catalog&gt;.gold.financial_impact_events<BR ALIGN="LEFT"/>
+      <FONT POINT-SIZE="10" COLOR="#475569">downtime, expected failure, avoided cost</FONT>
+    >];
+    work_orders [fillcolor="#eff6ff", label=<
+      <B>Work Orders</B><BR/>
+      &lt;catalog&gt;.lakebase.work_orders<BR ALIGN="LEFT"/>
+      <FONT POINT-SIZE="10" COLOR="#475569">open/scheduled action context</FONT>
+    >];
+  }
+
+  net_benefit [fillcolor="#f0fdf4", color="#86efac", label=<
+    <B>2) Net Benefit</B><BR/>
+    net_benefit = avoided_downtime + avoided_quality + avoided_energy<BR ALIGN="LEFT"/>
+    &nbsp;&nbsp;&nbsp;&nbsp;- intervention_cost - platform_cost
+  >];
+
+  ebit_saved [fillcolor="#f0fdf4", color="#86efac", label=<
+    <B>3) EBIT Saved</B><BR/>
+    ebit_saved = max(0, net_benefit)
+  >];
+
+  roi [fillcolor="#ecfeff", color="#67e8f9", label=<
+    <B>4a) ROI %</B><BR/>
+    roi_pct = ebit_saved / (intervention_cost + platform_cost) * 100
+  >];
+  payback [fillcolor="#ecfeff", color="#67e8f9", label=<
+    <B>4b) Payback Days</B><BR/>
+    payback_days = (intervention_cost + platform_cost) / (ebit_saved / 30)
+  >];
+  margin [fillcolor="#ecfeff", color="#67e8f9", label=<
+    <B>4c) EBIT Margin Lift (bps)</B><BR/>
+    ebit_margin_bps = ebit_saved / baseline_monthly_ebit * 10,000
+  >];
+
+  fallback [fillcolor="#fff7ed", color="#fdba74", label=<
+    <B>5) Fallback when daily finance is sparse</B><BR/>
+    Mode: modeled_work_order_economics<BR ALIGN="LEFT"/>
+    expected_failure_cost ~= downtime + quality + energy + emergency labor + expedited parts<BR ALIGN="LEFT"/>
+    intervention_cost ~= planned labor + planned parts + dispatch<BR ALIGN="LEFT"/>
+    net_ebit_impact_per_WO = max(0, expected_failure_cost - intervention_cost)
+  >];
+
+  currency [fillcolor="#f8fafc", color="#cbd5e1", label=<
+    <B>Display Layer</B><BR/>
+    All values converted to selected UI currency before rendering cards
+  >];
+
+  title -> finance_daily [style=invis];
+  title -> impact_events [style=invis];
+  title -> work_orders [style=invis];
+
+  finance_daily -> net_benefit;
+  impact_events -> net_benefit;
+  work_orders -> net_benefit;
+  net_benefit -> ebit_saved;
+  ebit_saved -> roi;
+  ebit_saved -> payback;
+  ebit_saved -> margin;
+  work_orders -> fallback;
+  impact_events -> fallback;
+  finance_daily -> fallback;
+  roi -> currency;
+  payback -> currency;
+  margin -> currency;
+  fallback -> currency;
+}

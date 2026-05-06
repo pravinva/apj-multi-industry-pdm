@@ -10,8 +10,8 @@ command:
 env:
   - name: OT_PDM_OWNER_USER
     value: "pravin.varma@databricks.com"
-  - name: OT_PDM_WAREHOUSE_ID
-    value: "4b9b953939869799"
+  # Leave warehouse unset to allow runtime auto-discovery in each workspace.
+  # Set explicitly only when you need to pin a specific SQL warehouse.
   # ~15m demo: long-lived SQL cache for stable UC data; predictions + stream stay short (see server.py).
   - name: OT_PDM_SQL_CACHE_TTL_S
     value: "900"
@@ -20,9 +20,9 @@ env:
   - name: OT_PDM_STREAM_SQL_CACHE_TTL_S
     value: "5"
   - name: OT_PDM_UI_OVERVIEW_CACHE_TTL_S
-    value: "0"
+    value: "300"
   - name: OT_PDM_UI_HIERARCHY_CACHE_TTL_S
-    value: "0"
+    value: "300"
   - name: OT_PDM_UI_RESPONSE_CACHE_TTL_S
     value: "900"
   # Asset detail + Model tab UI cache; align with predictions (default: OT_PDM_PREDICTIONS_CACHE_TTL_S).

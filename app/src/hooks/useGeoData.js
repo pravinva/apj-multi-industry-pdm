@@ -19,7 +19,7 @@ function mergeSites(prev, chunk) {
  * - sitesLoading: true while any industry request is still in flight
  * - loading: true only until the first sites appear or all requests finish (empty / failure)
  */
-export function useGeoData(activeIndustries, currency = "") {
+export function useGeoData(activeIndustries, currency = "", enabled = true) {
   const [sites, setSites] = useState([]);
   const [loading, setLoading] = useState(false);
   const [sitesLoading, setSitesLoading] = useState(false);
@@ -81,8 +81,15 @@ export function useGeoData(activeIndustries, currency = "") {
   }, [activeIndustries, currency]);
 
   useEffect(() => {
+    if (!enabled) {
+      setSites([]);
+      setLoading(false);
+      setSitesLoading(false);
+      setError("");
+      return;
+    }
     runLoad();
-  }, [runLoad]);
+  }, [runLoad, enabled]);
 
   return { sites, loading, sitesLoading, error, refetch: runLoad };
 }

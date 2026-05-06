@@ -19,6 +19,7 @@ Config-driven predictive and prescriptive maintenance application built on Datab
 - [Deployment Modes](#deployment-modes)
 - [Simulator and Fault Injection](#simulator-and-fault-injection)
 - [Localization and Currency](#localization-and-currency)
+- [Executive Finance Methodology](#executive-finance-methodology)
 - [Genie and Retrieval](#genie-and-retrieval)
 - [Validation and Tests](#validation-and-tests)
 - [Technology Stack](#technology-stack)
@@ -189,6 +190,38 @@ Source systems (Simulator / Zerobus / PI / ERP context)
 - Supported display currencies include `USD`, `AUD`, `JPY`, `INR`, `SGD`, `KRW`, plus `AUTO`.
 - Geo and financial sections are currency-aware and site-context-aware.
 - Language behavior can localize prompts and guidance for selected currency contexts.
+
+## Executive Finance Methodology
+
+The executive finance panel computes ROI, payback, and EBIT impact from maintenance outcomes.
+
+![Executive Finance Methodology](docs/executive-finance-methodology-nano-banana.png)
+
+### Primary source path
+
+- Preferred source table: `<catalog>.finance.pm_financial_daily` (last 30-day aggregation window)
+- Supplementary event context: `<catalog>.gold.financial_impact_events`
+- Work-order context: `<catalog>.lakebase.work_orders` (when available)
+
+### Core formulas
+
+- `net_benefit = avoided_downtime_cost + avoided_quality_cost + avoided_energy_cost - intervention_cost - platform_cost`
+- `ebit_saved = max(0, net_benefit)`
+- `roi_pct = ebit_saved / (intervention_cost + platform_cost) * 100`
+- `payback_days = (intervention_cost + platform_cost) / (ebit_saved / 30)` (30-day run-rate assumption)
+- `ebit_margin_bps = ebit_saved / baseline_monthly_ebit * 10,000`
+
+### Work-order level impact
+
+For each recommended work order:
+
+- `expected_failure_cost` is estimated from anomaly/risk severity and cost-rate assumptions.
+- `intervention_cost` is estimated from planned labor + planned parts + dispatch.
+- `net_ebit_impact = max(0, expected_failure_cost - intervention_cost)`.
+
+### Fallback behavior
+
+If `pm_financial_daily` is sparse/unavailable, the app falls back to modeled work-order economics derived from asset risk (`anomaly_score`, `rul_hours`) and industry profile cost rates. Display values are then converted to the selected UI currency.
 
 ## Genie and Retrieval
 

@@ -20,9 +20,9 @@ env:
   - name: OT_PDM_STREAM_SQL_CACHE_TTL_S
     value: "5"
   - name: OT_PDM_UI_OVERVIEW_CACHE_TTL_S
-    value: "0"
+    value: "300"
   - name: OT_PDM_UI_HIERARCHY_CACHE_TTL_S
-    value: "0"
+    value: "300"
   - name: OT_PDM_UI_RESPONSE_CACHE_TTL_S
     value: "900"
   # Asset detail + Model tab UI cache; align with predictions (default: OT_PDM_PREDICTIONS_CACHE_TTL_S).

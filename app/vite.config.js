@@ -5,7 +5,25 @@ export default defineConfig({
   plugins: [react()],
   build: {
     outDir: "dist",
-    emptyOutDir: true
+    emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("node_modules/react") || id.includes("node_modules/react-dom")) {
+            return "vendor-react";
+          }
+          if (
+            id.includes("node_modules/maplibre-gl") ||
+            id.includes("node_modules/react-map-gl")
+          ) {
+            return "vendor-map";
+          }
+          if (id.includes("node_modules/chart.js")) {
+            return "vendor-chart";
+          }
+        }
+      }
+    }
   },
   server: {
     port: 5173,

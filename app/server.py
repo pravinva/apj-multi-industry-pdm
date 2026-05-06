@@ -402,8 +402,8 @@ _BRONZE_LATEST_KEY_RE = re.compile(r":bronze:\d+$")
 _UI_RESPONSE_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 # Fallback TTL for any UI cache keys other than overview/hierarchy (see _ui_response_ttl_for_key).
 _UI_RESPONSE_TTL_DEFAULT_S = float(os.getenv("OT_PDM_UI_RESPONSE_CACHE_TTL_S", "900"))
-_UI_OVERVIEW_CACHE_TTL_S = float(os.getenv("OT_PDM_UI_OVERVIEW_CACHE_TTL_S", "0"))
-_UI_HIERARCHY_CACHE_TTL_S = float(os.getenv("OT_PDM_UI_HIERARCHY_CACHE_TTL_S", "0"))
+_UI_OVERVIEW_CACHE_TTL_S = float(os.getenv("OT_PDM_UI_OVERVIEW_CACHE_TTL_S", "300"))
+_UI_HIERARCHY_CACHE_TTL_S = float(os.getenv("OT_PDM_UI_HIERARCHY_CACHE_TTL_S", "300"))
 # Per-asset UI payloads (detail + model tab): default matches prediction SQL TTL so scores stay fresh.
 _UI_ASSET_MODEL_CACHE_TTL_S = float(os.getenv("OT_PDM_UI_ASSET_MODEL_CACHE_TTL_S", str(_SQL_PREDICTIONS_TTL_S)))
 _GEO_SITES_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
@@ -442,7 +442,7 @@ _LIVE_SCORING_MIN_INTERVAL_S = int(os.getenv("OT_PDM_LIVE_SCORING_MIN_INTERVAL_S
 _LIVE_SCORING_STALENESS_S = int(os.getenv("OT_PDM_LIVE_SCORING_STALENESS_S", "90"))
 _LIVE_SCORING_FRESH_LOOKBACK_S = int(os.getenv("OT_PDM_LIVE_SCORING_FRESH_LOOKBACK_S", "15"))
 # When true, skip freshness SQL + jobs/run-now on every predictions read (demo / UI responsiveness).
-_SKIP_LIVE_SCORING_ON_READ = str(os.getenv("OT_PDM_SKIP_LIVE_SCORING_ON_READ", "false")).lower() in (
+_SKIP_LIVE_SCORING_ON_READ = str(os.getenv("OT_PDM_SKIP_LIVE_SCORING_ON_READ", "true")).lower() in (
     "1",
     "true",
     "yes",

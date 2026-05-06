@@ -402,8 +402,8 @@ _BRONZE_LATEST_KEY_RE = re.compile(r":bronze:\d+$")
 _UI_RESPONSE_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 # Fallback TTL for any UI cache keys other than overview/hierarchy (see _ui_response_ttl_for_key).
 _UI_RESPONSE_TTL_DEFAULT_S = float(os.getenv("OT_PDM_UI_RESPONSE_CACHE_TTL_S", "900"))
-_UI_OVERVIEW_CACHE_TTL_S = float(os.getenv("OT_PDM_UI_OVERVIEW_CACHE_TTL_S", "0"))
-_UI_HIERARCHY_CACHE_TTL_S = float(os.getenv("OT_PDM_UI_HIERARCHY_CACHE_TTL_S", "0"))
+_UI_OVERVIEW_CACHE_TTL_S = float(os.getenv("OT_PDM_UI_OVERVIEW_CACHE_TTL_S", "300"))
+_UI_HIERARCHY_CACHE_TTL_S = float(os.getenv("OT_PDM_UI_HIERARCHY_CACHE_TTL_S", "300"))
 # Per-asset UI payloads (detail + model tab): default matches prediction SQL TTL so scores stay fresh.
 _UI_ASSET_MODEL_CACHE_TTL_S = float(os.getenv("OT_PDM_UI_ASSET_MODEL_CACHE_TTL_S", str(_SQL_PREDICTIONS_TTL_S)))
 _GEO_SITES_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
@@ -442,7 +442,7 @@ _LIVE_SCORING_MIN_INTERVAL_S = int(os.getenv("OT_PDM_LIVE_SCORING_MIN_INTERVAL_S
 _LIVE_SCORING_STALENESS_S = int(os.getenv("OT_PDM_LIVE_SCORING_STALENESS_S", "90"))
 _LIVE_SCORING_FRESH_LOOKBACK_S = int(os.getenv("OT_PDM_LIVE_SCORING_FRESH_LOOKBACK_S", "15"))
 # When true, skip freshness SQL + jobs/run-now on every predictions read (demo / UI responsiveness).
-_SKIP_LIVE_SCORING_ON_READ = str(os.getenv("OT_PDM_SKIP_LIVE_SCORING_ON_READ", "false")).lower() in (
+_SKIP_LIVE_SCORING_ON_READ = str(os.getenv("OT_PDM_SKIP_LIVE_SCORING_ON_READ", "true")).lower() in (
     "1",
     "true",
     "yes",
@@ -491,10 +491,14 @@ def _resolve_warehouse_id() -> str:
                         return wid
             if fallback:
                 return fallback[0][0]
-        except Exception:
-            pass
-    # Last-resort static fallback for environments without discovery access.
-    return "4b9b953939869799"
+        except Exception as e:
+            raise RuntimeError(
+                "Unable to discover a SQL warehouse automatically. "
+                "Set OT_PDM_WAREHOUSE_ID or DATABRICKS_SQL_WAREHOUSE_ID."
+            ) from e
+    raise RuntimeError(
+        "No SQL warehouse found. Set OT_PDM_WAREHOUSE_ID or DATABRICKS_SQL_WAREHOUSE_ID."
+    )
 
 
 _WAREHOUSE_ID = _resolve_warehouse_id()
@@ -1574,6 +1578,11 @@ def _sim_demo_sql_inject_paths(
         "sensor_readings_rows": 0,
         "sensor_features_rows": 0,
         "predictions_rows": 0,
+        "silver_sensor_features_rows": 0,
+        "financial_impact_rows": 0,
+        "finance_daily_rows": 0,
+        "line_risk_rows": 0,
+        "supplier_quality_rows": 0,
     }
 
     def ex(sql: str) -> None:
@@ -1582,7 +1591,9 @@ def _sim_demo_sql_inject_paths(
     try:
         ex(f"CREATE CATALOG IF NOT EXISTS {catalog}")
         ex(f"CREATE SCHEMA IF NOT EXISTS {catalog}.bronze")
+        ex(f"CREATE SCHEMA IF NOT EXISTS {catalog}.silver")
         ex(f"CREATE SCHEMA IF NOT EXISTS {catalog}.gold")
+        ex(f"CREATE SCHEMA IF NOT EXISTS {catalog}.finance")
     except Exception:
         pass
 
@@ -1636,10 +1647,99 @@ def _sim_demo_sql_inject_paths(
       _scored_at TIMESTAMP DEFAULT current_timestamp()
     ) USING DELTA
     """
+    silver_feat_ddl = f"""
+    CREATE TABLE IF NOT EXISTS {catalog}.silver.sensor_features (
+      equipment_id STRING,
+      tag_name STRING,
+      window_start TIMESTAMP,
+      window_end TIMESTAMP,
+      mean_15m DOUBLE,
+      stddev_15m DOUBLE,
+      slope_1h DOUBLE,
+      zscore_30d DOUBLE,
+      cumsum_24h DOUBLE,
+      quality_good_pct DOUBLE,
+      reading_count INT,
+      _processed_at TIMESTAMP
+    ) USING DELTA
+    """
+    impact_ddl = f"""
+    CREATE TABLE IF NOT EXISTS {catalog}.gold.financial_impact_events (
+      equipment_id STRING,
+      prediction_timestamp TIMESTAMP,
+      severity STRING,
+      anomaly_score DOUBLE,
+      rul_hours DOUBLE,
+      event_type STRING,
+      shift_label STRING,
+      maintenance_window_start TIMESTAMP,
+      maintenance_window_end TIMESTAMP,
+      has_maintenance_window BOOLEAN,
+      crew_available BOOLEAN,
+      downtime_hours DOUBLE,
+      maintenance_cost DOUBLE,
+      production_loss DOUBLE,
+      expected_failure_cost DOUBLE,
+      avoided_cost DOUBLE,
+      total_event_cost DOUBLE,
+      data_source STRING,
+      source_table STRING,
+      _computed_at TIMESTAMP
+    ) USING DELTA
+    """
+    finance_daily_ddl = f"""
+    CREATE TABLE IF NOT EXISTS {catalog}.finance.pm_financial_daily (
+      ds DATE,
+      industry STRING,
+      currency STRING,
+      avoided_downtime_cost DOUBLE,
+      avoided_quality_cost DOUBLE,
+      avoided_energy_cost DOUBLE,
+      intervention_cost DOUBLE,
+      platform_cost DOUBLE,
+      ebit_saved DOUBLE,
+      net_benefit DOUBLE,
+      baseline_monthly_ebit DOUBLE,
+      unplanned_downtime_cost DOUBLE,
+      unplanned_downtime_hours DOUBLE,
+      maintenance_cost_total DOUBLE,
+      units_produced DOUBLE,
+      maintenance_cost_per_unit DOUBLE,
+      recovered_capacity_units DOUBLE,
+      recovered_capacity_pct DOUBLE,
+      updated_at TIMESTAMP
+    ) USING DELTA
+    """
+    line_risk_ddl = f"""
+    CREATE TABLE IF NOT EXISTS {catalog}.finance.pm_line_risk_30d (
+      snapshot_ts TIMESTAMP,
+      site_id STRING,
+      line_id STRING,
+      risk_score DOUBLE,
+      ebit_at_risk DOUBLE,
+      updated_at TIMESTAMP
+    ) USING DELTA
+    """
+    supplier_ddl = f"""
+    CREATE TABLE IF NOT EXISTS {catalog}.finance.supplier_quality_failure_daily (
+      ds DATE,
+      supplier_name STRING,
+      site_id STRING,
+      defect_rate_ppm DOUBLE,
+      incoming_qc_score DOUBLE,
+      failure_rate_30d DOUBLE,
+      updated_at TIMESTAMP
+    ) USING DELTA
+    """
     try:
         ex(read_ddl)
         ex(feat_ddl)
         ex(pred_ddl)
+        ex(silver_feat_ddl)
+        ex(impact_ddl)
+        ex(finance_daily_ddl)
+        ex(line_risk_ddl)
+        ex(supplier_ddl)
     except Exception:
         pass
 
@@ -1728,8 +1828,52 @@ def _sim_demo_sql_inject_paths(
                 print(f"[simulator] demo sensor_features insert skipped: {e}")
                 break
         out["sensor_features_rows"] = sf_total
+        silver_values: list[str] = []
+        for r in sample_rows:
+            ts_raw = str(r.get("timestamp", "") or "")
+            ts = ts_raw[:19] if len(ts_raw) >= 19 else datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+            eid = _sql_escape(str(r.get("equipment_id", "")))
+            tag = _sql_escape(str(r.get("tag_name", "")))
+            val = float(r.get("value", 0.0))
+            qual = str(r.get("quality", "good"))
+            qgp = 1.0 if qual == "good" else 0.55
+            silver_values.append(
+                "("
+                + ", ".join(
+                    [
+                        f"'{eid}'",
+                        f"'{tag}'",
+                        f"TIMESTAMP '{_sql_escape(ts)}' - INTERVAL 15 MINUTES",
+                        f"TIMESTAMP '{_sql_escape(ts)}'",
+                        str(round(val, 4)),
+                        str(round(max(0.001, abs(val) * 0.05), 4)),
+                        "0.0",
+                        str(round(0.18 + random.random() * 0.42, 4)),
+                        str(round(val * 6.0, 4)),
+                        str(qgp),
+                        "1",
+                        "current_timestamp()",
+                    ]
+                )
+                + ")"
+            )
+        if silver_values:
+            silver_total = 0
+            for i in range(0, len(silver_values), chunk):
+                try:
+                    ex(
+                        f"INSERT INTO {catalog}.silver.sensor_features "
+                        "(equipment_id, tag_name, window_start, window_end, mean_15m, stddev_15m, slope_1h, zscore_30d, cumsum_24h, quality_good_pct, reading_count, _processed_at) VALUES "
+                        + ", ".join(silver_values[i : i + chunk])
+                    )
+                    silver_total += len(silver_values[i : i + chunk])
+                except Exception as e:
+                    print(f"[simulator] demo silver sensor_features insert skipped: {e}")
+                    break
+            out["silver_sensor_features_rows"] = silver_total
 
     pred_ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    pred_rows: list[dict[str, Any]] = []
     for aid in fault_asset_ids:
         fc = st.get("faults", {}).get(aid, {}) or {}
         sev = max(0, min(100, int(fc.get("severity", 70))))
@@ -1760,8 +1904,192 @@ def _sim_demo_sql_inject_paths(
                 """
             )
             out["predictions_rows"] += 1
+            pred_rows.append(
+                {
+                    "equipment_id": aid,
+                    "severity_score": sev,
+                    "anomaly_score": round(score, 4),
+                    "severity_label": "critical" if score >= 0.8 else "warning",
+                    "rul_hours": round(rul, 2),
+                    "prediction_timestamp": pred_ts,
+                }
+            )
         except Exception as e:
             print(f"[simulator] demo prediction insert skipped for {aid}: {e}")
+
+    # Seed downstream finance/event tables used by Data Discovery Hub.
+    if pred_rows:
+        asset_meta = {str(a.get("id") or ""): a for a in _asset_defs(industry) if a.get("id")}
+        events_values: list[str] = []
+        line_risk_by_site: dict[str, dict[str, float]] = {}
+        sum_avoided = 0.0
+        sum_downtime_h = 0.0
+        sum_maint_cost = 0.0
+        sum_expected = 0.0
+        for p in pred_rows:
+            aid = str(p.get("equipment_id") or "")
+            meta = asset_meta.get(aid, {})
+            site_id = str(meta.get("site") or "site_1")
+            line_id = str(meta.get("unit") or "line_1")
+            score = _to_float(p.get("anomaly_score"), 0.65)
+            rul_h = _to_float(p.get("rul_hours"), 24.0)
+            sev_label = str(p.get("severity_label") or "warning")
+            downtime_h = round(max(0.4, (score * 6.0) - (rul_h / 12.0)), 2)
+            maint_cost = round(1500.0 + score * 4200.0 + random.uniform(50, 450), 2)
+            expected_failure = round(maint_cost * (2.1 + score), 2)
+            avoided = round(max(0.0, expected_failure - maint_cost), 2)
+            total_cost = round(maint_cost + expected_failure, 2)
+            shift_label = random.choice(["A", "B", "C"])
+            mw_start = datetime.now(timezone.utc) + timedelta(hours=max(1.0, rul_h - 6.0))
+            mw_end = mw_start + timedelta(hours=4)
+            events_values.append(
+                "("
+                + ", ".join(
+                    [
+                        f"'{_sql_escape(aid)}'",
+                        f"TIMESTAMP '{_sql_escape(str(p.get('prediction_timestamp') or pred_ts))}'",
+                        f"'{_sql_escape(sev_label)}'",
+                        str(round(score, 4)),
+                        str(round(rul_h, 2)),
+                        "'equipment_risk'",
+                        f"'{shift_label}'",
+                        f"TIMESTAMP '{_sql_escape(mw_start.strftime('%Y-%m-%d %H:%M:%S'))}'",
+                        f"TIMESTAMP '{_sql_escape(mw_end.strftime('%Y-%m-%d %H:%M:%S'))}'",
+                        "TRUE",
+                        "TRUE",
+                        str(downtime_h),
+                        str(maint_cost),
+                        str(round(expected_failure * 0.45, 2)),
+                        str(expected_failure),
+                        str(avoided),
+                        str(total_cost),
+                        "'sim_demo_sql'",
+                        f"'{catalog}.gold.pdm_predictions'",
+                        "current_timestamp()",
+                    ]
+                )
+                + ")"
+            )
+            sum_avoided += avoided
+            sum_downtime_h += downtime_h
+            sum_maint_cost += maint_cost
+            sum_expected += expected_failure
+            cur = line_risk_by_site.setdefault(site_id, {"risk": 0.0, "ebit": 0.0, "line_id": line_id})
+            cur["risk"] = max(cur["risk"], score)
+            cur["ebit"] += expected_failure
+            if not cur.get("line_id"):
+                cur["line_id"] = line_id
+
+        if events_values:
+            try:
+                ex(
+                    f"INSERT INTO {catalog}.gold.financial_impact_events "
+                    "(equipment_id, prediction_timestamp, severity, anomaly_score, rul_hours, event_type, shift_label, maintenance_window_start, maintenance_window_end, has_maintenance_window, crew_available, downtime_hours, maintenance_cost, production_loss, expected_failure_cost, avoided_cost, total_event_cost, data_source, source_table, _computed_at) VALUES "
+                    + ", ".join(events_values)
+                )
+                out["financial_impact_rows"] = len(events_values)
+            except Exception as e:
+                print(f"[simulator] demo financial_impact_events insert skipped: {e}")
+
+        display_ccy = _effective_demo_currency("", _geo_currency(industry))
+        ds = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        finance_value = (
+            "("
+            + ", ".join(
+                [
+                    f"DATE '{_sql_escape(ds)}'",
+                    f"'{_sql_escape(industry)}'",
+                    f"'{_sql_escape(display_ccy)}'",
+                    str(round(sum_avoided * 0.72, 2)),
+                    str(round(sum_avoided * 0.18, 2)),
+                    str(round(sum_avoided * 0.10, 2)),
+                    str(round(sum_maint_cost, 2)),
+                    str(round(max(350.0, sum_maint_cost * 0.08), 2)),
+                    str(round(sum_avoided, 2)),
+                    str(round(sum_avoided - sum_maint_cost, 2)),
+                    str(round(max(100000.0, sum_expected * 1.8), 2)),
+                    str(round(sum_expected, 2)),
+                    str(round(sum_downtime_h, 2)),
+                    str(round(sum_maint_cost, 2)),
+                    str(round(max(5000.0, sum_avoided / 4.0), 2)),
+                    str(round(sum_maint_cost / max(1.0, sum_avoided / 4.0), 6)),
+                    str(round(max(200.0, sum_downtime_h * 18.0), 2)),
+                    str(round(min(35.0, max(3.0, (sum_avoided / max(1.0, sum_expected)) * 100.0)), 2)),
+                    "current_timestamp()",
+                ]
+            )
+            + ")"
+        )
+        try:
+            ex(
+                f"INSERT INTO {catalog}.finance.pm_financial_daily "
+                "(ds, industry, currency, avoided_downtime_cost, avoided_quality_cost, avoided_energy_cost, intervention_cost, platform_cost, ebit_saved, net_benefit, baseline_monthly_ebit, unplanned_downtime_cost, unplanned_downtime_hours, maintenance_cost_total, units_produced, maintenance_cost_per_unit, recovered_capacity_units, recovered_capacity_pct, updated_at) VALUES "
+                + finance_value
+            )
+            out["finance_daily_rows"] = 1
+        except Exception as e:
+            print(f"[simulator] demo finance.pm_financial_daily insert skipped: {e}")
+
+        if line_risk_by_site:
+            lr_values: list[str] = []
+            for site_id, vals in line_risk_by_site.items():
+                line_id = str(vals.get("line_id") or "line_1")
+                lr_values.append(
+                    "("
+                    + ", ".join(
+                        [
+                            "current_timestamp()",
+                            f"'{_sql_escape(site_id)}'",
+                            f"'{_sql_escape(line_id)}'",
+                            str(round(_to_float(vals.get("risk"), 0.0), 4)),
+                            str(round(_to_float(vals.get("ebit"), 0.0), 2)),
+                            "current_timestamp()",
+                        ]
+                    )
+                    + ")"
+                )
+            try:
+                ex(
+                    f"INSERT INTO {catalog}.finance.pm_line_risk_30d "
+                    "(snapshot_ts, site_id, line_id, risk_score, ebit_at_risk, updated_at) VALUES "
+                    + ", ".join(lr_values)
+                )
+                out["line_risk_rows"] = len(lr_values)
+            except Exception as e:
+                print(f"[simulator] demo finance.pm_line_risk_30d insert skipped: {e}")
+
+        supplier_rows = [
+            ("Nippon Components", 420.0, 93.2, 0.072),
+            ("HanTech Motion", 590.0, 88.4, 0.109),
+            ("ASEAN Precision", 350.0, 95.1, 0.061),
+        ]
+        sup_values = []
+        first_site = next(iter(line_risk_by_site.keys()), "site_1")
+        for name, defect_ppm, qc_score, fail_rate in supplier_rows:
+            sup_values.append(
+                "("
+                + ", ".join(
+                    [
+                        f"DATE '{_sql_escape(ds)}'",
+                        f"'{_sql_escape(name)}'",
+                        f"'{_sql_escape(first_site)}'",
+                        str(defect_ppm),
+                        str(qc_score),
+                        str(fail_rate),
+                        "current_timestamp()",
+                    ]
+                )
+                + ")"
+            )
+        try:
+            ex(
+                f"INSERT INTO {catalog}.finance.supplier_quality_failure_daily "
+                "(ds, supplier_name, site_id, defect_rate_ppm, incoming_qc_score, failure_rate_30d, updated_at) VALUES "
+                + ", ".join(sup_values)
+            )
+            out["supplier_quality_rows"] = len(sup_values)
+        except Exception as e:
+            print(f"[simulator] demo supplier_quality_failure_daily insert skipped: {e}")
 
     _sql_cache_flush_catalog(catalog)
     _ui_cache_invalidate(industry)
@@ -2332,7 +2660,9 @@ def _geo_assets_for_site(industry: str, site_id: str) -> list[dict[str, Any]]:
         for a in defs
         if _asset_token_norm(str(a.get("site") or "")) == site_key
     ]
-    return filtered
+    # Guardrail: if source metadata site keys drift (for example, stale/legacy
+    # asset_metadata.site_id values), avoid an empty Geo drilldown panel.
+    return filtered if filtered else defs
 
 
 def _geo_asset_defs_from_predictions(industry: str) -> list[dict[str, Any]]:
@@ -2460,6 +2790,53 @@ def _genie_extract_text(message: dict[str, Any]) -> str:
     if chunks:
         return "\n\n".join(chunks)
     return ""
+
+
+def _genie_uc_metrics_context(industry: str, currency: str = "") -> str:
+    """
+    Compact UC-backed metrics contract for Genie so answers align with
+    executive KPI semantics and table lineage.
+    """
+    catalog = _industry_cfg(industry).get("catalog", f"pdm_{industry}")
+    predictions_fqn = f"{catalog}.gold.pdm_predictions"
+    events_fqn = f"{catalog}.gold.financial_impact_events"
+    finance_daily_fqn = f"{catalog}.finance.pm_financial_daily"
+    site_finance_fqn = f"{catalog}.finance.pm_site_financial_daily"
+    features_fqn = f"{catalog}.silver.sensor_features"
+    sensor_fqn = f"{catalog}.bronze.sensor_readings"
+
+    snapshot_lines: list[str] = []
+    try:
+        ov = _overview(industry, display_currency=currency)
+        kpis = ov.get("kpis", {}) if isinstance(ov, dict) else {}
+        ex = ov.get("executive", {}) if isinstance(ov, dict) else {}
+        if isinstance(kpis, dict):
+            snapshot_lines.append(f"- fleet_health_score: {round(_to_float(kpis.get('fleet_health_score'), 0.0), 1)}")
+            snapshot_lines.append(f"- critical_assets: {int(_to_float(kpis.get('critical_assets'), 0))}")
+            snapshot_lines.append(f"- asset_count: {int(_to_float(kpis.get('asset_count'), 0))}")
+        if isinstance(ex, dict):
+            snapshot_lines.append(f"- ebit_saved_fmt: {str(ex.get('ebit_saved_fmt') or '')}")
+            snapshot_lines.append(f"- roi_pct: {round(_to_float(ex.get('roi_pct'), 0.0), 2)}")
+            snapshot_lines.append(f"- payback_days: {round(_to_float(ex.get('payback_days'), 0.0), 2)}")
+    except Exception:
+        pass
+
+    context = (
+        "Unity Catalog metrics contract (keep KPI semantics consistent):\n"
+        f"- Predictions table: {predictions_fqn}\n"
+        f"- Financial impact table: {events_fqn}\n"
+        f"- Finance daily table: {finance_daily_fqn}\n"
+        f"- Site finance table: {site_finance_fqn}\n"
+        f"- Sensor features table: {features_fqn}\n"
+        f"- Raw sensor table: {sensor_fqn}\n"
+        "Rules:\n"
+        "1) Keep fleet/executive KPI names and meanings aligned with overview semantics.\n"
+        "2) Derive financial impact from gold.financial_impact_events and finance daily/site tables.\n"
+        "3) Do not invent alternate KPI definitions that conflict with executive view.\n"
+    )
+    if snapshot_lines:
+        context += "Current KPI snapshot:\n" + "\n".join(snapshot_lines) + "\n"
+    return context
 
 
 def _sanitize_zerobus_config_for_response(cfg: dict[str, Any]) -> dict[str, Any]:
@@ -6587,6 +6964,134 @@ def ui_simulator_inject_and_score(payload: dict) -> dict:
     }
 
 
+def _sim_bulk_sample_rows(industry: str, assets: list[dict[str, Any]], st: dict[str, Any]) -> list[dict[str, Any]]:
+    cfg = _industry_cfg(industry)
+    protocol = str(cfg.get("simulator", {}).get("protocol", "OPC-UA") or "OPC-UA")
+    rows: list[dict[str, Any]] = []
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    for asset in assets:
+        aid = str(asset.get("id", "") or "").strip()
+        if not aid:
+            continue
+        site_id = str(asset.get("site", "site_1") or "site_1")
+        area_id = str(asset.get("area", "area_1") or "area_1")
+        unit_id = str(asset.get("unit", "unit_1") or "unit_1")
+        asset_type = str(asset.get("type", "") or "")
+        sensors = _sensor_defs(industry, asset_type)[:3] or [
+            {"name": "sensor_value", "unit": "u", "normal_range": [10, 100], "dir": 1}
+        ]
+        fault_cfg = st.get("faults", {}).get(aid, {"enabled": False, "severity": 0, "mode": "degradation"})
+        sev = max(0, min(100, int(fault_cfg.get("severity", 0) or 0)))
+        for s in sensors:
+            low, high = s.get("normal_range", [10, 100])
+            low_f = _to_float(low, 10.0)
+            high_f = _to_float(high, 100.0)
+            if high_f <= low_f:
+                high_f = low_f + 1.0
+            v = random.uniform(low_f, high_f)
+            if bool(fault_cfg.get("enabled")) and sev > 0:
+                direction = int(_to_float(s.get("dir"), 1))
+                bump = 0.10 + (sev / 100.0) * 0.35
+                if direction >= 0:
+                    v = v * (1 + bump)
+                else:
+                    v = v * max(0.2, 1 - bump)
+            quality = "good"
+            if sev >= 90:
+                quality = "bad" if random.random() < 0.45 else "uncertain"
+            elif sev >= 60:
+                quality = "uncertain" if random.random() < 0.55 else "good"
+            rows.append(
+                {
+                    "timestamp": now,
+                    "site_id": site_id,
+                    "area_id": area_id,
+                    "unit_id": unit_id,
+                    "equipment_id": aid,
+                    "tag_name": str(s.get("name", "sensor_value") or "sensor_value"),
+                    "value": round(v, 3),
+                    "unit": str(s.get("unit", "u") or "u"),
+                    "quality": quality,
+                    "source_protocol": protocol,
+                }
+            )
+    return rows[:180]
+
+
+@app.post("/api/ui/simulator/inject_scenario_all")
+def ui_simulator_inject_scenario_all(payload: dict | None = None) -> dict[str, Any]:
+    body = payload or {}
+    requested = body.get("industries")
+    if isinstance(requested, list):
+        selected = [str(i).strip().lower() for i in requested if str(i).strip()]
+    elif isinstance(requested, str):
+        selected = [s.strip().lower() for s in requested.split(",") if s.strip()]
+    else:
+        selected = list(INDUSTRIES)
+    selected = [i for i in selected if i in INDUSTRIES]
+    if not selected:
+        raise HTTPException(status_code=400, detail="No valid industries provided.")
+
+    heavy_count = max(0, min(len(selected), int(body.get("heavy_industries", 2) or 0)))
+    heavy_industries = set(random.sample(selected, heavy_count)) if heavy_count else set()
+    reset_existing = bool(body.get("reset_existing", True))
+
+    out: dict[str, Any] = {
+        "ok": True,
+        "industries": {},
+        "heavy_industries": sorted(list(heavy_industries)),
+    }
+    errors: list[dict[str, str]] = []
+
+    for industry in selected:
+        try:
+            st = _sim_state(industry)
+            cfg_assets = _industry_cfg(industry).get("simulator", {}).get("assets", []) or []
+            assets = [a for a in cfg_assets if str(a.get("id", "")).strip()]
+            if not assets:
+                assets = [a for a in _asset_defs(industry) if str(a.get("id", "")).strip()]
+            if len(assets) < 3:
+                raise RuntimeError(f"Not enough assets to inject for industry={industry}")
+
+            if reset_existing:
+                for a in assets:
+                    aid = str(a.get("id", "") or "").strip()
+                    if not aid:
+                        continue
+                    st["faults"][aid] = {"enabled": False, "severity": 0, "mode": "degradation"}
+
+            random.shuffle(assets)
+            crit_n, warn_n = (2, 2) if industry in heavy_industries else (1, 2)
+            picked = assets[: crit_n + warn_n]
+            critical = [str(a.get("id", "")).strip() for a in picked[:crit_n]]
+            warning = [str(a.get("id", "")).strip() for a in picked[crit_n : crit_n + warn_n]]
+            enabled_assets = [a for a in (critical + warning) if a]
+
+            for aid in critical:
+                st["faults"][aid] = {"enabled": True, "severity": 95, "mode": "degradation"}
+            for aid in warning:
+                st["faults"][aid] = {"enabled": True, "severity": 65, "mode": "degradation"}
+
+            sample_rows = _sim_bulk_sample_rows(industry, picked, st)
+            demo_writes = _sim_demo_sql_inject_paths(industry, sample_rows, enabled_assets)
+            _ui_cache_invalidate(industry)
+            out["industries"][industry] = {
+                "plan": {"critical": crit_n, "warning": warn_n},
+                "critical_assets": critical,
+                "warning_assets": warning,
+                "enabled_fault_assets": enabled_assets,
+                "sample_rows": len(sample_rows),
+                "demo_writes": demo_writes,
+            }
+        except Exception as e:
+            errors.append({"industry": industry, "error": str(e)})
+
+    if errors:
+        out["ok"] = False
+        out["errors"] = errors
+    return out
+
+
 @app.post("/api/ui/simulator/tick")
 def ui_simulator_tick(payload: dict) -> dict:
     industry = payload.get("industry", "mining")
@@ -7287,6 +7792,12 @@ def agent_chat(payload: dict) -> dict:
         effective_user_text = (
             f"{effective_user_text}\n\n"
             "Language note: respond entirely in English."
+        )
+    uc_ctx = _genie_uc_metrics_context(industry, currency)
+    if uc_ctx:
+        effective_user_text = (
+            f"{effective_user_text}\n\n"
+            f"{uc_ctx}"
         )
     manual_refs = _manual_references(
         industry,

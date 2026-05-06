@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import GeoMap from "./components/GeoMap";
-import PIDSchematic from "./components/PIDSchematic";
-import WindSchematic from "./components/WindSchematic";
-import AssetSidebar from "./components/AssetSidebar";
-import GeoStatusBar from "./components/GeoStatusBar";
-import GeoGeniePanel from "./components/GeoGeniePanel";
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { useGeoData, useAssetData } from "./hooks/useGeoData";
+
+const GeoMap = lazy(() => import("./components/GeoMap"));
+const PIDSchematic = lazy(() => import("./components/PIDSchematic"));
+const WindSchematic = lazy(() => import("./components/WindSchematic"));
+const AssetSidebar = lazy(() => import("./components/AssetSidebar"));
+const GeoStatusBar = lazy(() => import("./components/GeoStatusBar"));
+const GeoGeniePanel = lazy(() => import("./components/GeoGeniePanel"));
 
 const INDUSTRIES = ["mining", "energy", "water", "automotive", "semiconductor"];
 const CURRENCIES = ["AUTO", "USD", "AUD", "JPY", "INR", "SGD", "KRW"];
@@ -735,6 +736,9 @@ export default function App() {
   const stoppageSessionCache = useRef({});
   /** Per industry+currency+search: Data Hub discovery snapshots (stale-while-revalidate). */
   const dataHubSessionCache = useRef({});
+  /** Track in-flight warmups to avoid duplicate prefetch calls. */
+  const stoppageWarmupInFlight = useRef(new Set());
+  const dataHubWarmupInFlight = useRef(new Set());
 
   const [simState, setSimState] = useState({
     running: false,
@@ -803,14 +807,18 @@ export default function App() {
   const [selectedTags, setSelectedTags] = useState([]);
   const [tagMappings, setTagMappings] = useState([]);
   const currencyParam = demoCurrency === "AUTO" ? "" : `&currency=${encodeURIComponent(demoCurrency)}`;
+  const geoPageActive = page === "p8";
   const {
     sites: geoSites,
     loading: geoLoading,
     sitesLoading: geoSitesLoading,
     error: geoError,
     refetch: refetchGeoSites
-  } = useGeoData(visibleIndustries, demoCurrency);
-  const { assets: geoAssets, schematic: geoSchematic, loading: geoAssetLoading } = useAssetData(activeSiteId, demoCurrency);
+  } = useGeoData(visibleIndustries, demoCurrency, geoPageActive);
+  const { assets: geoAssets, schematic: geoSchematic, loading: geoAssetLoading } = useAssetData(
+    geoPageActive ? activeSiteId : "",
+    demoCurrency
+  );
 
   useEffect(() => {
     // Prevent stale cross-industry asset IDs from triggering 404 API calls
@@ -1217,6 +1225,37 @@ export default function App() {
   }, [page, industry, demoCurrency, stoppageFilters.site_id, stoppageFilters.line_id, stoppageFilters.shift_label]);
 
   useEffect(() => {
+    // Warm default Stoppage payload in background so first open is instant.
+    const stopKey = `${industry}|${demoCurrency}|||`;
+    if (stoppageSessionCache.current[stopKey]) return;
+    if (stoppageWarmupInFlight.current.has(stopKey)) return;
+    stoppageWarmupInFlight.current.add(stopKey);
+    let cancelled = false;
+    (async () => {
+      try {
+        const params = new URLSearchParams();
+        params.set("industry", industry);
+        if (demoCurrency !== "AUTO") params.set("currency", demoCurrency);
+        const [summary, timeline] = await Promise.all([
+          getJson(`/api/ui/stoppage/summary?${params.toString()}`, null),
+          getJson(`/api/ui/stoppage/timeline?${params.toString()}&limit=120`, { events: [] }),
+        ]);
+        if (cancelled) return;
+        stoppageSessionCache.current[stopKey] = {
+          summary,
+          timeline: Array.isArray(timeline?.events) ? timeline.events : [],
+          ts: Date.now(),
+        };
+      } finally {
+        stoppageWarmupInFlight.current.delete(stopKey);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [industry, demoCurrency]);
+
+  useEffect(() => {
     if (page !== "p10") return undefined;
     const dataKey = `${industry}|${demoCurrency}|${String(dataSearch || "").trim().toLowerCase()}`;
     const snap = dataHubSessionCache.current[dataKey];
@@ -1246,6 +1285,36 @@ export default function App() {
       clearTimeout(timer);
     };
   }, [page, industry, dataSearch, demoCurrency]);
+
+  useEffect(() => {
+    // Warm default Data Hub payload (empty search) in background.
+    const dataKey = `${industry}|${demoCurrency}|`;
+    if (dataHubSessionCache.current[dataKey]?.payload) return;
+    if (dataHubWarmupInFlight.current.has(dataKey)) return;
+    dataHubWarmupInFlight.current.add(dataKey);
+    let cancelled = false;
+    (async () => {
+      try {
+        const params = new URLSearchParams();
+        params.set("industry", industry);
+        if (demoCurrency !== "AUTO") params.set("currency", demoCurrency);
+        const payload = await getJson(
+          `/api/ui/data/discovery?${params.toString()}`,
+          { datasets: [], term_hits: [], viz_starters: [] }
+        );
+        if (cancelled) return;
+        dataHubSessionCache.current[dataKey] = {
+          payload: payload || { datasets: [], term_hits: [], viz_starters: [] },
+          ts: Date.now(),
+        };
+      } finally {
+        dataHubWarmupInFlight.current.delete(dataKey);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [industry, demoCurrency]);
 
   const selectedAsset = useMemo(
     () => overview.assets.find((a) => a.id === selectedAssetId) || overview.assets[0] || null,
@@ -3681,90 +3750,94 @@ export default function App() {
         </div>
 
         <div className={`page ${page === "p8" ? "active" : ""}`} id="p8">
-          <div className="geo-page">
-            <div className="geo-topbar">
-              <div className="geo-top-title">Geo Intelligence</div>
-              <div className="geo-top-meta">
-                {geoLoading && geoSites.length === 0
-                  ? "Loading sites..."
-                  : geoSitesLoading
-                    ? `${geoSites.length} site${geoSites.length === 1 ? "" : "s"} · loading more…`
-                    : `${geoSites.length} site${geoSites.length === 1 ? "" : "s"}`}
-                {geoError ? <span className="geo-err">{geoError}</span> : null}
-              </div>
-              <button className="sbtn" onClick={refetchGeoSites}>Refresh</button>
-            </div>
-            <div className="geo-stack" ref={geoStackRef}>
-              <div className="geo-map-top" style={{ height: geoMapHeight, flexBasis: geoMapHeight }}>
-                <GeoMap
-                  sites={geoSites}
-                  onSiteClick={onGeoSiteClick}
-                  activeSiteId={activeSiteId}
-                  activeIndustries={visibleIndustries}
-                  onToggleIndustry={toggleGeoIndustry}
-                  mapLayer={mapLayer}
-                  onMapLayerChange={setMapLayer}
-                />
-              </div>
-              <div
-                className={`geo-map-splitter ${geoMapResizing ? "active" : ""}`}
-                onMouseDown={() => setGeoMapResizing(true)}
-                title="Drag to resize map area"
-              />
-              <div className="geo-drill-wrap">
-                {activeGeoSite ? (
-                  <div className="geo-facility-wrap">
-                    <div className="geo-facility-hdr">
-                      <button className="chip" onClick={() => { setGeoView("geo"); setActiveSiteId(null); setActiveAssetId(null); }}>Clear selection</button>
-                      <div className="geo-facility-title">{activeGeoSite.customer} · {activeGeoSite.name}</div>
-                      <div className="geo-facility-sub">
-                        {activeGeoSite.industry} · {geoSchematic?.subtitle || ""} · Assets {geoAssets.length} · Native {activeGeoSite.currency || "USD"}
-                      </div>
-                    </div>
-                    <div className="geo-facility-main">
-                      <div className="geo-schematic-pane">
-                        {String(activeGeoSite?.industry || "").toLowerCase() === "energy" ? (
-                          <WindSchematic assets={geoAssets} activeAssetId={activeAssetId} onAssetClick={setActiveAssetId} />
-                        ) : (
-                          <PIDSchematic
-                            schematic={geoSchematic}
-                            assets={geoAssets}
-                            industry={activeGeoSite.industry}
-                            activeAssetId={activeAssetId}
-                            onAssetClick={setActiveAssetId}
-                          />
-                        )}
-                      </div>
-                      <AssetSidebar assets={geoAssets} activeAssetId={activeAssetId} onAssetClick={setActiveAssetId} currency={demoCurrency} />
-                      {activeGeoAsset ? (
-                        <GeoGeniePanel
-                          asset={activeGeoAsset}
-                          assets={geoAssets}
-                          site={activeGeoSite}
-                          industry={activeGeoSite.industry || industry}
-                          currency={demoCurrency}
-                          genieUrl={activeGeoGenieUrl}
-                          onSelectAsset={setActiveAssetId}
-                          onClose={() => setActiveAssetId(null)}
-                        />
-                      ) : null}
-                    </div>
-                    <GeoStatusBar
-                      assets={geoAssets}
-                      kpi={{
-                        oee: geoAssets.length ? Math.round((geoAssets.filter((a) => a.status === "running").length / geoAssets.length) * 100) : 0,
-                        mtbf: geoAssets.length ? Math.round(geoAssets.reduce((sum, a) => sum + Number(a.rul_hours || 0), 0) / geoAssets.length) : 0,
-                        location: activeGeoSite.name
-                      }}
-                    />
-                    {geoAssetLoading ? <div className="geo-loading-strip">Refreshing site assets...</div> : null}
+          {geoPageActive ? (
+            <Suspense fallback={<div className="geo-empty">Loading geo experience...</div>}>
+              <div className="geo-page">
+                <div className="geo-topbar">
+                  <div className="geo-top-title">Geo Intelligence</div>
+                  <div className="geo-top-meta">
+                    {geoLoading && geoSites.length === 0
+                      ? "Loading sites..."
+                      : geoSitesLoading
+                        ? `${geoSites.length} site${geoSites.length === 1 ? "" : "s"} · loading more…`
+                        : `${geoSites.length} site${geoSites.length === 1 ? "" : "s"}`}
+                    {geoError ? <span className="geo-err">{geoError}</span> : null}
                   </div>
-                ) : (
-                  <div className="geo-empty">Select a site from map above to open PID drill-down + Genie.</div>
-                )}
+                  <button className="sbtn" onClick={refetchGeoSites}>Refresh</button>
+                </div>
+                <div className="geo-stack" ref={geoStackRef}>
+                  <div className="geo-map-top" style={{ height: geoMapHeight, flexBasis: geoMapHeight }}>
+                    <GeoMap
+                      sites={geoSites}
+                      onSiteClick={onGeoSiteClick}
+                      activeSiteId={activeSiteId}
+                      activeIndustries={visibleIndustries}
+                      onToggleIndustry={toggleGeoIndustry}
+                      mapLayer={mapLayer}
+                      onMapLayerChange={setMapLayer}
+                    />
+                  </div>
+                  <div
+                    className={`geo-map-splitter ${geoMapResizing ? "active" : ""}`}
+                    onMouseDown={() => setGeoMapResizing(true)}
+                    title="Drag to resize map area"
+                  />
+                  <div className="geo-drill-wrap">
+                    {activeGeoSite ? (
+                      <div className="geo-facility-wrap">
+                        <div className="geo-facility-hdr">
+                          <button className="chip" onClick={() => { setGeoView("geo"); setActiveSiteId(null); setActiveAssetId(null); }}>Clear selection</button>
+                          <div className="geo-facility-title">{activeGeoSite.customer} · {activeGeoSite.name}</div>
+                          <div className="geo-facility-sub">
+                            {activeGeoSite.industry} · {geoSchematic?.subtitle || ""} · Assets {geoAssets.length} · Native {activeGeoSite.currency || "USD"}
+                          </div>
+                        </div>
+                        <div className="geo-facility-main">
+                          <div className="geo-schematic-pane">
+                            {String(activeGeoSite?.industry || "").toLowerCase() === "energy" ? (
+                              <WindSchematic assets={geoAssets} activeAssetId={activeAssetId} onAssetClick={setActiveAssetId} />
+                            ) : (
+                              <PIDSchematic
+                                schematic={geoSchematic}
+                                assets={geoAssets}
+                                industry={activeGeoSite.industry}
+                                activeAssetId={activeAssetId}
+                                onAssetClick={setActiveAssetId}
+                              />
+                            )}
+                          </div>
+                          <AssetSidebar assets={geoAssets} activeAssetId={activeAssetId} onAssetClick={setActiveAssetId} currency={demoCurrency} />
+                          {activeGeoAsset ? (
+                            <GeoGeniePanel
+                              asset={activeGeoAsset}
+                              assets={geoAssets}
+                              site={activeGeoSite}
+                              industry={activeGeoSite.industry || industry}
+                              currency={demoCurrency}
+                              genieUrl={activeGeoGenieUrl}
+                              onSelectAsset={setActiveAssetId}
+                              onClose={() => setActiveAssetId(null)}
+                            />
+                          ) : null}
+                        </div>
+                        <GeoStatusBar
+                          assets={geoAssets}
+                          kpi={{
+                            oee: geoAssets.length ? Math.round((geoAssets.filter((a) => a.status === "running").length / geoAssets.length) * 100) : 0,
+                            mtbf: geoAssets.length ? Math.round(geoAssets.reduce((sum, a) => sum + Number(a.rul_hours || 0), 0) / geoAssets.length) : 0,
+                            location: activeGeoSite.name
+                          }}
+                        />
+                        {geoAssetLoading ? <div className="geo-loading-strip">Refreshing site assets...</div> : null}
+                      </div>
+                    ) : (
+                      <div className="geo-empty">Select a site from map above to open PID drill-down + Genie.</div>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
+            </Suspense>
+          ) : null}
         </div>
 
         <div className={`page ${page === "p9" ? "active" : ""}`} id="p9">
