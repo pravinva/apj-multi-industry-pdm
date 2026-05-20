@@ -1,6 +1,6 @@
 industry: automotive
 display_name: Automotive - Stamping, Welding, CNC
-catalog: classic_stable_zz47bh_catalog
+catalog: pdm_automotive
 version: 1.0.0
 accounts:
   primary: Toyota
