@@ -23,3 +23,5 @@ To deploy and manage this bundle, follow these steps:
 
 - For information on using **Declarative Automation Bundles in the workspace**, see: [Declarative Automation Bundles in the workspace](https://docs.databricks.com/aws/en/dev-tools/bundles/workspace-bundles)
 - For details on the **Declarative Automation Bundles format** used in this bundle, see: [Declarative Automation Bundles Configuration reference](https://docs.databricks.com/aws/en/dev-tools/bundles/reference)
+- For Airflow operator migration guidance specific to this Salesforce bundle, see: `AIRFLOW_MIGRATION_GUIDE.md`
+- Airflow source DAG used for migration demo: `airflow_dags/salesforce_bulk_migration_source_dag.py`
