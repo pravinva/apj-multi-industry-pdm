@@ -1,0 +1,26 @@
+resources:
+  jobs:
+    hightouch_sync_completion_sensor:
+      name: "[hackathon] Hightouch Sync Completion Sensor"
+
+      tasks:
+        - task_key: wait_hightouch_sync
+          environment_key: default
+          python_operator_task:
+            main: hightouch_api.HightouchSyncCompletionSensor
+            parameters:
+              - name: conn_id
+                value: ${var.hightouch_conn_id}
+              - name: sync_id
+                value: ${var.hightouch_sync_id}
+              - name: task_key
+                value: "wait_hightouch_sync"
+              - name: poll_interval_minutes
+                value: "1"
+
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "5"
+            dependencies:
+              - ./dist/*.whl
