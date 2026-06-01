@@ -3,7 +3,7 @@
 A Python Operator task is configured with three fields:
 
 * `main` — fully qualified name of the class or function to run, e.g.
-  `salesforce_api.sensors.MySensor` or `salesforce_api.slack.send_notification`.
+  `salesforce_api.salesforce_upsert` or `salesforce_api.SalesforceBulkWriteOperator`.
 * `parameters` — list of named parameters. Each value is bound by name to a
   matching function argument or class constructor argument, and converted to
   the annotated type (`str`, `int`, `float`, `bool`, `list`, or `dict`).

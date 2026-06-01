@@ -20,4 +20,4 @@ resources:
           spec:
             environment_version: "5"
             dependencies:
-              - ./dist/*.whl
+              - ../dist/*.whl

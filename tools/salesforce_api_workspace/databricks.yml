@@ -24,7 +24,7 @@ targets:
     workspace:
       host: https://e2-dogfood.staging.cloud.databricks.com
     variables:
-      salesforce_conn_id: "salesforce_u2m_conn"
+      salesforce_conn_id: "salesforce_m2m_conn"
   prod:
     mode: production
     workspace:
@@ -38,7 +38,7 @@ targets:
 variables:
   salesforce_conn_id:
     description: "Unity Catalog HTTP connection id for Salesforce"
-    default: "salesforce_u2m_conn"
+    default: "salesforce_m2m_conn"
   salesforce_object:
     description: "Salesforce object for bulk write"
     default: "Account"
