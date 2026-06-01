@@ -87,8 +87,8 @@ resources:
               - name: records
                 value: |
                   [
-                    {"Account_Number_External__c": "INS001", "Name": "Insert Operator Account A", "Industry": "Technology"},
-                    {"Account_Number_External__c": "INS002", "Name": "Insert Operator Account B", "Industry": "Finance"}
+                    {"Account_Number_External__c": "INS800", "Name": "Insert Operator Account A", "Industry": "Technology"},
+                    {"Account_Number_External__c": "INS801", "Name": "Insert Operator Account B", "Industry": "Finance"}
                   ]
               - name: conn_id
                 value: ${var.salesforce_conn_id}
