@@ -8,6 +8,36 @@ from databricks.sdk.runtime import dbutils
 from python_operator_task import OperatorV0, SensorResult
 
 
+class SalesforceOperatorError(Exception):
+    """Base exception for Salesforce operator failures."""
+
+
+class SalesforceOperatorHttpError(SalesforceOperatorError):
+    """Raised when Salesforce UC proxy calls fail with non-success status codes."""
+
+
+class SalesforceOperatorJobStateError(SalesforceOperatorError):
+    """Raised when a Salesforce ingest job ends in a failure state."""
+
+
+def _response_detail(response: requests.Response) -> str:
+    try:
+        payload = response.json()
+        if isinstance(payload, dict):
+            message = payload.get("message") or payload.get("errorMessage")
+            if message:
+                return str(message)
+        if isinstance(payload, list) and payload:
+            first = payload[0]
+            if isinstance(first, dict):
+                message = first.get("message") or first.get("errorMessage")
+                if message:
+                    return str(message)
+    except ValueError:
+        pass
+    return response.text.strip() or "<empty response>"
+
+
 def _coerce_records(records: Any) -> List[Dict[str, Any]]:
     if isinstance(records, str):
         records = json.loads(records)
@@ -37,6 +67,13 @@ def _records_to_csv(records: List[Dict[str, Any]]) -> str:
 
 
 class SalesforceBulkWriteOperator(OperatorV0):
+    """
+    Salesforce Bulk API operator with open/poll lifecycle.
+
+    Use this for longer-running bulk writes where the Databricks operator lifecycle
+    should manage status polling and task-value handoff.
+    """
+
     SUPPORTED_OPERATIONS = {"insert", "update", "upsert", "delete", "hardDelete"}
     FAILURE_STATES = {"Failed", "Aborted"}
 
@@ -99,6 +136,20 @@ class SalesforceBulkWriteOperator(OperatorV0):
                 return response
         return last_response  # type: ignore[return-value]
 
+    def _ensure_status(
+        self,
+        response: requests.Response,
+        expected_statuses: tuple[int, ...],
+        action: str,
+    ) -> None:
+        if response.status_code in expected_statuses:
+            return
+        raise SalesforceOperatorHttpError(
+            f"{action} failed for connection '{self.conn_id}' with status {response.status_code}. "
+            f"Detail: {_response_detail(response)}. "
+            "Check UC connection auth/base_path and Salesforce object/field permissions."
+        )
+
     def open(self):
         payload: Dict[str, Any] = {
             "object": self.object_name,
@@ -114,8 +165,11 @@ class SalesforceBulkWriteOperator(OperatorV0):
             headers={"Content-Type": "application/json"},
             json=payload,
         )
-        if create_response.status_code != 200:
-            raise Exception(f"Failed to create job: {create_response.status_code} {create_response.text}")
+        self._ensure_status(
+            create_response,
+            (200,),
+            f"Create Salesforce bulk '{self.operation}' job",
+        )
 
         job_id = create_response.json()["id"]
         dbutils.jobs.taskValues.set("salesforce_job_id", job_id)
@@ -126,8 +180,11 @@ class SalesforceBulkWriteOperator(OperatorV0):
             headers={"Content-Type": "text/csv"},
             data=_records_to_csv(self.records),
         )
-        if upload_response.status_code not in (200, 201):
-            raise Exception(f"Failed to upload data: {upload_response.status_code} {upload_response.text}")
+        self._ensure_status(
+            upload_response,
+            (200, 201),
+            f"Upload CSV batch for Salesforce job {job_id}",
+        )
 
         close_response = self._request_salesforce(
             "PATCH",
@@ -135,8 +192,11 @@ class SalesforceBulkWriteOperator(OperatorV0):
             headers={"Content-Type": "application/json"},
             json={"state": "UploadComplete"},
         )
-        if close_response.status_code != 200:
-            raise Exception(f"Failed to close job: {close_response.status_code} {close_response.text}")
+        self._ensure_status(
+            close_response,
+            (200,),
+            f"Close Salesforce bulk job {job_id}",
+        )
 
     def poll(self) -> SensorResult:
         job_id = dbutils.jobs.taskValues.get(self.task_key, "salesforce_job_id", default=None)
@@ -146,8 +206,11 @@ class SalesforceBulkWriteOperator(OperatorV0):
             )
 
         status_response = self._request_salesforce("GET", f"/jobs/ingest/{job_id}")
-        if status_response.status_code != 200:
-            raise Exception(f"Failed to get job status: {status_response.status_code} {status_response.text}")
+        self._ensure_status(
+            status_response,
+            (200,),
+            f"Fetch status for Salesforce job {job_id}",
+        )
 
         data = status_response.json()
         state = data.get("state", "Unknown")
@@ -157,12 +220,18 @@ class SalesforceBulkWriteOperator(OperatorV0):
             dbutils.jobs.taskValues.set("records_processed", str(processed))
             dbutils.jobs.taskValues.set("records_failed", str(failed))
             if failed > 0:
-                raise Exception(
-                    f"Salesforce job completed with failed records: processed={processed}, failed={failed}"
+                raise SalesforceOperatorJobStateError(
+                    f"Salesforce job {job_id} completed with partial failures: "
+                    f"processed={processed}, failed={failed}. "
+                    "Use Salesforce failedResults endpoint to inspect row-level errors."
                 )
             return SensorResult.completed()
         if state in self.FAILURE_STATES:
-            raise Exception(f"Salesforce job {state.lower()}: {data.get('errorMessage', 'Unknown error')}")
+            raise SalesforceOperatorJobStateError(
+                f"Salesforce job {job_id} {state.lower()}. "
+                f"Detail: {data.get('errorMessage', 'Unknown error')}. "
+                "Confirm object permissions, required fields, and external ID mapping."
+            )
 
         return SensorResult.deferred(duration=datetime.timedelta(minutes=self.poll_interval_minutes))
 
@@ -172,6 +241,8 @@ class SalesforceBulkWriteOperator(OperatorV0):
 
 
 class SalesforceUpsertOperator(SalesforceBulkWriteOperator):
+    """Convenience operator that pins operation mode to Salesforce upsert."""
+
     def __init__(
         self,
         object_name: str,

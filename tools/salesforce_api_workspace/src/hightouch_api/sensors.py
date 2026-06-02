@@ -7,6 +7,36 @@ from databricks.sdk.runtime import dbutils
 from python_operator_task import Sensor, SensorResult
 
 
+class HightouchSensorError(Exception):
+    """Base exception for Hightouch sensor failures."""
+
+
+class HightouchHttpError(HightouchSensorError):
+    """Raised when Hightouch API proxy calls return non-success status codes."""
+
+
+class HightouchRunStateError(HightouchSensorError):
+    """Raised when the monitored Hightouch run enters a failure terminal state."""
+
+
+def _response_detail(response: requests.Response) -> str:
+    try:
+        payload = response.json()
+        if isinstance(payload, dict):
+            message = payload.get("message") or payload.get("error")
+            if message:
+                return str(message)
+        if isinstance(payload, list) and payload:
+            first = payload[0]
+            if isinstance(first, dict):
+                message = first.get("message") or first.get("error")
+                if message:
+                    return str(message)
+    except ValueError:
+        pass
+    return response.text.strip() or "<empty response>"
+
+
 class HightouchSyncCompletionSensor(Sensor):
     """
     Poll a Hightouch sync run until terminal completion.
@@ -31,6 +61,20 @@ class HightouchSyncCompletionSensor(Sensor):
         self.poll_interval_minutes = int(poll_interval_minutes)
         self.api_version = api_version
         self.w = WorkspaceClient()
+
+    def _ensure_status(
+        self,
+        response: requests.Response,
+        expected_statuses: tuple[int, ...],
+        action: str,
+    ) -> None:
+        if response.status_code in expected_statuses:
+            return
+        raise HightouchHttpError(
+            f"{action} failed for connection '{self.conn_id}' with status {response.status_code}. "
+            f"Detail: {_response_detail(response)}. "
+            "Check UC connection API token/base_path and Hightouch sync permissions."
+        )
 
     def _request_hightouch(self, method: str, resource_path: str, **kwargs: Any) -> requests.Response:
         proxy_base_url = f"{self.w.config.host}/api/2.0/unity-catalog/connections/{self.conn_id}/proxy"
@@ -75,17 +119,20 @@ class HightouchSyncCompletionSensor(Sensor):
         ).strip().lower()
 
     def _discover_latest_run_id(self) -> str:
+        """Return most recent Hightouch run id for the configured sync, if any."""
         response = self._request_hightouch("GET", f"/syncs/{self.sync_id}/runs")
-        if response.status_code != 200:
-            raise Exception(
-                f"Failed to list Hightouch sync runs: {response.status_code} {response.text}"
-            )
+        self._ensure_status(
+            response,
+            (200,),
+            f"List runs for Hightouch sync {self.sync_id}",
+        )
         runs = self._as_run_list(response.json())
         if not runs:
             return ""
         return str(runs[0].get("id", "")).strip()
 
     def _get_target_run_id(self) -> str:
+        """Resolve run id in precedence order: explicit param, task value, latest run."""
         if self.run_id:
             return self.run_id
         existing = dbutils.jobs.taskValues.get(self.task_key, "hightouch_run_id", default="")
@@ -97,21 +144,35 @@ class HightouchSyncCompletionSensor(Sensor):
         return discovered
 
     def poll(self) -> SensorResult:
+        """
+        Poll target Hightouch run until a terminal state is reached.
+
+        On success, records `hightouch_run_status` into task values.
+        """
         run_id = self._get_target_run_id()
         if not run_id:
             return SensorResult.deferred(duration=datetime.timedelta(minutes=self.poll_interval_minutes))
 
         response = self._request_hightouch("GET", f"/syncs/{self.sync_id}/runs")
-        if response.status_code != 200:
-            raise Exception(f"Failed to get Hightouch sync run status: {response.status_code} {response.text}")
+        self._ensure_status(
+            response,
+            (200,),
+            f"Get run status for Hightouch sync {self.sync_id}",
+        )
 
         runs = self._as_run_list(response.json())
         if not runs:
-            raise Exception(f"No runs returned for Hightouch sync {self.sync_id}")
+            raise HightouchSensorError(
+                f"No runs returned for Hightouch sync {self.sync_id}. "
+                "Verify sync id and that the API token has access to this workspace."
+            )
 
         run = next((r for r in runs if str(r.get("id", "")) == run_id), None)
         if not run:
-            raise Exception(f"Hightouch run {run_id} not found for sync {self.sync_id}")
+            raise HightouchSensorError(
+                f"Hightouch run {run_id} not found for sync {self.sync_id}. "
+                "This can happen when the run was purged or belongs to another workspace."
+            )
         status = self._run_status(run)
         print(f"[HightouchSyncCompletionSensor] sync_id={self.sync_id} run_id={run_id} status={status}")
 
@@ -121,6 +182,9 @@ class HightouchSyncCompletionSensor(Sensor):
 
         if status in self.FAILURE_STATES:
             error_text = run.get("error") or run.get("message") or "Unknown error"
-            raise Exception(f"Hightouch sync run failed: status={status}, error={error_text}")
+            raise HightouchRunStateError(
+                f"Hightouch sync run {run_id} failed with status='{status}'. "
+                f"Detail: {error_text}. Check source credentials/mapping in Hightouch."
+            )
 
         return SensorResult.deferred(duration=datetime.timedelta(minutes=self.poll_interval_minutes))
