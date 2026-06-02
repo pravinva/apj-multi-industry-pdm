@@ -1,6 +1,6 @@
 industry: mining
 display_name: Mining - Rio Tinto Haul Fleet
-catalog: classic_stable_zz47bh_catalog
+catalog: pdm_mining
 version: 1.0.0
 accounts:
   primary: Rio Tinto

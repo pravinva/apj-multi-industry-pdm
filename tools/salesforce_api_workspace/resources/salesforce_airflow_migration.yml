@@ -1,0 +1,76 @@
+resources:
+  jobs:
+    salesforce_airflow_migration_demo:
+      name: "[hackathon] Airflow Migration - Salesforce Demo"
+
+      tasks:
+        # Airflow PythonOperator equivalent (function call).
+        - task_key: airflow_migrated_insert_fn
+          environment_key: default
+          python_operator_task:
+            main: salesforce_api.salesforce_insert
+            parameters:
+              - name: object_name
+                value: ${var.salesforce_object}
+              - name: records
+                value: |
+                  [
+                    {"Account_Number_External__c": "MIG{{job.run_id}}900", "Name": "Migration Insert 900", "Industry": "Technology"},
+                    {"Account_Number_External__c": "MIG{{job.run_id}}901", "Name": "Migration Insert 901", "Industry": "Finance"}
+                  ]
+              - name: conn_id
+                value: ${var.salesforce_conn_id}
+              - name: wait_for_completion
+                value: "true"
+
+        # Airflow custom operator + sensor equivalent (single operator lifecycle).
+        - task_key: airflow_migrated_upsert_operator
+          depends_on:
+            - task_key: airflow_migrated_insert_fn
+          environment_key: default
+          python_operator_task:
+            main: salesforce_api.SalesforceUpsertOperator
+            parameters:
+              - name: object_name
+                value: ${var.salesforce_object}
+              - name: external_id_field
+                value: "Account_Number_External__c"
+              - name: records
+                value: |
+                  [
+                    {"Account_Number_External__c": "MIG{{job.run_id}}900", "Name": "Migration Upsert Updated 900", "Industry": "Healthcare"},
+                    {"Account_Number_External__c": "MIG{{job.run_id}}902", "Name": "Migration Upsert New 902", "Industry": "Retail"}
+                  ]
+              - name: conn_id
+                value: ${var.salesforce_conn_id}
+              - name: task_key
+                value: "airflow_migrated_upsert_operator"
+              - name: poll_interval_minutes
+                value: "1"
+
+        - task_key: airflow_migrated_update_fn
+          depends_on:
+            - task_key: airflow_migrated_upsert_operator
+          environment_key: default
+          python_operator_task:
+            main: salesforce_api.salesforce_update
+            parameters:
+              - name: object_name
+                value: ${var.salesforce_object}
+              - name: records
+                value: |
+                  [
+                    {"Id": "${var.salesforce_update_id_1}", "Industry": "Manufacturing"},
+                    {"Id": "${var.salesforce_update_id_2}", "Industry": "Retail"}
+                  ]
+              - name: conn_id
+                value: ${var.salesforce_conn_id}
+              - name: wait_for_completion
+                value: "true"
+
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "5"
+            dependencies:
+              - ../dist/*.whl
