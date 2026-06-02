@@ -1,6 +1,6 @@
 industry: semiconductor
 display_name: Semiconductor - Etch and Litho
-catalog: pdm_semiconductor
+catalog: classic_stable_zz47bh_catalog
 version: 1.0.0
 accounts:
   primary: Renesas

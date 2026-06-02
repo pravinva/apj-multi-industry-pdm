@@ -1,6 +1,6 @@
 industry: energy
 display_name: Energy - Wind, BESS, Transformer
-catalog: pdm_energy
+catalog: classic_stable_zz47bh_catalog
 version: 1.0.0
 accounts:
   primary: Alinta Energy

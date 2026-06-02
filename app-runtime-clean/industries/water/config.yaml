@@ -1,6 +1,6 @@
 industry: water
 display_name: Water - Pumping and Metering
-catalog: pdm_water
+catalog: classic_stable_zz47bh_catalog
 version: 1.0.0
 accounts:
   primary: Sydney Water

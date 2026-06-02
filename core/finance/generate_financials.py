@@ -263,15 +263,6 @@ def main() -> None:
         spdf = pd.DataFrame(site_rows)
         spdf["ds"] = pd.to_datetime(spdf["ds"]).dt.date
         sdf = spark.createDataFrame(spdf).withColumn("ds", F.to_date(F.col("ds")))
-        # Force deterministic numeric types to avoid Delta merge conflicts when
-        # pandas-inferred integer widths differ from table definitions.
-        sdf = (
-            sdf.withColumn("critical_assets", F.col("critical_assets").cast("int"))
-            .withColumn("warning_assets", F.col("warning_assets").cast("int"))
-            .withColumn("avoided_cost", F.col("avoided_cost").cast("double"))
-            .withColumn("intervention_cost", F.col("intervention_cost").cast("double"))
-            .withColumn("net_benefit", F.col("net_benefit").cast("double"))
-        )
         sdf.write.mode("append").saveAsTable(f"{catalog}.finance.pm_site_financial_daily")
         print(f"[finance] pm_site_financial_daily refreshed industry={industry} catalog={catalog}")
 
