@@ -15,8 +15,8 @@ resources:
               - name: records
                 value: |
                   [
-                    {"Account_Number_External__c": "MIG900", "Name": "Migration Insert 900", "Industry": "Technology"},
-                    {"Account_Number_External__c": "MIG901", "Name": "Migration Insert 901", "Industry": "Finance"}
+                    {"Account_Number_External__c": "MIG{{job.run_id}}900", "Name": "Migration Insert 900", "Industry": "Technology"},
+                    {"Account_Number_External__c": "MIG{{job.run_id}}901", "Name": "Migration Insert 901", "Industry": "Finance"}
                   ]
               - name: conn_id
                 value: ${var.salesforce_conn_id}
@@ -38,8 +38,8 @@ resources:
               - name: records
                 value: |
                   [
-                    {"Account_Number_External__c": "MIG900", "Name": "Migration Upsert Updated 900", "Industry": "Healthcare"},
-                    {"Account_Number_External__c": "MIG902", "Name": "Migration Upsert New 902", "Industry": "Retail"}
+                    {"Account_Number_External__c": "MIG{{job.run_id}}900", "Name": "Migration Upsert Updated 900", "Industry": "Healthcare"},
+                    {"Account_Number_External__c": "MIG{{job.run_id}}902", "Name": "Migration Upsert New 902", "Industry": "Retail"}
                   ]
               - name: conn_id
                 value: ${var.salesforce_conn_id}

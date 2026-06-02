@@ -14,8 +14,8 @@ resources:
               - name: records
                 value: |
                   [
-                    {"Account_Number_External__c": "FUNC_INS_001", "Name": "Function Insert Account 1", "Industry": "Technology"},
-                    {"Account_Number_External__c": "FUNC_INS_002", "Name": "Function Insert Account 2", "Industry": "Finance"}
+                    {"Account_Number_External__c": "FUNC_INS_{{job.run_id}}_1", "Name": "Function Insert Account 1", "Industry": "Technology"},
+                    {"Account_Number_External__c": "FUNC_INS_{{job.run_id}}_2", "Name": "Function Insert Account 2", "Industry": "Finance"}
                   ]
               - name: conn_id
                 value: ${var.salesforce_conn_id}
@@ -36,7 +36,7 @@ resources:
               - name: records
                 value: |
                   [
-                    {"Account_Number_External__c": "FUNC_INS_001", "Name": "Function Upsert Updated 1", "Industry": "Healthcare"},
+                    {"Account_Number_External__c": "FUNC_INS_{{job.run_id}}_1", "Name": "Function Upsert Updated 1", "Industry": "Healthcare"},
                     {"Account_Number_External__c": "FUNC_UPS_003", "Name": "Function Upsert New 3", "Industry": "Retail"}
                   ]
               - name: conn_id
@@ -87,8 +87,8 @@ resources:
               - name: records
                 value: |
                   [
-                    {"Account_Number_External__c": "INS800", "Name": "Insert Operator Account A", "Industry": "Technology"},
-                    {"Account_Number_External__c": "INS801", "Name": "Insert Operator Account B", "Industry": "Finance"}
+                    {"Account_Number_External__c": "INS{{job.run_id}}A", "Name": "Insert Operator Account A", "Industry": "Technology"},
+                    {"Account_Number_External__c": "INS{{job.run_id}}B", "Name": "Insert Operator Account B", "Industry": "Finance"}
                   ]
               - name: conn_id
                 value: ${var.salesforce_conn_id}
